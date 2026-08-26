@@ -1,7 +1,7 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
@@ -151,6 +151,7 @@ export default function SessionDetailPage() {
   const workflowDirtyRef = useRef(false);
   const [workflowSaveState, setWorkflowSaveState] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'CONFLICT' | 'ERROR'>('IDLE');
   const [workflowSavedAt, setWorkflowSavedAt] = useState<string | null>(null);
+  const [editClock, setEditClock] = useState(() => Date.now());
   const [showCompletionReview, setShowCompletionReview] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const metricsRef = useRef({
@@ -212,6 +213,12 @@ export default function SessionDetailPage() {
   useEffect(() => {
     void loadSessionDetail();
   }, [loadSessionDetail]);
+
+  useEffect(() => {
+    if (!session?.session.isCompleted) return;
+    const timer = window.setInterval(() => setEditClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [session?.session.isCompleted]);
 
   const updateWorkflowDraft = useCallback((key: SessionDraftKey, value: unknown) => {
     const next = { ...workflowDraftsRef.current, [key]: value };
@@ -673,6 +680,13 @@ export default function SessionDetailPage() {
     }
   };
 
+  // Workflow autosave re-renders this page for every draft change. Keep the
+  // filtered prop stable so the vital form does not reset while users type.
+  const vitalSignsBefore = useMemo(
+    () => session?.vitalSigns.filter((vital) => vital.waktuCatat === 'SEBELUM') ?? [],
+    [session?.vitalSigns],
+  );
+
   if (loading) {
     return (
       <div style={{ padding: '48px', textAlign: 'center' }}>
@@ -690,6 +704,20 @@ export default function SessionDetailPage() {
   const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
   const userCanFinalize = canFinalizeSession(user?.role);
   const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
+  const correctionDeadline = sessionInfo.completedAt
+    ? new Date(sessionInfo.completedAt).getTime() + (4 * 60 * 60 * 1000)
+    : null;
+  const correctionRemainingMs = correctionDeadline ? Math.max(0, correctionDeadline - editClock) : 0;
+  const correctionWindowOpen = !sessionInfo.isCompleted || correctionRemainingMs > 0;
+  const correctionTotalMinutes = Math.ceil(correctionRemainingMs / 60_000);
+  const correctionHours = Math.floor(correctionTotalMinutes / 60);
+  const correctionMinutes = correctionTotalMinutes % 60;
+  const postCompletionEditableSteps = new Set([1, 3, 7, 8, 9]);
+  const canEditStepNow = (step: number) => (
+    canEditSessionStep(user?.role, step)
+    && correctionWindowOpen
+    && (!sessionInfo.isCompleted || postCompletionEditableSteps.has(step))
+  );
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
   // Check if step can be accessed
@@ -822,6 +850,26 @@ export default function SessionDetailPage() {
               Edit Data Sesi
             </button>
           )}
+        </div>
+      </div>
+
+      <div style={{
+        marginBottom: '24px',
+        padding: '14px 18px',
+        borderRadius: '12px',
+        border: `1px solid ${correctionWindowOpen ? 'rgba(245,158,11,0.45)' : 'rgba(148,163,184,0.35)'}`,
+        background: correctionWindowOpen ? 'rgba(245,158,11,0.08)' : 'rgba(148,163,184,0.08)',
+        color: correctionWindowOpen ? '#fbbf24' : 'var(--text-secondary)',
+        fontSize: '13px',
+        lineHeight: 1.6,
+      }}>
+        <strong>{sessionInfo.isCompleted ? (correctionWindowOpen ? 'Masa koreksi masih aktif' : 'Masa koreksi sudah berakhir') : 'Informasi koreksi sesi'}</strong>
+        <div>
+          {sessionInfo.isCompleted
+            ? correctionWindowOpen
+              ? `Data klinis dapat diedit sesuai tanggung jawab role selama ${correctionHours} jam ${correctionMinutes} menit lagi. Semua perubahan direkam dalam Audit Log.`
+              : 'Batas edit 4 jam telah lewat. Koreksi berikutnya harus melalui Admin Manager dan prosedur koreksi formal.'
+            : 'Setelah sesi diselesaikan, Nakes/MSO dapat mengoreksi data operasional dan dokter dapat mengoreksi evaluasi dokter selama 4 jam. Semua perubahan direkam.'}
         </div>
       </div>
 
@@ -1152,7 +1200,7 @@ export default function SessionDetailPage() {
 
       {/* Step Content */}
       <div className="card">
-        {!canEditSessionStep(user?.role, activeStep) && (
+        {!canEditStepNow(activeStep) && (
           <div style={{ margin: '16px', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.35)', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-secondary)', fontSize: '13px' }}>
             Langkah ini merupakan tanggung jawab <strong>{SESSION_STEP_OWNER[activeStep]}</strong>. Anda dapat melihat statusnya, tetapi tidak dapat mengubah isian.
           </div>
@@ -1167,7 +1215,7 @@ export default function SessionDetailPage() {
             encounterId={sessionInfo.encounterId}
             memberId={session.memberId}
             diagnosis={session.diagnosis}
-            isLocked={!canEditSessionStep(user?.role, 1)}
+            isLocked={!canEditStepNow(1)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1177,7 +1225,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
-            isLocked={!canAccessStep(2) || !canEditSessionStep(user?.role, 2)}
+            isLocked={!canAccessStep(2) || !canEditStepNow(2)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1185,8 +1233,8 @@ export default function SessionDetailPage() {
         {activeStep === 3 && (
           <Step3VitalBefore 
             sessionId={sessionId}
-            vitalSigns={session.vitalSigns.filter(v => v.waktuCatat === 'SEBELUM')}
-            isLocked={!canAccessStep(3) || !canEditSessionStep(user?.role, 3)}
+            vitalSigns={vitalSignsBefore}
+            isLocked={!canAccessStep(3) || !canEditStepNow(3)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(4)}
           />
@@ -1198,7 +1246,7 @@ export default function SessionDetailPage() {
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
             infusion={session.infusion}
-            isLocked={!canAccessStep(4) || !canEditSessionStep(user?.role, 4)}
+            isLocked={!canAccessStep(4) || !canEditStepNow(4)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(5)}
             onEditTherapyPlanSet={openTherapyPlanEditModal}
@@ -1210,7 +1258,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             branchId={sessionInfo.branchId || ''}
             materials={session.materials || []}
-            isLocked={!canAccessStep(5) || !canEditSessionStep(user?.role, 5)}
+            isLocked={!canAccessStep(5) || !canEditStepNow(5)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1219,7 +1267,7 @@ export default function SessionDetailPage() {
           <Step7Photo 
             sessionId={sessionId}
             photo={session.photo}
-            isLocked={!canAccessStep(6) || !canEditSessionStep(user?.role, 6)}
+            isLocked={!canAccessStep(6) || !canEditStepNow(6)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1228,7 +1276,7 @@ export default function SessionDetailPage() {
           <Step8VitalAfter 
             sessionId={sessionId}
             vitalSigns={session.vitalSigns}
-            isLocked={!canAccessStep(7) || !canEditSessionStep(user?.role, 7)}
+            isLocked={!canAccessStep(7) || !canEditStepNow(7)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1240,7 +1288,7 @@ export default function SessionDetailPage() {
               keluhan: session.evaluation.keluhan,
               rekomendasi: session.evaluation.rekomendasi
             } : null}
-            isLocked={!canAccessStep(8) || !canEditSessionStep(user?.role, 8)}
+            isLocked={!canAccessStep(8) || !canEditStepNow(8)}
             onComplete={async () => {
               await handleStepComplete();
               setActiveStep(9);
@@ -1252,7 +1300,7 @@ export default function SessionDetailPage() {
           <Step9Evaluation 
             sessionId={sessionId}
             evaluation={session.evaluation}
-            isLocked={!canAccessStep(9) || !canEditSessionStep(user?.role, 9)}
+            isLocked={!canAccessStep(9) || !canEditStepNow(9)}
             onComplete={handleStepComplete}
           />
         )}

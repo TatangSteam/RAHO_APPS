@@ -19,7 +19,7 @@ export function canEditSessionStep(role: Role | undefined, step: number): boolea
   if (!role) return false;
   if (MANAGER_ROLES.includes(role)) return true;
   if (step === 1 || step === 2 || step === 9) return role === 'DOCTOR';
-  if (step >= 3 && step <= 8) return role === 'NURSE';
+  if (step >= 3 && step <= 8) return role === 'NURSE' || role === 'ADMIN_LAYANAN';
   return false;
 }
 

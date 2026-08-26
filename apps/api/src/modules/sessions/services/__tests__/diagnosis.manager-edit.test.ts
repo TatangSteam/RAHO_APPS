@@ -10,6 +10,7 @@ jest.mock('@lib/prisma', () => ({
       update: jest.fn(),
     },
     user: { findUnique: jest.fn() },
+    treatmentSession: { findFirst: jest.fn() },
   },
 }));
 
@@ -18,10 +19,14 @@ jest.mock('@utils/auditLog', () => ({ logAudit: jest.fn() }));
 const mockedPrisma = prisma as unknown as {
   diagnosis: { findUnique: jest.Mock; update: jest.Mock };
   user: { findUnique: jest.Mock };
+  treatmentSession: { findFirst: jest.Mock };
 };
 
 describe('DiagnosisService Admin Manager edit access', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedPrisma.treatmentSession.findFirst.mockResolvedValue({ isCompleted: false, completedAt: null });
+  });
 
   it('allows ADMIN_MANAGER to update a session diagnosis and writes an audit log', async () => {
     mockedPrisma.diagnosis.findUnique.mockResolvedValue({

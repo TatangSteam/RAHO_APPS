@@ -1,7 +1,7 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import type { TherapyPlan, InfusionExecution, CreateInfusionInput } from '@/types/session';
@@ -265,7 +265,8 @@ export default function Step5Infusion({
   onEditTherapyPlanSet,
 }: Step5InfusionProps) {
   const router = useRouter();
-  const infusionDraft = useSessionWorkflowDraft<CreateInfusionInput>('infusion');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<CreateInfusionInput>('infusion');
+  const initialDraftRef = useRef(initialDraft);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasDeviation, setHasDeviation] = useState(false);
@@ -295,13 +296,13 @@ export default function Step5Infusion({
     volumeCarrier: undefined,
     jumlahJarum: undefined,
     tanggalProduksi: undefined,
-    ...infusionDraft.initialDraft,
+    ...initialDraftRef.current,
   });
 
   // Prefill the execution from the approved plan. Staff still verifies the
   // actual values before saving; an existing server draft always wins.
   useEffect(() => {
-    if (!therapyPlan || infusion || Object.keys(infusionDraft.initialDraft).length > 0) return;
+    if (!therapyPlan || infusion || Object.keys(initialDraftRef.current).length > 0) return;
     const toDose = (value: number | null | undefined) => {
       const parsed = Number(value || 0);
       return parsed > 0 ? parsed : undefined;
@@ -326,8 +327,8 @@ export default function Step5Infusion({
   }, [infusion, therapyPlan]);
 
   useEffect(() => {
-    if (!infusion) infusionDraft.updateDraft(formData);
-  }, [formData, infusion]);
+    if (!infusion) updateDraft(formData);
+  }, [formData, infusion, updateDraft]);
 
   useEffect(() => {
     if (!therapyPlan) {
@@ -411,7 +412,7 @@ export default function Step5Infusion({
 
     try {
       await sessionApi.createInfusion(sessionId, formData);
-      infusionDraft.clearDraft();
+      clearDraft();
       onComplete();
       // Navigate to next step if user clicked "Simpan & Lanjut"
       if (shouldNavigateNext && onNext) {

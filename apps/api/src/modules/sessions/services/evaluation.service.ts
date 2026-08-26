@@ -2,10 +2,63 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateEvaluationCode } from '../../../utils/codeGenerator';
 import type { CreateEvaluationInput } from '../sessions.schema';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Role } from '@prisma/client';
+import { assertSessionEditWindow } from './session-edit-window';
+
+const OPERATIONAL_FIELDS = ['keluhan', 'rekomendasi'] as const;
+const DOCTOR_FIELDS = ['subjective', 'objective', 'assessment', 'plan', 'generalNotes'] as const;
+const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
+
+function providedFields(data: Partial<CreateEvaluationInput>, fields: readonly string[]) {
+  return fields.filter((field) => data[field as keyof CreateEvaluationInput] !== undefined);
+}
 
 export class EvaluationService {
+  private async assertEditor(sessionId: string, data: Partial<CreateEvaluationInput>, userId: string) {
+    const [session, actor] = await Promise.all([
+      prisma.treatmentSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          sessionDoctors: { select: { doctorId: true } },
+          sessionNurses: { select: { nurseId: true } },
+        },
+      }),
+      prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    ]);
+    if (!session) throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
+    if (!actor) throw { status: 403, code: 'FORBIDDEN', message: 'Pengguna tidak valid.' };
+
+    const operationalChanges = providedFields(data, OPERATIONAL_FIELDS);
+    const doctorChanges = providedFields(data, DOCTOR_FIELDS);
+    if (MANAGER_ROLES.includes(actor.role)) return session;
+
+    if (actor.role === Role.DOCTOR) {
+      const assigned = session.doctorId === userId
+        || session.sessionDoctors.some((item) => item.doctorId === userId);
+      if (!assigned) throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Dokter hanya dapat mengedit sesi yang ditugaskan kepadanya.' };
+      if (operationalChanges.length > 0) {
+        throw { status: 403, code: 'FIELD_NOT_OWNED', message: 'Keluhan dan rekomendasi operasional diisi oleh MSO atau Nakes.' };
+      }
+      return session;
+    }
+
+    if (actor.role === Role.ADMIN_LAYANAN || actor.role === Role.NURSE) {
+      const assigned = actor.role === Role.ADMIN_LAYANAN
+        ? session.adminLayananId === userId
+        : session.nurseId === userId || session.sessionNurses.some((item) => item.nurseId === userId);
+      if (!assigned) throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Anda hanya dapat mengedit sesi yang ditugaskan kepada Anda.' };
+      if (doctorChanges.length > 0) {
+        throw { status: 403, code: 'FIELD_NOT_OWNED', message: 'Evaluasi SOAP hanya dapat diedit oleh dokter yang ditugaskan.' };
+      }
+      return session;
+    }
+
+    throw { status: 403, code: 'FORBIDDEN', message: 'Anda tidak memiliki akses untuk mengedit bagian sesi ini.' };
+  }
+
   async createEvaluation(sessionId: string, data: CreateEvaluationInput, userId: string) {
+    const authorizedSession = await this.assertEditor(sessionId, data, userId);
+    assertSessionEditWindow(authorizedSession);
     // Check if evaluation already exists
     const existing = await prisma.doctorEvaluation.findUnique({
       where: { treatmentSessionId: sessionId },
@@ -72,16 +125,19 @@ export class EvaluationService {
 
     await logAudit({
       userId,
+      branchId: authorizedSession.branchId,
       action: AuditAction.CREATE,
       resource: 'DoctorEvaluation',
       resourceId: evaluation.id,
-      meta: { evaluationCode, sessionId },
+      afterData: evaluation,
+      meta: { evaluationCode, sessionId, changedFields: Object.keys(data) },
     });
 
     return evaluation;
   }
 
   async updateEvaluation(sessionId: string, data: Partial<CreateEvaluationInput>, userId: string) {
+    const session = await this.assertEditor(sessionId, data, userId);
     const evaluation = await prisma.doctorEvaluation.findUnique({
       where: { treatmentSessionId: sessionId },
     });
@@ -93,6 +149,7 @@ export class EvaluationService {
         message: 'Evaluasi dokter tidak ditemukan',
       };
     }
+    assertSessionEditWindow(session);
 
     const updated = await prisma.doctorEvaluation.update({
       where: { treatmentSessionId: sessionId },
@@ -110,10 +167,13 @@ export class EvaluationService {
 
     await logAudit({
       userId,
+      branchId: session.branchId,
       action: AuditAction.UPDATE,
       resource: 'DoctorEvaluation',
       resourceId: evaluation.id,
-      meta: { sessionId },
+      beforeData: evaluation,
+      afterData: updated,
+      meta: { sessionId, changedFields: Object.keys(data) },
     });
 
     return updated;

@@ -35,7 +35,7 @@ export default function Step9Evaluation({
   onComplete,
 }: Step9EvaluationProps) {
   const { user } = useAuthStore();
-  const evaluationDraft = useSessionWorkflowDraft<{
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<{
     subjective: string;
     objective: string;
     assessment: string;
@@ -50,12 +50,12 @@ export default function Step9Evaluation({
     assessment: evaluation?.assessment || '',
     plan: evaluation?.plan || '',
     generalNotes: evaluation?.generalNotes || '',
-    ...evaluationDraft.initialDraft,
+    ...initialDraft,
   });
 
   useEffect(() => {
-    evaluationDraft.updateDraft(formData);
-  }, [formData]);
+    updateDraft(formData);
+  }, [formData, updateDraft]);
 
   // Evaluasi klinis (SOAP) merupakan tanggung jawab khusus dokter.
   const canEdit = user?.role === 'DOCTOR';
@@ -97,7 +97,7 @@ export default function Step9Evaluation({
       }
 
       showToast.success('Evaluasi dokter berhasil disimpan');
-      evaluationDraft.clearDraft();
+      clearDraft();
       setIsEditing(false);
       onComplete();
     } catch (error) {

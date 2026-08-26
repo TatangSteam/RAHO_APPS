@@ -1,7 +1,7 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { VitalSign, VitalType } from '@/types/session';
@@ -32,14 +32,15 @@ export default function Step8VitalAfter({
   onComplete,
 }: Step8VitalAfterProps) {
   const { user } = useAuthStore();
-  const vitalDraft = useSessionWorkflowDraft<Record<VitalType, string>>('vitalAfter');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<Record<VitalType, string>>('vitalAfter');
+  const initialDraftRef = useRef(initialDraft);
   const [values, setValues] = useState<Record<VitalType, string>>({
     SISTOL: '',
     DIASTOL: '',
     HR: '',
     SATURASI: '',
     PI: '',
-    ...vitalDraft.initialDraft,
+    ...initialDraftRef.current,
   });
   const [saving, setSaving] = useState<Record<VitalType, boolean>>({
     SISTOL: false,
@@ -65,7 +66,7 @@ export default function Step8VitalAfter({
       HR: '',
       SATURASI: '',
       PI: '',
-      ...vitalDraft.initialDraft,
+      ...initialDraftRef.current,
     };
     const newSaved: Record<VitalType, boolean> = {
       SISTOL: false,
@@ -87,8 +88,8 @@ export default function Step8VitalAfter({
   }, [vitalSigns]);
 
   useEffect(() => {
-    vitalDraft.updateDraft(values);
-  }, [values]);
+    updateDraft(values);
+  }, [updateDraft, values]);
 
   // Check if all fields have valid values (real-time validation)
   const allFieldsValid = useMemo(() => {
@@ -168,7 +169,7 @@ export default function Step8VitalAfter({
       }
 
       // Call onComplete after all saved
-      vitalDraft.clearDraft();
+      clearDraft();
       onComplete();
     } catch (err) {
       assertCaughtError(err);

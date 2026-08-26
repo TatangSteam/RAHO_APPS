@@ -27,21 +27,21 @@ export default function Step8ComplaintsRecommendations({
   onComplete,
 }: Step8ComplaintsRecommendationsProps) {
   const { user } = useAuthStore();
-  const complaintsDraft = useSessionWorkflowDraft<{ keluhan: string; rekomendasi: string }>('complaints');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<{ keluhan: string; rekomendasi: string }>('complaints');
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     keluhan: complaintsRecommendations?.keluhan || '',
     rekomendasi: complaintsRecommendations?.rekomendasi || '',
-    ...complaintsDraft.initialDraft,
+    ...initialDraft,
   });
 
   useEffect(() => {
-    complaintsDraft.updateDraft(formData);
-  }, [formData]);
+    updateDraft(formData);
+  }, [formData, updateDraft]);
 
   // Keluhan dan rekomendasi operasional diisi tim pelaksana, bukan dokter.
-  const canEdit = user?.role === 'ADMIN_CABANG' || user?.role === 'ADMIN_LAYANAN' || user?.role === 'NURSE';
+  const canEdit = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE'].includes(user?.role || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +69,7 @@ export default function Step8ComplaintsRecommendations({
       }
 
       showToast.success('Keluhan dan rekomendasi berhasil disimpan');
-      complaintsDraft.clearDraft();
+      clearDraft();
       setIsEditing(false);
       onComplete();
     } catch (error) {

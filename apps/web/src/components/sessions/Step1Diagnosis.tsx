@@ -67,7 +67,7 @@ export default function Step1Diagnosis({
   const [memberDiagnoses, setMemberDiagnoses] = useState<Diagnosis[]>([]);
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
   const canEditDiagnosis = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'NURSE'].includes(user?.role || '');
-  const diagnosisDraft = useSessionWorkflowDraft<CreateDiagnosisInput>('diagnosis');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<CreateDiagnosisInput>('diagnosis');
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
     sourceDiagnosisId: undefined,
@@ -84,14 +84,14 @@ export default function Step1Diagnosis({
     riwayatPengobatan: '',
     pemeriksaanFisik: '',
     pemeriksaanTambahan: {},
-    ...diagnosisDraft.initialDraft,
+    ...initialDraft,
   });
   const [editFormData, setEditFormData] = useState<Partial<CreateDiagnosisInput>>({});
   const [additionalExamJson, setAdditionalExamJson] = useState('{}');
 
   useEffect(() => {
-    if (!diagnosis) diagnosisDraft.updateDraft(formData);
-  }, [diagnosis, formData]);
+    if (!diagnosis) updateDraft(formData);
+  }, [diagnosis, formData, updateDraft]);
 
   useEffect(() => {
     if (!diagnosis) return;
@@ -182,7 +182,7 @@ export default function Step1Diagnosis({
 
       await sessionApi.createDiagnosis(encounterId, data);
       onComplete();
-      diagnosisDraft.clearDraft();
+      clearDraft();
     } catch (err) {
       assertCaughtError(err);
       devError('Failed to save diagnosis:', err);

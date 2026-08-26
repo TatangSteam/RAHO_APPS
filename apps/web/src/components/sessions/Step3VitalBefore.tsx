@@ -1,7 +1,7 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { VitalSign, VitalType } from '@/types/session';
@@ -39,14 +39,15 @@ export default function Step3VitalBefore({
   onNext,
 }: Step3VitalBeforeProps) {
   const { user } = useAuthStore();
-  const vitalDraft = useSessionWorkflowDraft<Record<VitalType, string>>('vitalBefore');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<Record<VitalType, string>>('vitalBefore');
+  const initialDraftRef = useRef(initialDraft);
   const [values, setValues] = useState<Record<VitalType, string>>({
     SISTOL: '',
     DIASTOL: '',
     HR: '',
     SATURASI: '',
     PI: '',
-    ...vitalDraft.initialDraft,
+    ...initialDraftRef.current,
   });
   const [saving, setSaving] = useState<Record<VitalType, boolean>>({
     SISTOL: false,
@@ -79,7 +80,7 @@ export default function Step3VitalBefore({
       HR: '',
       SATURASI: '',
       PI: '',
-      ...vitalDraft.initialDraft,
+      ...initialDraftRef.current,
     };
     const newSaved: Record<VitalType, boolean> = {
       SISTOL: false,
@@ -99,8 +100,8 @@ export default function Step3VitalBefore({
   }, [vitalSigns]);
 
   useEffect(() => {
-    vitalDraft.updateDraft(values);
-  }, [values]);
+    updateDraft(values);
+  }, [updateDraft, values]);
 
   // Check if all fields have valid values (real-time validation)
   const allFieldsValid = useMemo(() => {
@@ -219,7 +220,7 @@ export default function Step3VitalBefore({
       }
 
       // Call onComplete after all saved
-      vitalDraft.clearDraft();
+      clearDraft();
       onComplete();
     } catch (err) {
       assertCaughtError(err);
@@ -335,7 +336,7 @@ export default function Step3VitalBefore({
       }}>
         {VITAL_FIELDS.map((field) => (
           <div key={field.type} style={{ position: 'relative' }}>
-            <label style={{
+            <label htmlFor={`vital-before-${field.type}`} style={{
               display: 'block',
               fontSize: '13px',
               fontWeight: '600',
@@ -349,6 +350,7 @@ export default function Step3VitalBefore({
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                id={`vital-before-${field.type}`}
                 type="text"
                 inputMode="decimal"
                 value={values[field.type]}

@@ -5,6 +5,7 @@ import { getDiagnosisCategoryList, normalizeDiagnosisCategories } from '../../..
 import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
 import { Role, AuditAction, NotificationStatus, Prisma } from '@prisma/client';
+import { assertSessionEditWindow } from './session-edit-window';
 
 const DIAGNOSIS_EDITORS: Role[] = [
   Role.SUPER_ADMIN,
@@ -208,6 +209,12 @@ export class DiagnosisService {
       };
     }
 
+    const treatmentSession = await prisma.treatmentSession.findFirst({
+      where: { encounterId },
+      select: { isCompleted: true, completedAt: true },
+    });
+    if (treatmentSession) assertSessionEditWindow(treatmentSession);
+
     // Build update data - only include fields that are provided
     const updateData: Prisma.DiagnosisUpdateInput = {};
     if (data.diagnosa !== undefined) updateData.diagnosa = data.diagnosa;
@@ -247,6 +254,8 @@ export class DiagnosisService {
       action: AuditAction.UPDATE,
       resource: 'Diagnosis',
       resourceId: updatedDiagnosis.id,
+      beforeData: existingDiagnosis,
+      afterData: updatedDiagnosis,
       meta: {
         diagnosisCode: updatedDiagnosis.diagnosisCode,
         encounterId,

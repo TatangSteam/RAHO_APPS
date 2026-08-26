@@ -19,12 +19,14 @@ const completeSteps: StepCompletion = {
 };
 
 describe('sessionWorkflow', () => {
-  it('memisahkan pemilik langkah klinis dari Admin Layanan', () => {
+  it('memisahkan langkah dokter dari langkah operasional Nakes dan MSO', () => {
     expect(canEditSessionStep('DOCTOR', 1)).toBe(true);
     expect(canEditSessionStep('DOCTOR', 9)).toBe(true);
     expect(canEditSessionStep('NURSE', 3)).toBe(true);
     expect(canEditSessionStep('NURSE', 8)).toBe(true);
-    expect(canEditSessionStep('ADMIN_LAYANAN', 3)).toBe(false);
+    expect(canEditSessionStep('ADMIN_LAYANAN', 3)).toBe(true);
+    expect(canEditSessionStep('ADMIN_LAYANAN', 8)).toBe(true);
+    expect(canEditSessionStep('ADMIN_LAYANAN', 1)).toBe(false);
     expect(canEditSessionStep('ADMIN_LAYANAN', 9)).toBe(false);
     expect(canFinalizeSession('ADMIN_LAYANAN')).toBe(false);
   });

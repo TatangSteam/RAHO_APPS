@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 
 export type SessionDraftKey =
   | 'diagnosis'
@@ -41,10 +41,19 @@ export function SessionWorkflowDraftProvider({
 }
 
 export function useSessionWorkflowDraft<T extends object>(key: SessionDraftKey) {
-  const context = useContext(SessionWorkflowDraftContext);
+  const { drafts, updateDraft: updateContextDraft, clearDraft: clearContextDraft } = useContext(SessionWorkflowDraftContext);
+  const updateDraft = useCallback(
+    (value: T) => updateContextDraft(key, value),
+    [key, updateContextDraft],
+  );
+  const clearDraft = useCallback(
+    () => clearContextDraft(key),
+    [clearContextDraft, key],
+  );
+
   return {
-    initialDraft: (context.drafts[key] || {}) as Partial<T>,
-    updateDraft: (value: T) => context.updateDraft(key, value),
-    clearDraft: () => context.clearDraft(key),
+    initialDraft: (drafts[key] || {}) as Partial<T>,
+    updateDraft,
+    clearDraft,
   };
 }

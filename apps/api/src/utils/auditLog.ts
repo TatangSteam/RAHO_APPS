@@ -102,6 +102,7 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   Session: 'SESI_TERAPI',
   Diagnosis: 'DIAGNOSIS',
   DoctorEvaluation: 'DIAGNOSIS',
+  VitalSign: 'SESI_TERAPI',
   TherapyPlan: 'THERAPY_PLAN',
   MasterProduct: 'MASTER_PRODUCT',
   StockRequest: 'INVENTORY',

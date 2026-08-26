@@ -106,18 +106,19 @@ export default function Step6Materials({
   isLocked,
   onComplete,
 }: Step6MaterialsProps) {
-  const materialDraft = useSessionWorkflowDraft<MaterialEntryDraft>('materials');
+  const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<MaterialEntryDraft>('materials');
+  const initialDraftRef = useRef(initialDraft);
   const [loading, setLoading] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(true);
   const [inventoryItems, setInventoryItems] = useState<InventoryItemWithStock[]>([]);
   const [selectedItem, setSelectedItem] = useState<InventoryItemWithStock | null>(null);
-  const [quantity, setQuantity] = useState(materialDraft.initialDraft.quantity || '');
-  const [searchTerm, setSearchTerm] = useState(materialDraft.initialDraft.searchTerm || '');
+  const [quantity, setQuantity] = useState(initialDraftRef.current.quantity || '');
+  const [searchTerm, setSearchTerm] = useState(initialDraftRef.current.searchTerm || '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [recommendations, setRecommendations] = useState<MaterialRecommendationsResponse | null>(null);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
-  const [deviationReason, setDeviationReason] = useState<MaterialDeviationReason | ''>(materialDraft.initialDraft.deviationReason || '');
-  const [deviationNotes, setDeviationNotes] = useState(materialDraft.initialDraft.deviationNotes || '');
+  const [deviationReason, setDeviationReason] = useState<MaterialDeviationReason | ''>(initialDraftRef.current.deviationReason || '');
+  const [deviationNotes, setDeviationNotes] = useState(initialDraftRef.current.deviationNotes || '');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadInventoryItems = useCallback(async () => {
@@ -144,20 +145,20 @@ export default function Step6Materials({
   }, [loadInventoryItems]);
 
   useEffect(() => {
-    if (!materialDraft.initialDraft.inventoryItemId || selectedItem || inventoryItems.length === 0) return;
-    const restored = inventoryItems.find((item) => item.id === materialDraft.initialDraft.inventoryItemId);
+    if (!initialDraftRef.current.inventoryItemId || selectedItem || inventoryItems.length === 0) return;
+    const restored = inventoryItems.find((item) => item.id === initialDraftRef.current.inventoryItemId);
     if (restored) setSelectedItem(restored);
   }, [inventoryItems, selectedItem]);
 
   useEffect(() => {
-    materialDraft.updateDraft({
+    updateDraft({
       inventoryItemId: selectedItem?.id,
       quantity,
       searchTerm,
       deviationReason,
       deviationNotes,
     });
-  }, [deviationNotes, deviationReason, quantity, searchTerm, selectedItem?.id]);
+  }, [deviationNotes, deviationReason, quantity, searchTerm, selectedItem?.id, updateDraft]);
 
   const loadRecommendations = useCallback(async () => {
     try {
@@ -236,7 +237,7 @@ export default function Step6Materials({
       setSearchTerm('');
       setDeviationReason('');
       setDeviationNotes('');
-      materialDraft.clearDraft();
+      clearDraft();
       onComplete();
     } catch (error: unknown) {
       devError('Error adding material:', error);

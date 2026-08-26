@@ -28,6 +28,13 @@ const CLINICAL_WRITERS: Role[] = [
   Role.ADMIN_CABANG,
   ...MEDICAL_STAFF,
 ];
+const VITAL_WRITERS: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+  Role.NURSE,
+];
 const COMPLETION_REVERSERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
 
 // ============================================================
@@ -185,7 +192,7 @@ router.put(
 router.post(
   '/:sessionId/vital-signs',
   authenticate,
-  authorize(CLINICAL_WRITERS),
+  authorize(VITAL_WRITERS),
   controller.upsertVitalSign.bind(controller)
 );
 
