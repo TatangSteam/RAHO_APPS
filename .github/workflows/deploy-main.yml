@@ -90,9 +90,10 @@ jobs:
           # Deployment must never create and push a second commit. If an app
           # lockfile is stale, fail and require the correction in a reviewed
           # commit instead.
+          npm install --package-lock-only --ignore-scripts
           (cd apps/api && npm install --package-lock-only --ignore-scripts --no-workspaces)
           (cd apps/web && npm install --package-lock-only --ignore-scripts --no-workspaces)
-          git diff --exit-code -- apps/api/package-lock.json apps/web/package-lock.json
+          git diff --exit-code -- package-lock.json apps/api/package-lock.json apps/web/package-lock.json
 
       - name: Install dependencies and run tests
         shell: bash
