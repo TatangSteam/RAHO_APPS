@@ -397,6 +397,13 @@ router.get(
 );
 
 // Complete session (with validation)
+router.get(
+  '/:sessionId/whatsapp-report/preview',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.previewWhatsAppReport.bind(controller)
+);
+
 router.patch(
   '/:sessionId/complete',
   authenticate,

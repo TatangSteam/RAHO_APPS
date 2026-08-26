@@ -36,6 +36,11 @@ export const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
   E2E_DISABLE_RATE_LIMIT: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
+  WHATSAPP_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  WHATSAPP_WORKER_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  WHATSAPP_PROVIDER: z.enum(['DISABLED', 'BAILEYS']).default('DISABLED'),
+  WHATSAPP_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined, z.string().min(32).optional()),
+
   ZOHO_CLIENT_ID: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
   ZOHO_CLIENT_SECRET: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
   ZOHO_REDIRECT_URI: z.preprocess(emptyStringToUndefined, z.string().url().optional()),

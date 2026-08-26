@@ -675,6 +675,22 @@ enum LogisticTransactionStatus {
   CANCELLED
 }
 
+enum WhatsAppDeliveryStatus {
+  PENDING
+  PROCESSING
+  RETRY
+  SENT
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
+enum WhatsAppDeliveryTrigger {
+  SESSION_COMPLETION
+  MANUAL
+  MANUAL_RESEND
+}
+
 // ============================================================
 // CORE DOMAIN
 // ============================================================
@@ -742,6 +758,7 @@ model Branch {
   socialProgramRequests   SocialProgramRequest[]
   stockOpnames            StockOpname[]
   invoicePaymentRefunds   InvoicePaymentRefund[]
+  whatsappDeliveries      WhatsAppDelivery[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -1208,23 +1225,25 @@ model Member {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  user                User                       @relation(fields: [userId], references: [id])
-  registrationBranch  Branch                     @relation(fields: [registrationBranchId], references: [id])
-  referralCode        ReferralCode?              @relation(fields: [referralCodeId], references: [id])
-  documents           MemberDocument[]
-  branchAccesses      BranchMemberAccess[]
-  memberPackages      MemberPackage[]
+  user                  User                        @relation(fields: [userId], references: [id])
+  registrationBranch    Branch                      @relation(fields: [registrationBranchId], references: [id])
+  referralCode          ReferralCode?               @relation(fields: [referralCodeId], references: [id])
+  documents             MemberDocument[]
+  branchAccesses        BranchMemberAccess[]
+  memberPackages        MemberPackage[]
   socialProgramRequests SocialProgramRequest[]
-  memberAddOns        MemberAddOn[]
-  nonTherapyPurchases MemberNonTherapyPurchase[]
-  invoices            Invoice[]
-  encounters          Encounter[]
-  diagnoses           Diagnosis[] // Direct diagnoses without encounter
-  therapyPlans        TherapyPlan[] // Therapy plans for preparation
-  therapyPlanSets     TherapyPlanSet[]
-  chatRoom            ChatRoom?
-  incentiveRecords    ReferralIncentiveRecord[]
-  labResults          LabResult[]
+  memberAddOns          MemberAddOn[]
+  nonTherapyPurchases   MemberNonTherapyPurchase[]
+  invoices              Invoice[]
+  encounters            Encounter[]
+  diagnoses             Diagnosis[] // Direct diagnoses without encounter
+  therapyPlans          TherapyPlan[] // Therapy plans for preparation
+  therapyPlanSets       TherapyPlanSet[]
+  chatRoom              ChatRoom?
+  incentiveRecords      ReferralIncentiveRecord[]
+  labResults            LabResult[]
+  communicationConsent  MemberCommunicationConsent?
+  whatsappDeliveries    WhatsAppDelivery[]
 
   @@index([memberNo])
   @@index([registrationBranchId, isActive])
@@ -1391,33 +1410,33 @@ model PackagePricing {
 }
 
 model MemberPackage {
-  id                  String          @id @default(cuid())
-  packageCode         String          @unique
-  memberId            String
-  branchId            String
-  packagePricingId    String?
-  packageType         PackageType
-  productCode         String? // e.g., TNB-P7-HC, BST-NO-P1-HC
-  totalSessions       Int
-  usedSessions        Int             @default(0)
-  finalPrice          Decimal         @db.Decimal(12, 2)
-  discountPercent     Decimal?        @db.Decimal(5, 2)
-  discountAmount      Decimal?        @db.Decimal(12, 2)
-  discountNote        String?
-  notes               String?
-  status              PackageStatus   @default(PENDING_PAYMENT)
-  paymentPlanType     PaymentPlanType @default(FULL_PAYMENT)
-  installmentTotal    Int?
-  installmentSchedule Json?
-  totalVerifiedPaid   Decimal         @default(0) @db.Decimal(12, 2)
-  paymentPlanStatus   String?
-  boosterType         String?
-  serviceType         String? // HC, PS, PHC, PTY, PDA
-  purchaseGroupId     String? // Group BASIC + BOOSTER purchased together
+  id                     String          @id @default(cuid())
+  packageCode            String          @unique
+  memberId               String
+  branchId               String
+  packagePricingId       String?
+  packageType            PackageType
+  productCode            String? // e.g., TNB-P7-HC, BST-NO-P1-HC
+  totalSessions          Int
+  usedSessions           Int             @default(0)
+  finalPrice             Decimal         @db.Decimal(12, 2)
+  discountPercent        Decimal?        @db.Decimal(5, 2)
+  discountAmount         Decimal?        @db.Decimal(12, 2)
+  discountNote           String?
+  notes                  String?
+  status                 PackageStatus   @default(PENDING_PAYMENT)
+  paymentPlanType        PaymentPlanType @default(FULL_PAYMENT)
+  installmentTotal       Int?
+  installmentSchedule    Json?
+  totalVerifiedPaid      Decimal         @default(0) @db.Decimal(12, 2)
+  paymentPlanStatus      String?
+  boosterType            String?
+  serviceType            String? // HC, PS, PHC, PTY, PDA
+  purchaseGroupId        String? // Group BASIC + BOOSTER purchased together
   socialProgramRequestId String?
-  upgradedFromId      String? // Track if this is an upgrade from another package
+  upgradedFromId         String? // Track if this is an upgrade from another package
   // 1 = paket legacy sebelum cutover finance; 2 = paket baru yang wajib deferred revenue
-  revenueFlowVersion  Int             @default(2)
+  revenueFlowVersion     Int             @default(2)
 
   // Payment proof (bukti pembayaran)
   paymentProofUrl      String?
@@ -2176,15 +2195,15 @@ model Reimbursement {
   createdAt              DateTime                   @default(now())
   updatedAt              DateTime                   @updatedAt
 
-  branch              Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  claimant            User                  @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id], onDelete: Restrict)
-  reviewer            User?                 @relation("ReimbursementReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
-  payer               User?                 @relation("ReimbursementPaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
-  approvalInstance    ApprovalInstance?     @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
-  expenseAccount      Account?              @relation(fields: [expenseAccountId], references: [id], onDelete: Restrict)
-  cashBankAccount     CashBankAccount?      @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
-  journalEntry        JournalEntry?         @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
-  cashBankTransaction CashBankTransaction?  @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+  branch              Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  claimant            User                      @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id], onDelete: Restrict)
+  reviewer            User?                     @relation("ReimbursementReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  payer               User?                     @relation("ReimbursementPaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
+  approvalInstance    ApprovalInstance?         @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  expenseAccount      Account?                  @relation(fields: [expenseAccountId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount?          @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  journalEntry        JournalEntry?             @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction?      @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
   attachments         ReimbursementAttachment[]
 
   @@index([branchId, status, createdAt])
@@ -2272,14 +2291,14 @@ model ApprovalInstance {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  rule                ApprovalRule         @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
-  branch              Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  maker               User                 @relation("ApprovalInstanceMaker", fields: [makerUserId], references: [id], onDelete: Restrict)
-  decisions           ApprovalDecision[]
-  auditLogs           ApprovalAuditLog[]
-  stockOpname         StockOpname?
-  inventoryAdjustment InventoryAdjustment?
-  reimbursement       Reimbursement?
+  rule                 ApprovalRule          @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
+  branch               Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  maker                User                  @relation("ApprovalInstanceMaker", fields: [makerUserId], references: [id], onDelete: Restrict)
+  decisions            ApprovalDecision[]
+  auditLogs            ApprovalAuditLog[]
+  stockOpname          StockOpname?
+  inventoryAdjustment  InventoryAdjustment?
+  reimbursement        Reimbursement?
   socialProgramRequest SocialProgramRequest?
 
   @@index([module, status, branchId, submittedAt])
@@ -2869,6 +2888,7 @@ model TreatmentSession {
   completedEvent           DomainEvent?
   revenueRecognitions      RevenueRecognition[]
   deferredRevenueMovements DeferredRevenueMovement[]
+  whatsappDeliveries       WhatsAppDelivery[]
 
   @@index([encounterId])
   @@index([branchId, treatmentDate])
@@ -3108,7 +3128,7 @@ model MaterialUsage {
 }
 
 model TreatmentBom {
-  id               String            @id @default(cuid())
+  id               String             @id @default(cuid())
   bomCode          String             @unique
   packagePricingId String
   branchId         String?
@@ -3200,14 +3220,14 @@ model ZohoEntityMapping {
   zohoEntityType   String
   zohoEntityId     String
   externalKey      String?
-  dataOrigin       ZohoDataOrigin    @default(UNKNOWN)
+  dataOrigin       ZohoDataOrigin     @default(UNKNOWN)
   managementMode   ZohoManagementMode @default(REVIEW_REQUIRED)
   originVerifiedAt DateTime?
-  status           ZohoMappingStatus @default(ACTIVE)
+  status           ZohoMappingStatus  @default(ACTIVE)
   metadata         Json?
   lastSyncedAt     DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   connection ZohoConnection @relation(fields: [zohoConnectionId], references: [id], onDelete: Cascade)
 
@@ -3488,6 +3508,61 @@ model DoctorEvaluationHistory {
 
   @@index([evaluationId])
   @@map("doctor_evaluation_histories")
+}
+
+model MemberCommunicationConsent {
+  id                      String    @id @default(cuid())
+  memberId                String    @unique
+  whatsappTreatmentReport Boolean   @default(false)
+  consentedAt             DateTime?
+  consentedBy             String?
+  revokedAt               DateTime?
+  revokedBy               String?
+  consentSource           String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("member_communication_consents")
+}
+
+model WhatsAppDelivery {
+  id                 String                  @id @default(cuid())
+  idempotencyKey     String                  @unique
+  treatmentSessionId String
+  memberId           String
+  branchId           String
+  trigger            WhatsAppDeliveryTrigger
+  status             WhatsAppDeliveryStatus  @default(PENDING)
+  templateKey        String                  @default("SESSION_COMPLETED_V1")
+  templateVersion    Int                     @default(1)
+  recipientEncrypted String                  @db.Text
+  recipientMasked    String
+  payloadEncrypted   String                  @db.Text
+  attempts           Int                     @default(0)
+  maxAttempts        Int                     @default(6)
+  availableAt        DateTime                @default(now())
+  lockedBy           String?
+  leaseUntil         DateTime?
+  providerMessageId  String?
+  requestedBy        String
+  requestedAt        DateTime                @default(now())
+  sentAt             DateTime?
+  failedAt           DateTime?
+  lastErrorCode      String?
+  lastErrorSanitized String?                 @db.Text
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id], onDelete: Restrict)
+  member           Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  branch           Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([status, availableAt, createdAt])
+  @@index([treatmentSessionId, createdAt])
+  @@index([branchId, status])
+  @@map("whatsapp_deliveries")
 }
 
 // ============================================================

@@ -30,6 +30,8 @@ import { SessionDeletionService } from './services/session-deletion.service';
 import { SessionDetailsService } from './services/session-details.service';
 import { UnfinishedSessionReminderService } from './services/unfinished-session-reminder.service';
 import type { BulkEditSetInput } from '../members/services/member-therapy-plan-set-edit.service';
+import { previewSessionReport } from '../whatsapp/whatsapp-report.service';
+import type { SessionReportBackgroundKey } from '../whatsapp/whatsapp-backgrounds';
 
 /**
  * Main Sessions Service - Orchestrates all session-related operations
@@ -95,6 +97,14 @@ export class SessionsService {
 
   async getSessionById(sessionId: string) {
     return this.retrievalService.getSessionById(sessionId);
+  }
+
+  async previewWhatsAppReport(
+    sessionId: string,
+    userId: string,
+    backgroundKey?: SessionReportBackgroundKey,
+  ) {
+    return previewSessionReport(sessionId, userId, backgroundKey);
   }
 
   async getAllSessions(params: { 

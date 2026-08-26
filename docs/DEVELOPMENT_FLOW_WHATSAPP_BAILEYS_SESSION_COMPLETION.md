@@ -4,6 +4,30 @@ Status: rencana pengembangan
 Tanggal: 10 Agustus 2026  
 Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan  
 Integrasi awal: Baileys (WhatsApp Web)  
+
+## Status implementasi
+
+Mulai dikembangkan pada 26 Agustus 2026.
+
+Sudah tersedia pada fondasi awal:
+
+- model consent komunikasi dan outbox delivery melalui migration;
+- feature flag WhatsApp dengan kondisi awal nonaktif;
+- normalisasi serta masking nomor Indonesia;
+- snapshot laporan dari foto, infus, tanda vital, dan evaluasi dokter;
+- template caption klinis versi 1;
+- renderer PNG 1080 × 1080 dengan border RAHO dan fallback tanpa foto;
+- background visual dapat dipilih dari preset resmi `RAHO_RED`,
+  `HEALTH_GREEN`, `PREMIUM_GOLD`, atau `CLEAN_LIGHT`;
+- endpoint preview read-only pada
+  `GET /treatment-sessions/:sessionId/whatsapp-report/preview`.
+
+Belum diaktifkan untuk pengiriman production:
+
+- penyimpanan auth state dan pairing Baileys;
+- pembuatan outbox saat completion/manual request;
+- worker pengiriman, retry, dead-letter, dan halaman monitoring;
+- UI consent, preview, dan tombol kirim.
 Alternatif produksi: WhatsApp Business Platform/Cloud API
 
 ## 1. Tujuan
@@ -347,6 +371,12 @@ Validasi ketika `sendWhatsAppReport=true`:
 
 ```http
 GET /treatment-sessions/:sessionId/whatsapp-report/preview
+```
+
+Background dapat dipilih tanpa membuat delivery:
+
+```http
+GET /treatment-sessions/:sessionId/whatsapp-report/preview?background=HEALTH_GREEN
 ```
 
 Respons memuat:
@@ -972,4 +1002,3 @@ memiliki outbox, audit, retry, dan kontrol akses belum siap untuk production.
 - [Baileys README - authentication, events, and sending messages](https://github.com/WhiskeySockets/Baileys/blob/master/README.md)
 - [Baileys security guidance](https://github.com/WhiskeySockets/Baileys/security)
 - [WhatsApp Business Platform](https://developers.facebook.com/docs/whatsapp/)
-

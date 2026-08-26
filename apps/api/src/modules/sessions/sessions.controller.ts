@@ -22,6 +22,7 @@ import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 import { WorkflowBurdenService } from './services/workflow-burden.service';
+import { isSessionReportBackgroundKey } from '@modules/whatsapp/whatsapp-backgrounds';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
@@ -972,6 +973,32 @@ export class SessionsController {
   // ============================================================
   // COMPLETE SESSION
   // ============================================================
+
+  async previewWhatsAppReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const requestedBackground = req.query.background;
+      const backgroundKey = isSessionReportBackgroundKey(requestedBackground)
+        ? requestedBackground
+        : undefined;
+      if (requestedBackground !== undefined && backgroundKey === undefined) {
+        return sendError(
+          res,
+          400,
+          'WHATSAPP_BACKGROUND_INVALID',
+          'Pilihan background laporan WhatsApp tidak valid.',
+        );
+      }
+      const result = await sessionsService.previewWhatsAppReport(
+        req.params.sessionId,
+        req.user!.userId,
+        backgroundKey,
+      );
+      return sendSuccess(res, result);
+    } catch (err) {
+      if (err.status) return sendError(res, err.status, err.code, err.message);
+      next(err);
+    }
+  }
 
   async completeSession(req: Request, res: Response, next: NextFunction) {
     try {
