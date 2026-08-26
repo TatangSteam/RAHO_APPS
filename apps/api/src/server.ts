@@ -8,6 +8,7 @@ import {
   startZohoReconciliationScheduler,
   stopZohoReconciliationScheduler,
 } from '@modules/zoho/zoho.reconciliation.service';
+import { startWhatsAppRuntime, stopWhatsAppRuntime } from '@modules/whatsapp/whatsapp-runtime';
 
 async function bootstrap(): Promise<void> {
   // ── Verify Database Connection ─────────────────────────────
@@ -31,11 +32,19 @@ async function bootstrap(): Promise<void> {
   registerZohoHandlers();
   startZohoWorker();
   startZohoReconciliationScheduler();
+  try {
+    await startWhatsAppRuntime();
+  } catch (error) {
+    // WhatsApp is an optional side effect. A broken pairing/auth state must not
+    // make core RAHO transactions unavailable.
+    logger.error('WhatsApp runtime failed to start; API remains available', error);
+  }
 
   // ── Graceful Shutdown ─────────────────────────────────────
   const shutdown = async (signal: string): Promise<void> => {
     stopZohoWorker();
     stopZohoReconciliationScheduler();
+    await stopWhatsAppRuntime();
     logger.info(`\n${signal} received — shutting down gracefully`);
 
     server.close(async () => {

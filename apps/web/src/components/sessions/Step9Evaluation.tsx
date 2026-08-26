@@ -57,8 +57,9 @@ export default function Step9Evaluation({
     updateDraft(formData);
   }, [formData, updateDraft]);
 
-  // Evaluasi klinis (SOAP) merupakan tanggung jawab khusus dokter.
-  const canEdit = user?.role === 'DOCTOR';
+  // Dokter tetap pemilik klinis utama. Super Admin dan Admin Manager dapat
+  // membantu koreksi terkontrol; perubahan tetap tercatat pada audit log.
+  const canEdit = ['DOCTOR', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '');
 
   const hasDoctorEvaluation = !!evaluation && [
     evaluation.subjective,
@@ -308,7 +309,7 @@ export default function Step9Evaluation({
           Evaluasi Dokter
         </h3>
         <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-          Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan pada sesi ini.
+          Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan, Admin Manager, atau Super Admin.
         </p>
       </div>
     );
@@ -344,7 +345,7 @@ export default function Step9Evaluation({
             📋 Evaluasi Dokter (SOAP)
           </h3>
           <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-            {isEditing ? 'Edit evaluasi dokter' : 'Catat evaluasi dokter menggunakan format SOAP'}
+            {isEditing ? 'Edit evaluasi SOAP (perubahan tercatat di audit)' : 'Catat evaluasi dokter menggunakan format SOAP'}
           </p>
         </div>
       </div>

@@ -691,6 +691,16 @@ enum WhatsAppDeliveryTrigger {
   MANUAL_RESEND
 }
 
+enum WhatsAppConnectionStatus {
+  DISCONNECTED
+  PAIRING
+  CONNECTING
+  CONNECTED
+  RECONNECTING
+  LOGGED_OUT
+  ERROR
+}
+
 // ============================================================
 // CORE DOMAIN
 // ============================================================
@@ -3563,6 +3573,24 @@ model WhatsAppDelivery {
   @@index([treatmentSessionId, createdAt])
   @@index([branchId, status])
   @@map("whatsapp_deliveries")
+}
+
+model WhatsAppConnection {
+  id                 String                   @id
+  status             WhatsAppConnectionStatus @default(DISCONNECTED)
+  phoneMasked        String?
+  authStateEncrypted String?                  @db.Text
+  authKeyVersion     Int                      @default(1)
+  defaultBackgroundKey String                 @default("RAHO_RED")
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastErrorSanitized String?                  @db.Text
+  createdBy          String
+  updatedBy          String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@map("whatsapp_connections")
 }
 
 // ============================================================

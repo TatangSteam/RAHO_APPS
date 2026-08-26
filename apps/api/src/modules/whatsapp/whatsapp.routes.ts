@@ -1,0 +1,17 @@
+import { Router } from 'express';
+import { Role } from '@prisma/client';
+import { authenticate } from '@middleware/authenticate';
+import { authorize } from '@middleware/authorize';
+import * as controller from './whatsapp-connection.controller';
+
+const router = Router();
+router.use(authenticate, authorize([Role.SUPER_ADMIN]));
+router.get('/connection', controller.status);
+router.post('/connection/pair', controller.pair);
+router.post('/connection/reconnect', controller.reconnect);
+router.post('/connection/logout', controller.logout);
+router.put('/config', controller.updateConfig);
+router.get('/deliveries', controller.deliveries);
+router.post('/deliveries/:deliveryId/retry', controller.retryDelivery);
+
+export default router;

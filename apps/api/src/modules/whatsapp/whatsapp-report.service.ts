@@ -14,6 +14,15 @@ import {
 import { Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { encryptWhatsAppValue } from './whatsapp.crypto';
+import { GLOBAL_WHATSAPP_CONNECTION_ID } from './whatsapp-auth-state.repository';
+
+async function configuredBackgroundKey(): Promise<SessionReportBackgroundKey> {
+  const connection = await prisma.whatsAppConnection.findUnique({
+    where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
+    select: { defaultBackgroundKey: true },
+  });
+  return getSessionReportBackground(connection?.defaultBackgroundKey).key;
+}
 
 const SAFE_DELIVERY_SELECT = {
   id: true,
@@ -63,14 +72,17 @@ export async function previewSessionReport(
   } catch {
     // Preview remains available with the explicit no-photo layout.
   }
-  const selectedBackground = getSessionReportBackground(backgroundKey);
+  const selectedBackground = getSessionReportBackground(backgroundKey ?? await configuredBackgroundKey());
   const image = await renderSessionReportImage(report.snapshot, photo, selectedBackground.key);
 
   return {
     recipientMasked: normalized ? maskWhatsAppNumber(normalized) : null,
     consentActive: report.consentActive,
     phoneValid: normalized !== null,
-    readyToQueue: env.WHATSAPP_ENABLED && report.consentActive && normalized !== null,
+    readyToQueue: env.WHATSAPP_ENABLED
+      && report.consentActive
+      && normalized !== null
+      && report.operationalReportReady,
     provider: env.WHATSAPP_PROVIDER,
     caption: buildSessionReportCaption(report.snapshot),
     imageDataUrl: `data:image/png;base64,${image.toString('base64')}`,
@@ -78,6 +90,8 @@ export async function previewSessionReport(
     templateVersion: report.snapshot.templateVersion,
     background: { key: selectedBackground.key, name: selectedBackground.name },
     availableBackgrounds: listSessionReportBackgrounds(),
+    doctorEvaluationIncluded: report.doctorEvaluationIncluded,
+    evaluationRequired: false,
   };
 }
 
@@ -96,6 +110,12 @@ export async function assertSessionReportCanQueue(sessionId: string, actorUserId
   if (!recipient) {
     throw errors.badRequest('WHATSAPP_PHONE_INVALID', 'Nomor WhatsApp member belum valid.');
   }
+  if (!report.operationalReportReady) {
+    throw errors.badRequest(
+      'WHATSAPP_REPORT_NOT_READY',
+      'Laporan WhatsApp dapat dikirim setelah data infus dan tanda vital sebelum/sesudah tersedia.',
+    );
+  }
   return { report, recipient };
 }
 
@@ -106,18 +126,9 @@ export async function queueManualSessionReport(input: {
   backgroundKey?: SessionReportBackgroundKey;
 }) {
   const { report, recipient } = await assertSessionReportCanQueue(input.sessionId, input.actorUserId);
-  const session = await prisma.treatmentSession.findUnique({
-    where: { id: input.sessionId },
-    select: { isCompleted: true, completionStatus: true },
-  });
-  if (!session?.isCompleted || session.completionStatus !== 'COMPLETED') {
-    throw errors.badRequest(
-      'WHATSAPP_SESSION_NOT_COMPLETED',
-      'Laporan WhatsApp hanya dapat diantrekan setelah sesi selesai.',
-    );
-  }
-
-  const background = getSessionReportBackground(input.backgroundKey);
+  // The approved background is centrally governed by Super Admin. Ignore a
+  // stale client's selection when creating the immutable delivery payload.
+  const background = getSessionReportBackground(await configuredBackgroundKey());
   const encryptedPayload = encryptWhatsAppValue(JSON.stringify({
     snapshot: report.snapshot,
     photoUrl: report.photoUrl,

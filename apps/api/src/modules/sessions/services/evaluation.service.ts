@@ -7,7 +7,7 @@ import { assertSessionEditWindow } from './session-edit-window';
 
 const OPERATIONAL_FIELDS = ['keluhan', 'rekomendasi'] as const;
 const DOCTOR_FIELDS = ['subjective', 'objective', 'assessment', 'plan', 'generalNotes'] as const;
-const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
+const SOAP_MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER];
 
 function providedFields(data: Partial<CreateEvaluationInput>, fields: readonly string[]) {
   return fields.filter((field) => data[field as keyof CreateEvaluationInput] !== undefined);
@@ -30,7 +30,18 @@ export class EvaluationService {
 
     const operationalChanges = providedFields(data, OPERATIONAL_FIELDS);
     const doctorChanges = providedFields(data, DOCTOR_FIELDS);
-    if (MANAGER_ROLES.includes(actor.role)) return session;
+    if (SOAP_MANAGER_ROLES.includes(actor.role)) return session;
+
+    if (actor.role === Role.ADMIN_CABANG) {
+      if (doctorChanges.length > 0) {
+        throw {
+          status: 403,
+          code: 'FIELD_NOT_OWNED',
+          message: 'Evaluasi SOAP hanya dapat diedit oleh dokter, Admin Manager, atau Super Admin.',
+        };
+      }
+      return session;
+    }
 
     if (actor.role === Role.DOCTOR) {
       const assigned = session.doctorId === userId

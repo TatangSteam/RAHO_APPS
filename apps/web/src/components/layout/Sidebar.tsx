@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Activity, Package, Boxes,
-  Bell, MessageSquare, ChevronLeft, X,
+  Bell, MessageSquare, MessageCircle, ChevronLeft, X,
   LogOut, ClipboardList, ClipboardCheck, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
@@ -374,6 +374,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/admin/integrations/zoho',
         icon: <PlugZap size={20} />,
         roles: ['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'],
+      },
+      {
+        label: 'Pengaturan WhatsApp',
+        href: '/admin/integrations/whatsapp',
+        icon: <MessageCircle size={20} />,
+        roles: ['SUPER_ADMIN'],
       },
     ],
   },

@@ -1381,7 +1381,11 @@ export default function SessionDetailPage() {
         </div>
       )}
 
-      {sessionInfo.isCompleted && !isCompletionCancelled && (
+      {!isCompletionCancelled
+        && steps.step3_vitalBefore
+        && steps.step4_infusion
+        && steps.step7_vitalAfter
+        && (
         <WhatsAppReportCard
           sessionId={sessionId}
           canManageConsent={['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user?.role || '')}

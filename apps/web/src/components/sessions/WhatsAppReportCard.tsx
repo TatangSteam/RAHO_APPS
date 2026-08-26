@@ -5,14 +5,7 @@ import NextImage from 'next/image';
 import { CheckCircle2, Eye, Image as ImageIcon, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
-import { sessionApi, type WhatsAppReportBackground, type WhatsAppReportDelivery, type WhatsAppReportPreview } from '@/lib/sessionApi';
-
-const DEFAULT_BACKGROUNDS: Array<{ key: WhatsAppReportBackground; name: string }> = [
-  { key: 'RAHO_RED', name: 'Merah RAHO' },
-  { key: 'HEALTH_GREEN', name: 'Hijau Sehat' },
-  { key: 'PREMIUM_GOLD', name: 'Emas Premium' },
-  { key: 'CLEAN_LIGHT', name: 'Minimal Terang' },
-];
+import { sessionApi, type WhatsAppReportDelivery, type WhatsAppReportPreview } from '@/lib/sessionApi';
 
 function idempotencyKey(sessionId: string) {
   return `SESSION_REPORT:MANUAL:${sessionId}:${crypto.randomUUID()}`;
@@ -25,7 +18,6 @@ export default function WhatsAppReportCard({
   sessionId: string;
   canManageConsent: boolean;
 }) {
-  const [background, setBackground] = useState<WhatsAppReportBackground>('RAHO_RED');
   const [preview, setPreview] = useState<WhatsAppReportPreview | null>(null);
   const [deliveries, setDeliveries] = useState<WhatsAppReportDelivery[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,10 +33,10 @@ export default function WhatsAppReportCard({
 
   useEffect(() => { void loadDeliveries(); }, [loadDeliveries]);
 
-  const loadPreview = async (selected = background) => {
+  const loadPreview = async () => {
     try {
       setLoading(true);
-      const result = await sessionApi.previewWhatsAppReport(sessionId, selected);
+      const result = await sessionApi.previewWhatsAppReport(sessionId);
       setPreview(result);
     } catch (error) {
       assertCaughtError(error);
@@ -72,7 +64,6 @@ export default function WhatsAppReportCard({
     try {
       setSending(true);
       await sessionApi.queueWhatsAppReport(sessionId, {
-        background,
         idempotencyKey: idempotencyKey(sessionId),
       });
       showToast.success('Laporan masuk antrean WhatsApp');
@@ -85,7 +76,6 @@ export default function WhatsAppReportCard({
     }
   };
 
-  const backgrounds = preview?.availableBackgrounds || DEFAULT_BACKGROUNDS;
   return (
     <section className="card" style={{ marginTop: 24, padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -102,24 +92,9 @@ export default function WhatsAppReportCard({
         </button>
       </div>
 
-      <div style={{ marginTop: 18 }}>
-        <label htmlFor="wa-report-background" style={{ display: 'block', fontSize: 13, fontWeight: 650, marginBottom: 7 }}>
-          Background laporan
-        </label>
-        <select
-          id="wa-report-background"
-          value={background}
-          onChange={(event) => {
-            const selected = event.target.value as WhatsAppReportBackground;
-            setBackground(selected);
-            if (preview) void loadPreview(selected);
-          }}
-          className="form-control"
-          style={{ width: '100%', maxWidth: 360 }}
-        >
-          {backgrounds.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
-        </select>
-      </div>
+      <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: 12 }}>
+        Background pesan ditetapkan oleh Super Admin agar identitas laporan konsisten.
+      </p>
 
       {preview && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 420px) minmax(260px, 1fr)', gap: 20, marginTop: 20 }}>
@@ -137,6 +112,10 @@ export default function WhatsAppReportCard({
               <p style={{ margin: '6px 0 0', color: preview.consentActive ? '#16a34a' : '#f59e0b' }}>
                 <ShieldCheck size={15} style={{ display: 'inline', marginRight: 5 }} />
                 {preview.consentActive ? 'Consent WhatsApp aktif' : 'Consent WhatsApp belum aktif'}
+              </p>
+              <p style={{ margin: '6px 0 0', color: 'var(--text-muted)' }}>
+                Evaluasi dokter tidak wajib untuk pengiriman.
+                {preview.doctorEvaluationIncluded ? ' Evaluasi tersedia dan ikut dimasukkan.' : ' Laporan dikirim tanpa evaluasi dokter.'}
               </p>
             </div>
             <pre style={{ marginTop: 12, padding: 14, maxHeight: 310, overflow: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, border: '1px solid var(--surface-border)', borderRadius: 10 }}>

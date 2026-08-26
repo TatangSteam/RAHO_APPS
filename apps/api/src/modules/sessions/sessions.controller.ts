@@ -24,7 +24,6 @@ import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 import { WorkflowBurdenService } from './services/workflow-burden.service';
-import { isSessionReportBackgroundKey } from '@modules/whatsapp/whatsapp-backgrounds';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
@@ -94,16 +93,17 @@ export class SessionsController {
     const writesDoctorEvaluation = doctorFieldNames.some((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (writesDoctorEvaluation) {
-      if (user.role !== Role.DOCTOR) {
+      const isSoapManager = user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_MANAGER;
+      if (user.role !== Role.DOCTOR && !isSoapManager) {
         throw {
           status: 403,
           code: 'DOCTOR_EVALUATION_ROLE_REQUIRED',
-          message: 'Evaluasi dokter hanya dapat diisi oleh dokter yang ditugaskan',
+          message: 'Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan, Admin Manager, atau Super Admin',
         };
       }
 
       const isAssignedDoctor = session.doctorId === user.userId || session.sessionDoctors.length > 0;
-      if (!isAssignedDoctor) {
+      if (user.role === Role.DOCTOR && !isAssignedDoctor) {
         throw {
           status: 403,
           code: 'DOCTOR_NOT_ASSIGNED',
@@ -978,22 +978,9 @@ export class SessionsController {
 
   async previewWhatsAppReport(req: Request, res: Response, next: NextFunction) {
     try {
-      const requestedBackground = req.query.background;
-      const backgroundKey = isSessionReportBackgroundKey(requestedBackground)
-        ? requestedBackground
-        : undefined;
-      if (requestedBackground !== undefined && backgroundKey === undefined) {
-        return sendError(
-          res,
-          400,
-          'WHATSAPP_BACKGROUND_INVALID',
-          'Pilihan background laporan WhatsApp tidak valid.',
-        );
-      }
       const result = await sessionsService.previewWhatsAppReport(
         req.params.sessionId,
         req.user!.userId,
-        backgroundKey,
       );
       return sendSuccess(res, result);
     } catch (err) {

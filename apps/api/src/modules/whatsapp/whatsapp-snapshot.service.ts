@@ -23,6 +23,8 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
   branchId: string;
   consentActive: boolean;
   photoUrl: string | null;
+  operationalReportReady: boolean;
+  doctorEvaluationIncluded: boolean;
 }> {
   const session = await prisma.treatmentSession.findUnique({
     where: { id: sessionId },
@@ -61,6 +63,13 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
     target[vital.pencatatan] = `${String(vital.value)}${vital.unit ? ` ${vital.unit}` : ''}`;
   });
   const photoAllowed = member.isConsentToPhoto && Boolean(session.photo);
+  const hasVitalBefore = session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM');
+  const hasVitalAfter = session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
+  const doctorEvaluationIncluded = Boolean(
+    session.evaluation?.rekomendasi
+    || session.evaluation?.plan
+    || session.evaluation?.generalNotes,
+  );
 
   return {
     memberId: member.id,
@@ -69,6 +78,8 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
     consentActive: member.communicationConsent?.whatsappTreatmentReport === true
       && member.communicationConsent.revokedAt === null,
     photoUrl: photoAllowed ? session.photo?.fileUrl || null : null,
+    operationalReportReady: Boolean(session.infusion) && hasVitalBefore && hasVitalAfter,
+    doctorEvaluationIncluded,
     snapshot: {
       templateVersion: 1,
       sessionId: session.id,

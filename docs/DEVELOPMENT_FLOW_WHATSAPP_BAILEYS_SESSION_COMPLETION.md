@@ -1,6 +1,6 @@
 # Development Flow Integrasi WhatsApp Baileys untuk Penyelesaian Sesi Terapi
 
-Status: dalam pengembangan; fondasi, preview, consent, dan antrean manual tersedia
+Status: dalam pengembangan; koneksi, pairing, preview, consent, antrean, dan worker tersedia
 Tanggal: 10 Agustus 2026  
 Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan  
 Integrasi awal: Baileys (WhatsApp Web)  
@@ -32,11 +32,10 @@ Sudah tersedia pada fondasi awal:
 
 Belum diaktifkan untuk pengiriman production:
 
-- penyimpanan auth state dan pairing Baileys;
 - pembuatan outbox atomik langsung di dalam transaksi completion;
-- aktivasi loop worker, graceful shutdown, retry manual, dan halaman monitoring;
-- koneksi socket Baileys masih diperlukan sebelum tombol antrean dapat
-  mengirim pesan sungguhan.
+- retry manual dan halaman monitoring admin;
+- pairing dengan nomor WhatsApp test serta UAT pengiriman nyata masih wajib;
+- worker production tetap nonaktif secara default sampai UAT disetujui.
 Alternatif produksi: WhatsApp Business Platform/Cloud API
 
 ## 1. Tujuan
@@ -1011,3 +1010,69 @@ memiliki outbox, audit, retry, dan kontrol akses belum siap untuk production.
 - [Baileys README - authentication, events, and sending messages](https://github.com/WhiskeySockets/Baileys/blob/master/README.md)
 - [Baileys security guidance](https://github.com/WhiskeySockets/Baileys/security)
 - [WhatsApp Business Platform](https://developers.facebook.com/docs/whatsapp/)
+
+# Status development 26 Agustus 2026
+
+Fondasi pengiriman dan koneksi Baileys sudah tersedia di kode:
+
+- preview laporan bergambar dengan background yang dapat dipilih;
+- consent member, antrean manual, idempotency, retry, dan riwayat pengiriman;
+- auth-state Baileys disimpan terenkripsi di PostgreSQL, bukan file lokal;
+- pairing code, status koneksi, reconnect, dan logout hanya untuk Super Admin;
+- nomor pengirim dan background laporan dikelola dari halaman **Pengaturan
+  WhatsApp** khusus Super Admin;
+- Super Admin dapat memantau status delivery, tujuan yang sudah disamarkan,
+  jumlah percobaan, dan error aman dari halaman yang sama;
+- retry manual hanya tersedia untuk delivery `FAILED`, `RETRY`, atau
+  `DEAD_LETTER`; delivery `SENT` tidak dapat dikirim ulang dari tombol retry;
+- staf pada halaman sesi hanya melihat background aktif dan tidak dapat
+  mengganti template yang sudah ditetapkan;
+- evaluasi dokter tidak menjadi syarat pengiriman WhatsApp; jika belum diisi,
+  bagian rekomendasi/catatan dokter tidak ditampilkan pada pesan;
+- pengiriman dapat dilakukan setelah data operasional laporan tersedia, yaitu
+  data infus dan tanda vital sebelum serta sesudah;
+- worker pengiriman hanya berjalan jika feature flag diaktifkan;
+- restart server dapat memakai kembali sesi tertaut selama encryption key tetap sama.
+
+Endpoint administrasi:
+
+```text
+GET  /api/v1/integrations/whatsapp/connection
+POST /api/v1/integrations/whatsapp/connection/pair
+POST /api/v1/integrations/whatsapp/connection/reconnect
+POST /api/v1/integrations/whatsapp/connection/logout
+PUT  /api/v1/integrations/whatsapp/config
+GET  /api/v1/integrations/whatsapp/deliveries
+POST /api/v1/integrations/whatsapp/deliveries/:deliveryId/retry
+```
+
+Urutan aman di deployment server:
+
+1. Backup database terlebih dahulu.
+2. Isi `WHATSAPP_ENCRYPTION_KEY` dengan secret stabil minimal 32 karakter.
+   Jangan mengganti key setelah pairing karena auth-state lama tidak akan dapat
+   dibaca.
+3. Jalankan `npm.cmd run db:migrate:prod --prefix apps/api`. Migration hanya
+   menambah enum dan tabel `whatsapp_connections`; tidak mengubah data terapi
+   atau data member lama.
+4. Aktifkan koneksi tetapi tahan worker:
+
+   ```env
+   WHATSAPP_ENABLED=true
+   WHATSAPP_PROVIDER=BAILEYS
+   WHATSAPP_WORKER_ENABLED=false
+   WHATSAPP_WORKER_INTERVAL_MS=5000
+   ```
+
+5. Restart API, login sebagai Super Admin, minta pairing code, lalu tautkan
+   nomor test melalui menu **Perangkat tertaut** di WhatsApp.
+6. Pastikan status `CONNECTED`, lakukan satu pengiriman uji yang sudah mendapat
+   consent, baru ubah `WHATSAPP_WORKER_ENABLED=true` dan restart API.
+7. Pantau delivery `SENT`, `RETRY`, dan `DEAD_LETTER` di halaman Pengaturan
+   WhatsApp. Gunakan retry manual hanya setelah penyebab error diperbaiki.
+   Jangan mengaktifkan worker produksi sebelum hasil uji foto, caption, nomor
+   tujuan, dan consent disetujui.
+
+Catatan: kode sudah lolos build, lint, dan automated test. Validasi end-to-end
+dengan nomor WhatsApp test tetap wajib karena membutuhkan pairing perangkat
+nyata dan koneksi ke layanan WhatsApp.
