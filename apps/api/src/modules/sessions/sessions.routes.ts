@@ -36,6 +36,12 @@ const VITAL_WRITERS: Role[] = [
   Role.NURSE,
 ];
 const COMPLETION_REVERSERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
+const WHATSAPP_CONSENT_MANAGERS: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+];
 
 // ============================================================
 // SESSION ROUTES
@@ -402,6 +408,27 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   controller.previewWhatsAppReport.bind(controller)
+);
+
+router.post(
+  '/:sessionId/whatsapp-report',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.queueWhatsAppReport.bind(controller)
+);
+
+router.get(
+  '/:sessionId/whatsapp-deliveries',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.listWhatsAppReportDeliveries.bind(controller)
+);
+
+router.put(
+  '/:sessionId/whatsapp-consent',
+  authenticate,
+  authorize(WHATSAPP_CONSENT_MANAGERS),
+  controller.updateWhatsAppReportConsent.bind(controller)
 );
 
 router.patch(

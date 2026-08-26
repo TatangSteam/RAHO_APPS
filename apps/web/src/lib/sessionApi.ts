@@ -302,6 +302,41 @@ export const sessionApi = {
     return response.data.data;
   },
 
+  previewWhatsAppReport: async (
+    sessionId: string,
+    background: WhatsAppReportBackground,
+  ): Promise<WhatsAppReportPreview> => {
+    const response = await api.get(`/treatment-sessions/${sessionId}/whatsapp-report/preview`, {
+      params: { background },
+    });
+    return response.data.data;
+  },
+
+  updateWhatsAppConsent: async (sessionId: string, enabled: boolean) => {
+    const response = await api.put(`/treatment-sessions/${sessionId}/whatsapp-consent`, {
+      enabled,
+      source: 'SESSION_WORKFLOW_UI',
+    });
+    return response.data.data;
+  },
+
+  queueWhatsAppReport: async (
+    sessionId: string,
+    input: { background: WhatsAppReportBackground; idempotencyKey: string },
+  ) => {
+    const response = await api.post(
+      `/treatment-sessions/${sessionId}/whatsapp-report`,
+      { background: input.background },
+      { headers: { 'Idempotency-Key': input.idempotencyKey } },
+    );
+    return response.data.data;
+  },
+
+  listWhatsAppDeliveries: async (sessionId: string): Promise<WhatsAppReportDelivery[]> => {
+    const response = await api.get(`/treatment-sessions/${sessionId}/whatsapp-deliveries`);
+    return response.data.data;
+  },
+
   getWorkflowBurden: async (params?: { dateFrom?: string; dateTo?: string; branchId?: string }): Promise<{
     period: { dateFrom: string; dateTo: string };
     summary: {
@@ -355,3 +390,31 @@ export const sessionApi = {
     return response.data.data;
   },
 };
+
+export type WhatsAppReportBackground = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GOLD' | 'CLEAN_LIGHT';
+
+export interface WhatsAppReportPreview {
+  recipientMasked: string | null;
+  consentActive: boolean;
+  phoneValid: boolean;
+  readyToQueue: boolean;
+  provider: 'DISABLED' | 'BAILEYS';
+  caption: string;
+  imageDataUrl: string;
+  templateKey: string;
+  templateVersion: number;
+  background: { key: WhatsAppReportBackground; name: string };
+  availableBackgrounds: Array<{ key: WhatsAppReportBackground; name: string }>;
+}
+
+export interface WhatsAppReportDelivery {
+  id: string;
+  trigger: 'SESSION_COMPLETION' | 'MANUAL' | 'MANUAL_RESEND';
+  status: 'PENDING' | 'PROCESSING' | 'RETRY' | 'SENT' | 'FAILED' | 'DEAD_LETTER' | 'CANCELLED';
+  recipientMasked: string;
+  attempts: number;
+  maxAttempts: number;
+  requestedAt: string;
+  sentAt: string | null;
+  lastErrorSanitized: string | null;
+}

@@ -19,6 +19,7 @@ function decimalRecord(value: Record<string, unknown> | null): Record<string, st
 export async function buildSessionReportSnapshot(sessionId: string): Promise<{
   snapshot: SessionReportSnapshot;
   recipientPhone: string | null;
+  memberId: string;
   branchId: string;
   consentActive: boolean;
   photoUrl: string | null;
@@ -62,6 +63,7 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
   const photoAllowed = member.isConsentToPhoto && Boolean(session.photo);
 
   return {
+    memberId: member.id,
     branchId: session.branchId,
     recipientPhone: member.user.profile?.phone || null,
     consentActive: member.communicationConsent?.whatsappTreatmentReport === true

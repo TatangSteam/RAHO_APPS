@@ -23,6 +23,7 @@ import Step7Photo from '@/components/sessions/Step7Photo';
 import Step8VitalAfter from '@/components/sessions/Step8VitalAfter';
 import Step8ComplaintsRecommendations from '@/components/sessions/Step8ComplaintsRecommendations';
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
+import WhatsAppReportCard from '@/components/sessions/WhatsAppReportCard';
 import { SessionWorkflowDraftProvider, type SessionDraftKey } from '@/components/sessions/SessionWorkflowDraftContext';
 import {
   SESSION_STEP_OWNER,
@@ -1378,6 +1379,13 @@ export default function SessionDetailPage() {
             {sessionInfo.cancellationReason || 'Posting revenue dan quantity persediaan telah dibalik.'}
           </p>
         </div>
+      )}
+
+      {sessionInfo.isCompleted && !isCompletionCancelled && (
+        <WhatsAppReportCard
+          sessionId={sessionId}
+          canManageConsent={['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user?.role || '')}
+        />
       )}
 
       {showCompletionReview && typeof document !== 'undefined' && createPortal(

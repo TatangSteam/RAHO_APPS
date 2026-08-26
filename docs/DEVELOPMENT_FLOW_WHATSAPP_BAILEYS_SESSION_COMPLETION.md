@@ -1,6 +1,6 @@
 # Development Flow Integrasi WhatsApp Baileys untuk Penyelesaian Sesi Terapi
 
-Status: rencana pengembangan  
+Status: dalam pengembangan; fondasi, preview, consent, dan antrean manual tersedia
 Tanggal: 10 Agustus 2026  
 Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan  
 Integrasi awal: Baileys (WhatsApp Web)  
@@ -21,13 +21,22 @@ Sudah tersedia pada fondasi awal:
   `HEALTH_GREEN`, `PREMIUM_GOLD`, atau `CLEAN_LIGHT`;
 - endpoint preview read-only pada
   `GET /treatment-sessions/:sessionId/whatsapp-report/preview`.
+- UI laporan pada sesi yang sudah selesai untuk memilih background, melihat
+  gambar/caption, mencatat consent, dan melihat status antrean;
+- endpoint consent, manual queue idempotent, dan histori delivery sudah
+  tersedia tanpa mengekspos nomor atau payload medis terenkripsi.
+- dependency Baileys legacy stabil dipin pada `6.7.24`, provider gambar sudah
+  diisolasi melalui interface, dan core worker sudah memiliki claim lease,
+  pemeriksaan ulang consent, retry/backoff, dead-letter, serta penyimpanan
+  provider message ID.
 
 Belum diaktifkan untuk pengiriman production:
 
 - penyimpanan auth state dan pairing Baileys;
-- pembuatan outbox saat completion/manual request;
-- worker pengiriman, retry, dead-letter, dan halaman monitoring;
-- UI consent, preview, dan tombol kirim.
+- pembuatan outbox atomik langsung di dalam transaksi completion;
+- aktivasi loop worker, graceful shutdown, retry manual, dan halaman monitoring;
+- koneksi socket Baileys masih diperlukan sebelum tombol antrean dapat
+  mengirim pesan sungguhan.
 Alternatif produksi: WhatsApp Business Platform/Cloud API
 
 ## 1. Tujuan

@@ -30,7 +30,12 @@ import { SessionDeletionService } from './services/session-deletion.service';
 import { SessionDetailsService } from './services/session-details.service';
 import { UnfinishedSessionReminderService } from './services/unfinished-session-reminder.service';
 import type { BulkEditSetInput } from '../members/services/member-therapy-plan-set-edit.service';
-import { previewSessionReport } from '../whatsapp/whatsapp-report.service';
+import {
+  listSessionReportDeliveries,
+  previewSessionReport,
+  queueManualSessionReport,
+  updateSessionReportConsent,
+} from '../whatsapp/whatsapp-report.service';
 import type { SessionReportBackgroundKey } from '../whatsapp/whatsapp-backgrounds';
 
 /**
@@ -105,6 +110,38 @@ export class SessionsService {
     backgroundKey?: SessionReportBackgroundKey,
   ) {
     return previewSessionReport(sessionId, userId, backgroundKey);
+  }
+
+  async queueWhatsAppReport(input: {
+    sessionId: string;
+    userId: string;
+    idempotencyKey: string;
+    backgroundKey?: SessionReportBackgroundKey;
+  }) {
+    return queueManualSessionReport({
+      sessionId: input.sessionId,
+      actorUserId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      backgroundKey: input.backgroundKey,
+    });
+  }
+
+  async listWhatsAppReportDeliveries(sessionId: string, userId: string) {
+    return listSessionReportDeliveries(sessionId, userId);
+  }
+
+  async updateWhatsAppReportConsent(input: {
+    sessionId: string;
+    userId: string;
+    enabled: boolean;
+    source?: string;
+  }) {
+    return updateSessionReportConsent({
+      sessionId: input.sessionId,
+      actorUserId: input.userId,
+      enabled: input.enabled,
+      source: input.source,
+    });
   }
 
   async getAllSessions(params: { 

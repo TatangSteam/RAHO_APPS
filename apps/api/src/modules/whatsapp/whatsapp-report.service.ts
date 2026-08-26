@@ -11,6 +11,26 @@ import {
   listSessionReportBackgrounds,
   type SessionReportBackgroundKey,
 } from './whatsapp-backgrounds';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@lib/prisma';
+import { encryptWhatsAppValue } from './whatsapp.crypto';
+
+const SAFE_DELIVERY_SELECT = {
+  id: true,
+  treatmentSessionId: true,
+  trigger: true,
+  status: true,
+  recipientMasked: true,
+  templateKey: true,
+  templateVersion: true,
+  attempts: true,
+  maxAttempts: true,
+  requestedAt: true,
+  sentAt: true,
+  failedAt: true,
+  lastErrorCode: true,
+  lastErrorSanitized: true,
+} satisfies Prisma.WhatsAppDeliverySelect;
 
 async function loadTrustedSessionPhoto(url: string | null): Promise<Buffer | undefined> {
   if (!url) return undefined;
@@ -77,4 +97,119 @@ export async function assertSessionReportCanQueue(sessionId: string, actorUserId
     throw errors.badRequest('WHATSAPP_PHONE_INVALID', 'Nomor WhatsApp member belum valid.');
   }
   return { report, recipient };
+}
+
+export async function queueManualSessionReport(input: {
+  sessionId: string;
+  actorUserId: string;
+  idempotencyKey: string;
+  backgroundKey?: SessionReportBackgroundKey;
+}) {
+  const { report, recipient } = await assertSessionReportCanQueue(input.sessionId, input.actorUserId);
+  const session = await prisma.treatmentSession.findUnique({
+    where: { id: input.sessionId },
+    select: { isCompleted: true, completionStatus: true },
+  });
+  if (!session?.isCompleted || session.completionStatus !== 'COMPLETED') {
+    throw errors.badRequest(
+      'WHATSAPP_SESSION_NOT_COMPLETED',
+      'Laporan WhatsApp hanya dapat diantrekan setelah sesi selesai.',
+    );
+  }
+
+  const background = getSessionReportBackground(input.backgroundKey);
+  const encryptedPayload = encryptWhatsAppValue(JSON.stringify({
+    snapshot: report.snapshot,
+    photoUrl: report.photoUrl,
+    backgroundKey: background.key,
+  }));
+  const existing = await prisma.whatsAppDelivery.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+    select: SAFE_DELIVERY_SELECT,
+  });
+  if (existing) {
+    if (existing.treatmentSessionId !== input.sessionId) {
+      throw errors.conflict(
+        'WHATSAPP_IDEMPOTENCY_CONFLICT',
+        'Idempotency key sudah digunakan untuk sesi lain.',
+      );
+    }
+    return { delivery: existing, idempotentReplay: true };
+  }
+
+  try {
+    const delivery = await prisma.whatsAppDelivery.create({
+      data: {
+        idempotencyKey: input.idempotencyKey,
+        treatmentSessionId: input.sessionId,
+        memberId: report.memberId,
+        branchId: report.branchId,
+        trigger: 'MANUAL',
+        recipientEncrypted: encryptWhatsAppValue(recipient),
+        recipientMasked: maskWhatsAppNumber(recipient),
+        payloadEncrypted: encryptedPayload,
+        requestedBy: input.actorUserId,
+      },
+      select: SAFE_DELIVERY_SELECT,
+    });
+    return { delivery, idempotentReplay: false };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const replay = await prisma.whatsAppDelivery.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+        select: SAFE_DELIVERY_SELECT,
+      });
+      if (replay?.treatmentSessionId === input.sessionId) {
+        return { delivery: replay, idempotentReplay: true };
+      }
+    }
+    throw error;
+  }
+}
+
+export async function listSessionReportDeliveries(sessionId: string, actorUserId: string) {
+  const report = await buildSessionReportSnapshot(sessionId);
+  await assertBranchAccess(actorUserId, report.branchId);
+  return prisma.whatsAppDelivery.findMany({
+    where: { treatmentSessionId: sessionId },
+    select: SAFE_DELIVERY_SELECT,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function updateSessionReportConsent(input: {
+  sessionId: string;
+  actorUserId: string;
+  enabled: boolean;
+  source?: string;
+}) {
+  const report = await buildSessionReportSnapshot(input.sessionId);
+  await assertBranchAccess(input.actorUserId, report.branchId);
+  const now = new Date();
+  return prisma.memberCommunicationConsent.upsert({
+    where: { memberId: report.memberId },
+    create: {
+      memberId: report.memberId,
+      whatsappTreatmentReport: input.enabled,
+      consentedAt: input.enabled ? now : null,
+      consentedBy: input.enabled ? input.actorUserId : null,
+      revokedAt: input.enabled ? null : now,
+      revokedBy: input.enabled ? null : input.actorUserId,
+      consentSource: input.source || 'SESSION_WORKFLOW',
+    },
+    update: {
+      whatsappTreatmentReport: input.enabled,
+      consentedAt: input.enabled ? now : undefined,
+      consentedBy: input.enabled ? input.actorUserId : undefined,
+      revokedAt: input.enabled ? null : now,
+      revokedBy: input.enabled ? null : input.actorUserId,
+      consentSource: input.source || 'SESSION_WORKFLOW',
+    },
+    select: {
+      whatsappTreatmentReport: true,
+      consentedAt: true,
+      revokedAt: true,
+      consentSource: true,
+    },
+  });
 }
