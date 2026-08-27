@@ -8,6 +8,7 @@ import { parseStockRequestQuantity } from './services/stock-request-units';
 import { dispatchShipmentSchema, receiveShipmentLedgerSchema } from './shipment-ledger.schema';
 import {
   dispatchReservedShipment,
+  confirmPartnershipDelivery,
   hasReservedShipment,
   receiveReservedShipment,
 } from './services/shipment-ledger.service';
@@ -146,7 +147,14 @@ export class ShipmentService {
         discrepancies: input.discrepancies,
         receiptFile: undefined,
       });
-      return receiveReservedShipment(userId, shipmentId, parsed, { receiptFile: input.receiptFile });
+      const shipmentScope = await prisma.shipment.findUnique({
+        where: { id: shipmentId },
+        select: { toBranch: { select: { type: true } } },
+      });
+      if (!shipmentScope) throw errors.notFound('Shipment tidak ditemukan.');
+      return shipmentScope.toBranch.type === BranchType.PARTNERSHIP
+        ? confirmPartnershipDelivery(userId, shipmentId, parsed, { receiptFile: input.receiptFile })
+        : receiveReservedShipment(userId, shipmentId, parsed, { receiptFile: input.receiptFile });
     }
     return await this.processingService.receiveShipment(shipmentId, userId, input);
   }

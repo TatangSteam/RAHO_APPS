@@ -1242,3 +1242,166 @@ export async function receiveReservedShipment(
   }
   return receipt;
 }
+
+/**
+ * Confirm that goods sold to a Partnership branch were delivered.
+ * Partnership stock is external to company inventory, so this closes the
+ * shipment and request without creating TRANSFER_IN, inventory balances, or
+ * destination cost layers.
+ */
+export async function confirmPartnershipDelivery(
+  actorUserId: string,
+  shipmentId: string,
+  input: ReceiveShipmentLedgerInput,
+  options: ReceiptOptions = {},
+) {
+  const scope = await prisma.shipment.findUnique({
+    where: { id: shipmentId },
+    select: {
+      toBranchId: true,
+      toBranch: { select: { type: true } },
+      status: true,
+    },
+  });
+  if (!scope) throw errors.notFound('Shipment tidak ditemukan.');
+  if (scope.toBranch.type !== BranchType.PARTNERSHIP) {
+    throw errors.unprocessable(
+      'DELIVERY_CONFIRMATION_PARTNERSHIP_ONLY',
+      'Konfirmasi delivery khusus untuk shipment Partnership.',
+    );
+  }
+  await assertBranchAccess(actorUserId, scope.toBranchId);
+  await assertPermission(actorUserId, PERMISSIONS.INVENTORY_SHIPMENT_RECEIVE, scope.toBranchId);
+
+  if (scope.status === ShipmentStatus.RECEIVED || scope.status === ShipmentStatus.RECEIVED_WITH_ISSUE) {
+    return {
+      shipmentId,
+      status: scope.status,
+      deliveryConfirmed: true,
+      inventoryUpdated: false,
+      replay: true,
+    };
+  }
+  if (scope.status !== ShipmentStatus.SHIPPED && scope.status !== ShipmentStatus.PARTIALLY_RECEIVED) {
+    throw errors.conflict(
+      'INVALID_SHIPMENT_STATUS',
+      `Shipment berstatus ${scope.status} dan belum dapat dikonfirmasi delivered.`,
+    );
+  }
+
+  const evidence = await prepareEvidence(shipmentId, options);
+  const result = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+    const shipment = await tx.shipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        items: { include: { masterProduct: true } },
+        stockRequest: true,
+        toBranch: { select: { type: true } },
+      },
+    });
+    if (!shipment) throw errors.notFound('Shipment tidak ditemukan.');
+    if (shipment.toBranch.type !== BranchType.PARTNERSHIP) {
+      throw errors.unprocessable('DELIVERY_CONFIRMATION_PARTNERSHIP_ONLY', 'Konfirmasi delivery khusus untuk shipment Partnership.');
+    }
+    if (shipment.status === ShipmentStatus.RECEIVED || shipment.status === ShipmentStatus.RECEIVED_WITH_ISSUE) {
+      return { status: shipment.status, replay: true };
+    }
+    if (shipment.status !== ShipmentStatus.SHIPPED && shipment.status !== ShipmentStatus.PARTIALLY_RECEIVED) {
+      throw errors.conflict('INVALID_SHIPMENT_STATUS', `Shipment berstatus ${shipment.status} dan belum dapat dikonfirmasi delivered.`);
+    }
+
+    const receivedByProduct = new Map(
+      input.receivedItems.map((item) => [item.masterProductId, new Prisma.Decimal(item.receivedQty)]),
+    );
+    const reportedProducts = new Set(input.discrepancies.map((item) => item.masterProductId));
+    const hasQuantityDifference = shipment.items.some((item) => {
+      const received = receivedByProduct.get(item.masterProductId) ?? item.sentQty;
+      return !received.equals(item.sentQty);
+    });
+    const hasIssue = input.discrepancies.length > 0 || hasQuantityDifference;
+    const status = hasIssue ? ShipmentStatus.RECEIVED_WITH_ISSUE : ShipmentStatus.RECEIVED;
+
+    for (const item of shipment.items) {
+      const receivedQty = receivedByProduct.get(item.masterProductId) ?? item.sentQty;
+      if (receivedQty.isNegative() || receivedQty.greaterThan(item.sentQty)) {
+        throw errors.unprocessable(
+          'INVALID_DELIVERED_QUANTITY',
+          `Jumlah diterima ${item.masterProduct.name} harus antara 0 dan ${item.sentQty.toFixed(4)}.`,
+        );
+      }
+      await tx.shipmentItem.update({ where: { id: item.id }, data: { receivedQty } });
+
+      const explicit = input.discrepancies.find((row) => row.masterProductId === item.masterProductId);
+      if (explicit || (!receivedQty.equals(item.sentQty) && !reportedProducts.has(item.masterProductId))) {
+        await tx.shipmentDiscrepancy.create({
+          data: {
+            shipmentId,
+            masterProductId: item.masterProductId,
+            productName: item.masterProduct.name,
+            expectedQty: item.sentQty,
+            receivedQty,
+            discrepancyType: explicit?.discrepancyType ?? DiscrepancyType.SHORTAGE,
+            notes: explicit?.notes ?? 'Jumlah diterima Partnership berbeda dari jumlah dikirim.',
+            photoUrl: explicit?.photoUrl,
+            photoFileName: explicit?.photoFileName,
+            reportedBy: actorUserId,
+          },
+        });
+      }
+    }
+
+    await tx.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        status,
+        receivedAt: input.occurredAt,
+        receivedBy: actorUserId,
+        receiptFileUrl: evidence.url,
+        receiptFileName: evidence.fileName,
+        receiptFileSize: evidence.fileSize,
+        receiptMimeType: evidence.mimeType,
+        notes: input.notes || shipment.notes,
+      },
+    });
+    await tx.stockRequest.update({
+      where: { id: shipment.stockRequestId },
+      data: {
+        status: hasIssue ? StockRequestStatus.SHIPPED : StockRequestStatus.COMPLETED,
+        receivedBy: actorUserId,
+        receivedAt: input.occurredAt,
+        receivingNotes: hasIssue
+          ? `${input.notes || ''}${input.notes ? '\n' : ''}Delivery Partnership diterima dengan ketidaksesuaian.`
+          : input.notes,
+      },
+    });
+
+    return { status, replay: false };
+  }));
+
+  await logAudit({
+    userId: actorUserId,
+    branchId: scope.toBranchId,
+    action: AuditAction.UPDATE,
+    resource: 'Shipment',
+    resourceId: shipmentId,
+    afterData: {
+      status: result.status,
+      deliveryConfirmed: true,
+      inventoryUpdated: false,
+      evidenceChecksum: evidence.checksum,
+    },
+    meta: { idempotencyKey: input.idempotencyKey, partnershipDelivery: true },
+  });
+
+  return {
+    shipmentId,
+    status: result.status,
+    deliveryConfirmed: true,
+    inventoryUpdated: false,
+    replay: result.replay,
+    message: result.status === ShipmentStatus.RECEIVED
+      ? 'Delivery Partnership berhasil dikonfirmasi tanpa menambah inventory perusahaan.'
+      : 'Delivery Partnership dikonfirmasi dengan catatan ketidaksesuaian.',
+  };
+}

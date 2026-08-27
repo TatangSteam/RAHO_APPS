@@ -4,7 +4,7 @@ import { prisma } from '@lib/prisma';
 import { deleteApprovalAuditLogsForDatabaseTest } from './database-test-cleanup';
 import { postOpeningInventory } from '../inventory-ledger.service';
 import { approveAndReserveStockRequest } from '../stock-reservation.service';
-import { dispatchReservedShipment, receiveReservedShipment } from '../shipment-ledger.service';
+import { confirmPartnershipDelivery, dispatchReservedShipment, receiveReservedShipment } from '../shipment-ledger.service';
 import { resolveShipmentDiscrepancy } from '../inventory-discrepancy-homecare.service';
 
 const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describe : describe.skip;
@@ -497,7 +497,7 @@ describeDatabase('shipment transfer ledger', () => {
       where: { inventoryItemId: sourceItemId },
     });
     expect(sourceBalance.inTransitQty.toFixed(4)).toBe('0.0000');
-    await expect(receiveReservedShipment(actorId, partnershipShipmentId, {
+    const delivery = await confirmPartnershipDelivery(actorId, partnershipShipmentId, {
       idempotencyKey: `PARTNER-RECEIPT-${runId}`,
       isFinal: true,
       occurredAt: new Date('2026-07-21T08:00:00.000Z'),
@@ -516,8 +516,19 @@ describeDatabase('shipment transfer ledger', () => {
         mimeType: 'application/pdf',
         checksum: `partner-checksum-${runId}`,
       },
-    })).rejects.toMatchObject({
-      code: 'PARTNERSHIP_RECEIPT_IS_DELIVERY_CONFIRMATION',
     });
+    expect(delivery).toMatchObject({
+      shipmentId: partnershipShipmentId,
+      status: 'RECEIVED',
+      deliveryConfirmed: true,
+      inventoryUpdated: false,
+    });
+    expect(await prisma.inventoryItem.count({
+      where: { branchId: partnershipBranchId, masterProductId: productId },
+    })).toBe(0);
+    expect((await prisma.stockRequest.findUniqueOrThrow({
+      where: { id: partnershipRequestId },
+      select: { status: true },
+    })).status).toBe('COMPLETED');
   }, 60_000);
 });

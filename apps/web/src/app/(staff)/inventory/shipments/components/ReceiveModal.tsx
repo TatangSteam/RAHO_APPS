@@ -18,6 +18,7 @@ interface ReceiveModalProps {
 }
 
 export default function ReceiveModal({ shipment, onClose, onReceive, loading }: ReceiveModalProps) {
+  const isPartnership = shipment.toBranchType === 'PARTNERSHIP';
   const [idempotencyKey] = useState(() => `RECEIPT-${shipment.id}-${crypto.randomUUID()}`);
   const [notes, setNotes] = useState('');
   const [isFinal, setIsFinal] = useState(true);
@@ -224,7 +225,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
       open
       size="2xl"
       subtitle={shipment.shipmentCode}
-      title="Terima Pengiriman"
+      title={isPartnership ? 'Konfirmasi Delivery Partnership' : 'Terima Pengiriman'}
       wrapBody={false}
       onClose={onClose}
     >
@@ -250,7 +251,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-700 dark:bg-neutral-800">
+            {!isPartnership && <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-700 dark:bg-neutral-800">
               <button
                 type="button"
                 onClick={() => changeReceiptMode(false)}
@@ -265,10 +266,17 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               >
                 Penerimaan final
               </button>
-            </div>
+            </div>}
+
+            {isPartnership && (
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-700 dark:text-blue-200">
+                <p className="font-bold">Konfirmasi delivery eksternal</p>
+                <p className="mt-1">Tindakan ini menyelesaikan pengiriman dan request Partnership. Barang tidak akan ditambahkan ke inventory utama atau stok milik perusahaan.</p>
+              </div>
+            )}
 
             {/* Overstock Info Banner - Show if any item has overstock */}
-            {shipment.items.some(item => (item.overstockQty && item.overstockQty > 0) || (item.originalRequestedQty && item.sentQty > (item.originalRequestedQty - (item.overstockDeducted || 0)))) && (
+            {!isPartnership && shipment.items.some(item => (item.overstockQty && item.overstockQty > 0) || (item.originalRequestedQty && item.sentQty > (item.originalRequestedQty - (item.overstockDeducted || 0)))) && (
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
                 <div className="flex items-start gap-3">
                   <TrendingUp className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
@@ -345,7 +353,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                   const originalRequestedQty = item.originalRequestedQty || item.requestedQty || item.sentQty;
                   const overstockDeducted = item.overstockDeducted || 0;
                   const expectedSentQty = originalRequestedQty - overstockDeducted;
-                  const hasOverstock = overstockQty > 0 || item.sentQty > expectedSentQty;
+                  const hasOverstock = !isPartnership && (overstockQty > 0 || item.sentQty > expectedSentQty);
                   const newOverstockQty = overstockQty > 0 ? overstockQty : (item.sentQty - expectedSentQty);
                   
                   return (
@@ -413,7 +421,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                           </span>
                         )}
                       </div>
-                      <div className="mt-3 flex items-center gap-3 border-t border-neutral-700/60 pt-3">
+                      {!isPartnership && <div className="mt-3 flex items-center gap-3 border-t border-neutral-700/60 pt-3">
                         <label className="min-w-[70px] text-sm text-neutral-500 dark:text-neutral-400">
                           Quarantine:
                         </label>
@@ -427,7 +435,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                           className="w-24 rounded-lg border border-amber-500/40 bg-neutral-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                         <span className="text-sm text-neutral-500 dark:text-neutral-400">{item.unit}</span>
-                      </div>
+                      </div>}
                       {/* Show overstock reason if available */}
                       {hasOverstock && (
                         <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
@@ -576,12 +584,12 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
               <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
-                Catatan Penerimaan (Opsional)
+                {isPartnership ? 'Catatan Delivery (Opsional)' : 'Catatan Penerimaan (Opsional)'}
               </h3>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Masukkan catatan penerimaan..."
+                placeholder={isPartnership ? 'Masukkan catatan delivery...' : 'Masukkan catatan penerimaan...'}
                 rows={3}
                 className="w-full px-4 py-3 text-sm rounded-xl border border-amber-500/30 bg-neutral-800/50 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
               />
@@ -621,7 +629,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  {isFinal ? 'Terima Pengiriman' : 'Simpan Penerimaan Parsial'}
+                  {isPartnership ? 'Konfirmasi Delivery' : isFinal ? 'Terima Pengiriman' : 'Simpan Penerimaan Parsial'}
                 </>
               )}
             </Button>

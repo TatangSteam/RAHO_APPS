@@ -100,9 +100,14 @@ export default function ShipmentsPage() {
     
     try {
       setActionLoading(true);
-      await inventoryApi.receiveShipment(selectedShipment.id, input);
+      const isPartnership = selectedShipment.toBranchType === 'PARTNERSHIP';
+      await (isPartnership
+        ? inventoryApi.confirmPartnershipDelivery(selectedShipment.id, input)
+        : inventoryApi.receiveShipment(selectedShipment.id, input));
       const hasDiscrepancy = input.discrepancies && input.discrepancies.length > 0;
-      showToast.success(hasDiscrepancy ? 'Pengiriman diterima dengan catatan ketidaksesuaian' : 'Pengiriman berhasil diterima');
+      showToast.success(isPartnership
+        ? (hasDiscrepancy ? 'Delivery Partnership dikonfirmasi dengan catatan' : 'Delivery Partnership berhasil dikonfirmasi')
+        : (hasDiscrepancy ? 'Pengiriman diterima dengan catatan ketidaksesuaian' : 'Pengiriman berhasil diterima'));
       closeModal();
       fetchShipments();
     } catch (error: unknown) {
@@ -562,7 +567,7 @@ export default function ShipmentsPage() {
                               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-emerald-600"
                             >
                               <Inbox className="h-3.5 w-3.5" />
-                              Terima
+                              {shipment.toBranchType === 'PARTNERSHIP' ? 'Konfirmasi Delivery' : 'Terima'}
                             </button>
                           )}
                           <button

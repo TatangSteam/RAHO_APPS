@@ -851,6 +851,16 @@ router.post(
   shipmentController.receiveShipment.bind(shipmentController)
 );
 
+// Partnership delivery confirmation closes an external sale shipment without
+// posting stock into company-owned destination inventory.
+router.post(
+  '/shipments/:shipmentId/confirm-delivery',
+  authenticate,
+  authorize(canReceiveBranchStock),
+  uploadShipmentReceipt.single('receiptFile'),
+  shipmentController.receiveShipment.bind(shipmentController)
+);
+
 // Review shipment issue (SUPER_ADMIN and ADMIN_MANAGER)
 router.post(
   '/shipments/:shipmentId/review-issue',

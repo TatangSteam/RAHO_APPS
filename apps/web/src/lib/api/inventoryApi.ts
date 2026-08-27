@@ -1239,6 +1239,20 @@ export const inventoryApi = {
     return api.post('/inventory/logistics/homecare-bags', data);
   },
 
+  confirmPartnershipDelivery: (shipmentId: string, data: ReceiveShipmentInput) => {
+    const formData = new FormData();
+    const idempotencyKey = data.idempotencyKey || `DELIVERY-${shipmentId}-${crypto.randomUUID()}`;
+    formData.append('idempotencyKey', idempotencyKey);
+    formData.append('isFinal', 'true');
+    formData.append('receivedItems', JSON.stringify(data.receivedItems || []));
+    formData.append('discrepancies', JSON.stringify(data.discrepancies || []));
+    if (data.notes) formData.append('notes', data.notes);
+    if (data.receiptFile) formData.append('receiptFile', data.receiptFile);
+    return api.post(`/inventory/shipments/${shipmentId}/confirm-delivery`, formData, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+  },
+
   updateHomecareTeam: (teamId: string, data: { name?: string; description?: string; isActive?: boolean }) => {
     return api.patch(`/inventory/logistics/homecare-teams/${teamId}`, data);
   },
