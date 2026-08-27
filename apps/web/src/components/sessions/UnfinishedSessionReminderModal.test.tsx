@@ -4,9 +4,11 @@ import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
 
 const push = jest.fn();
+let pathname = '/dashboard/admin-layanan';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
+  usePathname: () => pathname,
 }));
 
 jest.mock('@/lib/sessionApi', () => ({
@@ -26,6 +28,7 @@ jest.mock('@/lib/logger', () => ({
 describe('UnfinishedSessionReminderModal', () => {
   beforeEach(() => {
     push.mockReset();
+    pathname = '/dashboard/admin-layanan';
     sessionStorage.clear();
     (useAuthStore as unknown as jest.Mock).mockReturnValue({
       user: {
@@ -64,5 +67,27 @@ describe('UnfinishedSessionReminderModal', () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/sessions/session-1'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('only checks once per browser session and does not reopen after remount', async () => {
+    const firstRender = render(<UnfinishedSessionReminderModal />);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    firstRender.unmount();
+
+    render(<UnfinishedSessionReminderModal />);
+
+    await waitFor(() => expect(sessionApi.getUnfinishedSessionReminders).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('does not show or request reminders while filling a treatment session', async () => {
+    pathname = '/sessions/session-1';
+
+    render(<UnfinishedSessionReminderModal />);
+
+    await waitFor(() => {
+      expect(sessionApi.getUnfinishedSessionReminders).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

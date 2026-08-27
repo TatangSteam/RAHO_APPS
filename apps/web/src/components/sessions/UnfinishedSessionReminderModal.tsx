@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowRight,
@@ -22,7 +22,7 @@ import { devError } from '@/lib/logger';
 import { useAuthStore } from '@/stores/authStore';
 
 const REMINDER_ROLES = new Set(['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE']);
-const POLL_INTERVAL_MS = 60_000;
+const REMINDER_SESSION_KEY_PREFIX = 'raho:unfinished-session-reminder:shown';
 
 const modalClassNames: ModalClassNames = {
   modalOverlay: 'fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm',
@@ -38,14 +38,9 @@ const formatTreatmentDate = (value: string) => new Intl.DateTimeFormat('id-ID', 
   timeStyle: 'short',
 }).format(new Date(value));
 
-const buildSignature = (userId: string, data: UnfinishedSessionReminderResponse) => [
-  userId,
-  data.total,
-  ...data.items.map((item) => `${item.sessionId}:${item.missingSteps.map((step) => step.key).join(',')}`),
-].join('|');
-
 export function UnfinishedSessionReminderModal() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, accessToken } = useAuthStore();
   const [data, setData] = useState<UnfinishedSessionReminderResponse>({ total: 0, items: [] });
   const [open, setOpen] = useState(false);
@@ -58,16 +53,19 @@ export function UnfinishedSessionReminderModal() {
     REMINDER_ROLES.has(user.role),
   );
 
-  const signature = useMemo(
-    () => user?.userId && data.total > 0 ? buildSignature(user.userId, data) : '',
-    [data, user?.userId],
-  );
+  const isFillingTreatmentSession = Boolean(pathname?.startsWith('/sessions/'));
 
   const loadReminders = useCallback(async () => {
     if (!enabled || !user?.userId) return;
 
     try {
       setLoading(true);
+      const reminderSessionKey = `${REMINDER_SESSION_KEY_PREFIX}:${user.userId}`;
+      if (sessionStorage.getItem(reminderSessionKey) === 'true') return;
+
+      // Mark before requesting so route changes or component remounts cannot
+      // open a second popup while staff is working through a treatment session.
+      sessionStorage.setItem(reminderSessionKey, 'true');
       const response = await sessionApi.getUnfinishedSessionReminders();
       setData(response);
 
@@ -76,11 +74,7 @@ export function UnfinishedSessionReminderModal() {
         return;
       }
 
-      const nextSignature = buildSignature(user.userId, response);
-      const dismissedSignature = sessionStorage.getItem(`raho:unfinished-session-reminder:${user.userId}`);
-      if (dismissedSignature !== nextSignature) {
-        setOpen(true);
-      }
+      setOpen(true);
     } catch (error) {
       devError('Gagal memuat pengingat sesi belum selesai:', error);
     } finally {
@@ -95,15 +89,18 @@ export function UnfinishedSessionReminderModal() {
       return;
     }
 
+    if (isFillingTreatmentSession) {
+      if (user?.userId) {
+        sessionStorage.setItem(`${REMINDER_SESSION_KEY_PREFIX}:${user.userId}`, 'true');
+      }
+      setOpen(false);
+      return;
+    }
+
     void loadReminders();
-    const interval = window.setInterval(() => void loadReminders(), POLL_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [enabled, loadReminders]);
+  }, [enabled, isFillingTreatmentSession, loadReminders, user?.userId]);
 
   const dismiss = () => {
-    if (user?.userId && signature) {
-      sessionStorage.setItem(`raho:unfinished-session-reminder:${user.userId}`, signature);
-    }
     setOpen(false);
   };
 
