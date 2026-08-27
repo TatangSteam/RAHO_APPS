@@ -36,6 +36,10 @@ const DOSE_FIELDS = [
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml' },
 ];
 
+function isDoseEmpty(value: unknown): boolean {
+  return value === undefined || value === null || value === '';
+}
+
 // For display purposes
 const ALL_DOSE_FIELDS = [
   { key: 'ifa250', label: 'IFA + NO 2,5ml', unit: 'Botol' },
@@ -398,10 +402,29 @@ export default function Step5Infusion({
 
   const [shouldNavigateNext, setShouldNavigateNext] = useState(false);
   const deviationMissing = hasDeviation && !formData.deviationNotes?.trim();
+  const missingPlannedDoses = useMemo(() => {
+    if (!therapyPlan) return [];
+
+    return DOSE_FIELDS.filter((field) => {
+      const plannedDose = getPlannedActualDose(field.key, therapyPlan, formData);
+      const actualDose = formData[field.key as keyof CreateInfusionInput];
+      return plannedDose > 0 && isDoseEmpty(actualDose);
+    });
+  }, [formData, therapyPlan]);
+  const hasMissingPlannedDoses = missingPlannedDoses.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (hasMissingPlannedDoses) {
+      setError(`Lengkapi dosis aktual yang wajib diisi: ${missingPlannedDoses.map((field) => field.label).join(', ')}.`);
+      document.getElementById(`infusion-dose-${missingPlannedDoses[0].key}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+      return;
+    }
 
     if (deviationMissing) {
       setError('Catatan alasan deviasi wajib diisi karena dosis aktual berbeda dari therapy plan.');
@@ -937,13 +960,23 @@ export default function Step5Infusion({
           </div>
         </div>
 
+        {hasMissingPlannedDoses && (
+          <div
+            role="alert"
+            className="infusion-required-reminder"
+          >
+            <span aria-hidden="true" className="infusion-required-reminder__icon">!</span>
+            <div>
+              <strong>{missingPlannedDoses.length} dosis rencana belum diisi</strong>
+              <p>
+                Isi dosis aktual untuk {missingPlannedDoses.map((field) => field.label).join(', ')} sebelum menyimpan sesi.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Other Dose Input Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '16px',
-          marginBottom: '24px'
-        }}>
+        <div className="infusion-dose-grid">
           {DOSE_FIELDS.map((field) => {
             const rawPlanValue = therapyPlan?.[field.key as keyof TherapyPlan];
             const planValue = therapyPlan ? getPlannedActualDose(field.key, therapyPlan, formData) : 0;
@@ -952,17 +985,19 @@ export default function Step5Infusion({
             const actualValue = formData[field.key as keyof CreateInfusionInput];
             const isDifferent = hasDoseDeviation(planValue, actualValue);
             const hasPlanValue = planValue > 0 || toPositiveNumber(rawPlanValue) > 0;
+            const isRequiredEmpty = planValue > 0 && isDoseEmpty(actualValue);
 
             return (
-              <div key={field.key} style={{
+              <div id={`infusion-dose-${field.key}`} key={field.key} className="infusion-dose-card" style={{
                 padding: '16px',
-                background: isDifferent ? 'rgba(251,191,36,0.1)' : 'rgba(148,163,184,0.08)',
-                border: isDifferent ? '2px solid rgba(251,191,36,0.3)' : '1px solid rgba(148,163,184,0.2)',
+                background: isRequiredEmpty ? 'rgba(239,68,68,0.1)' : isDifferent ? 'rgba(251,191,36,0.1)' : 'rgba(148,163,184,0.08)',
+                border: isRequiredEmpty ? '2px solid rgba(248,113,113,0.75)' : isDifferent ? '2px solid rgba(251,191,36,0.3)' : '1px solid rgba(148,163,184,0.2)',
                 borderRadius: 'var(--radius-md)'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div className="infusion-dose-card__header">
                   <label style={{ fontSize: '13px', fontWeight: '700', color: '#cbd5e1' }}>
                     {field.label}
+                    {planValue > 0 && <span style={{ color: '#f87171' }}> *</span>}
                   </label>
                   {hasPlanValue && (
                     <span style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'right' }}>
@@ -979,13 +1014,17 @@ export default function Step5Infusion({
                   <input
                     type="number"
                     step="0.01"
-                    value={actualValue || ''}
+                    value={(actualValue as number | undefined) ?? ''}
                     onChange={(e) => updateDose(field.key, e.target.value)}
+                    min="0"
+                    inputMode="decimal"
+                    aria-required={planValue > 0}
+                    aria-invalid={isRequiredEmpty}
                     style={{
                       width: '100%',
                       padding: '12px 48px 12px 12px',
                       background: 'rgba(15,23,42,0.5)',
-                      border: isDifferent ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
+                      border: isRequiredEmpty ? '2px solid #f87171' : isDifferent ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
                       borderRadius: 'var(--radius-md)',
                       color: '#f1f5f9',
                       fontSize: '16px',
@@ -1000,7 +1039,7 @@ export default function Step5Infusion({
                       e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = isDifferent ? '#fbbf24' : 'rgba(148,163,184,0.3)';
+                      e.target.style.borderColor = isRequiredEmpty ? '#f87171' : isDifferent ? '#fbbf24' : 'rgba(148,163,184,0.3)';
                       e.target.style.boxShadow = 'none';
                     }}
                   />
@@ -1017,16 +1056,19 @@ export default function Step5Infusion({
                     {field.unit}
                   </span>
                 </div>
+                {isRequiredEmpty && (
+                  <p className="infusion-dose-card__required">Wajib diisi sesuai dosis rencana</p>
+                )}
               </div>
             );
           })}
         </div>
 
         {/* Submit Button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
+        <div className="infusion-submit-actions" style={{ paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
           <button
             type="submit"
-            disabled={loading || deviationMissing}
+            disabled={loading || deviationMissing || hasMissingPlannedDoses}
             style={{
               padding: '12px 24px',
               background: 'rgba(148,163,184,0.2)',
@@ -1035,7 +1077,7 @@ export default function Step5Infusion({
               color: 'var(--text-primary)',
               fontSize: '15px',
               fontWeight: '600',
-              cursor: loading || deviationMissing ? 'not-allowed' : 'pointer',
+              cursor: loading || deviationMissing || hasMissingPlannedDoses ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
             }}
           >
@@ -1044,11 +1086,11 @@ export default function Step5Infusion({
           {onNext && (
             <button
               type="submit"
-              disabled={loading || deviationMissing}
+              disabled={loading || deviationMissing || hasMissingPlannedDoses}
               onClick={() => setShouldNavigateNext(true)}
               style={{
                 padding: '12px 32px',
-                background: loading || deviationMissing
+                background: loading || deviationMissing || hasMissingPlannedDoses
                   ? 'rgba(34,197,94,0.3)' 
                   : 'linear-gradient(135deg, #22c55e, #16a34a)',
                 border: 'none',
@@ -1056,9 +1098,9 @@ export default function Step5Infusion({
                 color: 'white',
                 fontSize: '15px',
                 fontWeight: '600',
-                cursor: loading || deviationMissing ? 'not-allowed' : 'pointer',
+                cursor: loading || deviationMissing || hasMissingPlannedDoses ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: loading || deviationMissing
+                boxShadow: loading || deviationMissing || hasMissingPlannedDoses
                   ? 'none' 
                   : '0 4px 12px rgba(34,197,94,0.3)',
                 display: 'flex',
@@ -1066,14 +1108,14 @@ export default function Step5Infusion({
                 gap: '8px',
               }}
               onMouseEnter={(e) => {
-                if (!loading && !deviationMissing) {
+                if (!loading && !deviationMissing && !hasMissingPlannedDoses) {
                   e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.boxShadow = '0 6px 16px rgba(34,197,94,0.4)';
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = loading || deviationMissing
+                e.currentTarget.style.boxShadow = loading || deviationMissing || hasMissingPlannedDoses
                   ? 'none' 
                   : '0 4px 12px rgba(34,197,94,0.3)';
               }}
@@ -1083,6 +1125,94 @@ export default function Step5Infusion({
           )}
         </div>
       </form>
+      <style jsx>{`
+        .infusion-required-reminder {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 16px;
+          padding: 14px 16px;
+          border: 1px solid rgba(248, 113, 113, 0.65);
+          border-radius: 12px;
+          background: rgba(239, 68, 68, 0.12);
+          color: #fecaca;
+        }
+        .infusion-required-reminder__icon {
+          display: grid;
+          flex: 0 0 24px;
+          width: 24px;
+          height: 24px;
+          place-items: center;
+          border-radius: 999px;
+          background: #ef4444;
+          color: white;
+          font-weight: 800;
+        }
+        .infusion-required-reminder p {
+          margin: 3px 0 0;
+          color: #fca5a5;
+          font-size: 13px;
+          line-height: 1.45;
+        }
+        .infusion-dose-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+        .infusion-dose-card__header {
+          display: flex;
+          min-height: 34px;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+        .infusion-dose-card__required {
+          margin: 8px 0 0;
+          color: #fca5a5;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.35;
+        }
+        .infusion-submit-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+        }
+        @media (max-width: 720px) {
+          .infusion-dose-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+          .infusion-dose-card {
+            min-width: 0;
+            padding: 14px !important;
+          }
+          .infusion-dose-card__header {
+            min-height: 48px;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 3px;
+          }
+          .infusion-dose-card__header span {
+            text-align: left !important;
+          }
+          .infusion-submit-actions {
+            flex-direction: column;
+          }
+          .infusion-submit-actions button {
+            width: 100%;
+            min-height: 48px;
+            justify-content: center;
+          }
+        }
+        @media (max-width: 390px) {
+          .infusion-dose-grid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+        }
+      `}</style>
     </div>
   );
 }
