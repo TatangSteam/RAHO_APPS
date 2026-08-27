@@ -97,4 +97,13 @@ describe('homecare logistics operational contract', () => {
     expect(service).toContain("workbook.addWorksheet('Penggunaan Inventori Tim'");
     expect(service).toContain('workbook.xlsx.writeBuffer()');
   });
+
+  it('posts every received homecare shipment item into the destination bag stock', () => {
+    expect(service).toContain('async receiveBagShipment');
+    expect(service).toContain('for (const item of shipment.items)');
+    expect(service).toContain('bagId: shipment.toBagId');
+    expect(service).toContain("direction: 'IN'");
+    expect(service).toContain("referenceType: 'HOMECARE_BAG_SHIPMENT'");
+    expect(service).toContain('receivedQty > 0');
+  });
 });

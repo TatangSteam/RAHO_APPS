@@ -283,7 +283,7 @@ export default function HomecareBagsPage() {
 
     try {
       setLoading(true);
-      const [branchesResponse, productsResponse, teamsResponse, bagsResponse, requestsResponse, shipmentsResponse] = await Promise.all([
+      const results = await Promise.allSettled([
         inventoryApi.getHomecareBranches(),
         inventoryApi.getHomecareProducts(),
         inventoryApi.getHomecareTeams(),
@@ -291,37 +291,63 @@ export default function HomecareBagsPage() {
         inventoryApi.getHomecareBagRequests(),
         inventoryApi.getHomecareBagShipments(),
       ]);
+      const [branchesResult, productsResult, teamsResult, bagsResult, requestsResult, shipmentsResult] = results;
+      const failures = results.filter((result) => result.status === 'rejected');
 
-      const branchData = unwrapData<HomecareBranchOption[]>(branchesResponse, []);
-      const productPayload = unwrapData<{ products?: HomecareProduct[] }>(productsResponse, { products: [] });
-      const teamData = unwrapData<HomecareTeam[]>(teamsResponse, []);
-      const bagData = unwrapData<HomecareBag[]>(bagsResponse, []);
+      const branchData = branchesResult.status === 'fulfilled'
+        ? unwrapData<HomecareBranchOption[]>(branchesResult.value, [])
+        : null;
+      const productPayload = productsResult.status === 'fulfilled'
+        ? unwrapData<{ products?: HomecareProduct[] }>(productsResult.value, { products: [] })
+        : null;
+      const teamData = teamsResult.status === 'fulfilled'
+        ? unwrapData<HomecareTeam[]>(teamsResult.value, [])
+        : null;
+      const bagData = bagsResult.status === 'fulfilled'
+        ? unwrapData<HomecareBag[]>(bagsResult.value, [])
+        : null;
 
-      setBranches(branchData);
-      setProducts(productPayload.products || []);
-      setTeams(teamData);
-      setBags(bagData);
-      setRequests(unwrapData<HomecareBagRequest[]>(requestsResponse, []));
-      setShipments(unwrapData<HomecareBagShipment[]>(shipmentsResponse, []));
+      if (branchData) setBranches(branchData);
+      if (productPayload) setProducts(productPayload.products || []);
+      if (teamData) setTeams(teamData);
+      if (bagData) setBags(bagData);
+      if (requestsResult.status === 'fulfilled') {
+        setRequests(unwrapData<HomecareBagRequest[]>(requestsResult.value, []));
+      }
+      if (shipmentsResult.status === 'fulfilled') {
+        setShipments(unwrapData<HomecareBagShipment[]>(shipmentsResult.value, []));
+      }
 
-      const defaultServiceBranch = branchData.find((branch) => branch.type !== 'PUSAT');
+      const defaultServiceBranch = branchData?.find((branch) => branch.type !== 'PUSAT');
       if (!teamForm.branchId && defaultServiceBranch) {
         setTeamForm((current) => ({ ...current, branchId: current.branchId || defaultServiceBranch.id }));
       }
-      if (!returnBranchId && branchData[0]) {
+      if (!returnBranchId && branchData?.[0]) {
         setReturnBranchId(branchData[0].id);
       }
-      if (!selectedBagId && bagData[0]) {
+      if (!selectedBagId && bagData?.[0]) {
         setSelectedBagId(bagData[0].id);
-      } else if (selectedBagId && !bagData.some((bag) => bag.id === selectedBagId)) {
+      } else if (selectedBagId && bagData && !bagData.some((bag) => bag.id === selectedBagId)) {
         setSelectedBagId(bagData[0]?.id || '');
       }
 
       if (canManageSetup) {
-        const staffResponse = await inventoryApi.getHomecareStaff(
-          teamForm.branchId ? { branchId: teamForm.branchId } : undefined,
-        );
-        setStaffOptions(unwrapData<HomecareStaffOption[]>(staffResponse, []));
+        try {
+          const staffResponse = await inventoryApi.getHomecareStaff(
+            teamForm.branchId ? { branchId: teamForm.branchId } : undefined,
+          );
+          setStaffOptions(unwrapData<HomecareStaffOption[]>(staffResponse, []));
+        } catch (error) {
+          assertCaughtError(error);
+          devError('Failed to load homecare staff options:', error);
+        }
+      }
+
+      if (failures.length > 0) {
+        failures.forEach((failure) => {
+          if (failure.status === 'rejected') devError('Failed to load part of homecare logistics data:', failure.reason);
+        });
+        showToast.error('Sebagian data pendukung gagal dimuat. Data tas dan stok yang tersedia tetap ditampilkan.');
       }
     } catch (error) {
       assertCaughtError(error);
@@ -351,10 +377,13 @@ export default function HomecareBagsPage() {
     }
   }, [loadBagStock, selectedBagId]);
 
-  const resetAfterAction = async (message: string) => {
+  const resetAfterAction = async (message: string, bagIdToRefresh = selectedBagId) => {
     showToast.success(message);
+    if (bagIdToRefresh && bagIdToRefresh !== selectedBagId) {
+      setSelectedBagId(bagIdToRefresh);
+    }
     await loadData();
-    if (selectedBagId) await loadBagStock(selectedBagId);
+    if (bagIdToRefresh) await loadBagStock(bagIdToRefresh);
   };
 
   const updateRow = <T extends object>(
@@ -767,6 +796,7 @@ export default function HomecareBagsPage() {
 
     try {
       setActionLoading(true);
+      const receivedBagId = selectedShipment.toBagId;
       await inventoryApi.receiveHomecareBagShipment(selectedShipment.id, {
         receivedItems,
         discrepancies,
@@ -774,7 +804,10 @@ export default function HomecareBagsPage() {
       });
       setSelectedShipment(null);
       setShipmentAction(null);
-      await resetAfterAction(discrepancies.length ? 'Shipment diterima dengan catatan' : 'Shipment tas berhasil diterima');
+      await resetAfterAction(
+        discrepancies.length ? 'Shipment diterima dengan catatan' : 'Shipment tas berhasil diterima',
+        receivedBagId,
+      );
     } catch (error) {
       assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menerima shipment tas'));
