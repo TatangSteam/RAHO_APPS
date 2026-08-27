@@ -216,6 +216,14 @@ export default function HomecareBagsPage() {
 
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const branchMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
+  const approvalSourceBranches = useMemo(() => {
+    if (!selectedRequest) return [];
+    const requestBranch = branchMap.get(selectedRequest.branchId);
+    if (requestBranch?.type === 'PARTNERSHIP') {
+      return branches.filter((candidate) => candidate.id === selectedRequest.branchId || candidate.type === 'PUSAT');
+    }
+    return branches.filter((candidate) => candidate.id === selectedRequest.branchId);
+  }, [branchMap, branches, selectedRequest]);
   const adminLayananOptions = useMemo(
     () => staffOptions.filter((staff) => staff.role === 'ADMIN_LAYANAN'),
     [staffOptions],
@@ -660,7 +668,13 @@ export default function HomecareBagsPage() {
     setSelectedRequest(request);
     setRequestAction('approve');
     setReviewNotes('');
-    setApprovalSourceBranchId(request.branchId || branches.find((branch) => branch.type !== 'PUSAT')?.id || branches[0]?.id || '');
+    const requestBranch = branchMap.get(request.branchId);
+    const centralBranch = branches.find((branch) => branch.type === 'PUSAT');
+    setApprovalSourceBranchId(
+      requestBranch?.type === 'PARTNERSHIP' && centralBranch
+        ? centralBranch.id
+        : request.branchId,
+    );
     setApprovalRows(request.items.map((item) => ({
       masterProductId: item.masterProductId,
       approvedQty: String(item.finalQty ?? item.requestedQty),
@@ -1224,12 +1238,17 @@ export default function HomecareBagsPage() {
                   <div className="space-y-2">
                     <SelectField label="Sumber Stok" value={approvalSourceBranchId} onChange={setApprovalSourceBranchId}>
                       <option value="">Pilih sumber stok</option>
-                      {branches.map((branch) => (
+                      {approvalSourceBranches.map((branch) => (
                         <option key={branch.id} value={branch.id}>
                           {branch.name} ({branch.branchCode}){branch.id === selectedRequest.branchId ? ' - Cabang Tas' : ''}
                         </option>
                       ))}
                     </SelectField>
+                    {branchMap.get(selectedRequest.branchId)?.type === 'PARTNERSHIP' && (
+                      <p className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+                        Tim Partnership dapat dipenuhi dari Central Stock/Cabang Pusat. Pengiriman tetap tercatat menuju tas tim.
+                      </p>
+                    )}
                     {approvalRows.map((row, index) => (
                       <div key={row.masterProductId} className="grid gap-2 md:grid-cols-[1fr_120px]">
                         <div className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-neutral-900">{productName(row.masterProductId)}</div>

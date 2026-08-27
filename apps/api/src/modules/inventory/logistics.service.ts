@@ -28,6 +28,7 @@ import {
   stockShipmentRoles,
 } from './logistics.access';
 import { getHomecareTeamReadiness, homecareRoleForStaffRole } from './homecare-team.policy';
+import { canSupplyHomecareBagRequest } from './homecare-source-branch.policy';
 import { dispatchInternalTransfer, receiveInternalTransfer } from './services/internal-transfer-posting.service';
 import type {
   AddHomecareTeamMemberInput,
@@ -2357,21 +2358,30 @@ export class LogisticsService {
     }
 
     const sourceBranchId = input.sourceBranchId || request.branchId;
-    if (sourceBranchId !== request.branchId) {
+    await this.assertManagerBranchAccess(actor, request.branchId);
+
+    const [requestBranch, sourceBranch] = await Promise.all([
+      prisma.branch.findUnique({
+        where: { id: request.branchId },
+        select: { id: true, branchCode: true, name: true, type: true, isActive: true },
+      }),
+      prisma.branch.findUnique({
+        where: { id: sourceBranchId },
+        select: { id: true, branchCode: true, name: true, type: true, isActive: true },
+      }),
+    ]);
+    if (!requestBranch || !requestBranch.isActive) {
+      throw { status: 404, code: 'REQUEST_BRANCH_NOT_FOUND', message: 'Cabang tim tidak ditemukan atau tidak aktif' };
+    }
+    if (!sourceBranch || !sourceBranch.isActive) {
+      throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
+    }
+    if (!canSupplyHomecareBagRequest(requestBranch, sourceBranch)) {
       throw {
         status: 422,
         code: 'HOMECARE_SOURCE_BRANCH_MISMATCH',
-        message: 'Stok tas homecare harus dipenuhi dari stok cabang tim yang meminta',
+        message: 'Sumber stok harus cabang tim, atau Central Stock jika tim berasal dari Partnership',
       };
-    }
-    await this.assertManagerBranchAccess(actor, sourceBranchId);
-
-    const sourceBranch = await prisma.branch.findUnique({
-      where: { id: sourceBranchId },
-      select: { id: true, branchCode: true, name: true, isActive: true },
-    });
-    if (!sourceBranch || !sourceBranch.isActive) {
-      throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
     }
 
     const products = await prisma.masterProduct.findMany({
@@ -2503,8 +2513,6 @@ export class LogisticsService {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat dikirim saat PREPARING' };
     }
 
-    await this.assertManagerBranchAccess(actor, shipment.fromBranchId);
-
     const sourceBranch = await prisma.branch.findUnique({
       where: { id: shipment.fromBranchId },
       select: { type: true, isActive: true },
@@ -2606,6 +2614,20 @@ export class LogisticsService {
     if (!sourceBranch || !sourceBranch.isActive) {
       throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
     }
+    const destinationBranch = await prisma.branch.findUnique({
+      where: { id: shipment.bag.branchId },
+      select: { id: true, type: true, isActive: true },
+    });
+    if (!destinationBranch || !destinationBranch.isActive) {
+      throw { status: 404, code: 'DESTINATION_BRANCH_NOT_FOUND', message: 'Cabang tujuan tas tidak ditemukan atau tidak aktif' };
+    }
+    if (!canSupplyHomecareBagRequest(
+      { id: destinationBranch.id, type: destinationBranch.type },
+      { id: shipment.fromBranchId, type: sourceBranch.type },
+    )) {
+      throw { status: 422, code: 'HOMECARE_SOURCE_BRANCH_MISMATCH', message: 'Sumber pengiriman stok tas tidak valid' };
+    }
+    await this.assertManagerBranchAccess(actor, destinationBranch.id);
 
     if (!bagStockReceiverRoles.has(actor.role)) {
       await this.assertBagAccess(actor, shipment.toBagId);
