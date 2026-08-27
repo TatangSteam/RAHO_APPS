@@ -14,6 +14,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
 import { sessionApi } from '@/lib/sessionApi';
+import { getMembersApi } from '@/lib/membersApi';
+import { invoiceApi } from '@/lib/invoiceApi';
+import { logisticsReportApi } from '@/lib/logisticsReportApi';
 import { devError } from '@/lib/logger';
 import { ReportAccessDenied } from '@/components/reports/ReportAccessDenied';
 import { ReportDropdown } from '@/components/reports/ReportDropdown';
@@ -24,7 +27,9 @@ import { ReportScheduleDialog } from '@/components/reports/ReportScheduleDialog'
 import {
   REPORT_STATUSES,
   REPORT_TYPES,
-  buildReportRows,
+  buildInventoryReportRows,
+  buildMemberReportRows,
+  buildPaymentReportRows,
   buildSessionReportRows,
   exportReportFile,
   isFutureStartDate,
@@ -32,6 +37,7 @@ import {
   type ReportExportFormat,
   type ReportFrequency,
   type ReportPanel,
+  type ReportRow,
   type ReportStatus,
   type ReportType,
   type ReportViewMode,
@@ -57,9 +63,10 @@ export default function ReportsPage() {
   const [toast, setToast] = useState('');
   const [branches, setBranches] = useState<string[]>([]);
   const [branchIdsByName, setBranchIdsByName] = useState<Record<string, string>>({});
+  const [branchCodesByName, setBranchCodesByName] = useState<Record<string, string>>({});
   const [branchesLoading, setBranchesLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [rows, setRows] = useState<ReturnType<typeof buildReportRows>>([]);
+  const [rows, setRows] = useState<ReportRow[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -68,14 +75,15 @@ export default function ReportsPage() {
       try {
         setBranchesLoading(true);
         const branchRecords = role === 'ADMIN_MANAGER'
-          ? (await doctorBranchApi.getManagedBranches(false)).map((item) => ({ id: item.branchId, name: item.branchName }))
+          ? (await doctorBranchApi.getManagedBranches(false)).map((item) => ({ id: item.branchId, name: item.branchName, code: item.branchCode }))
           : ((await branchesApi.getAllBranches()).data?.data || [])
               .filter((item) => item.isActive)
-              .map((item) => ({ id: item.id, name: item.name }));
+              .map((item) => ({ id: item.id, name: item.name, code: item.branchCode }));
 
         if (active) {
           setBranches(Array.from(new Set(branchRecords.map((item) => item.name))));
           setBranchIdsByName(Object.fromEntries(branchRecords.map((item) => [item.name, item.id])));
+          setBranchCodesByName(Object.fromEntries(branchRecords.map((item) => [item.name, item.code])));
         }
       } catch (error) {
         devError('Gagal memuat cabang laporan:', error);
@@ -108,15 +116,68 @@ export default function ReportsPage() {
     try {
       setGenerating(true);
       setToast('');
-      const nextRows = reportType === 'Session'
-        ? buildSessionReportRows(await sessionApi.getAllSessions({
+      let nextRows;
+      if (reportType === 'Session') {
+        nextRows = buildSessionReportRows(await sessionApi.getAllSessions({
             limit: 1000,
             ...(branch !== 'Semua Cabang' ? { branchId: branchIdsByName[branch] } : {}),
             ...(startDate ? { dateFrom: startDate } : {}),
             ...(endDate ? { dateTo: endDate } : {}),
             status: 'all',
-          }), { status, member, doctor })
-        : buildReportRows(reportType, branch, status, branches);
+          }), { status, member, doctor });
+      } else if (reportType === 'Member') {
+        const memberParams = {
+          limit: 100,
+          ...(member ? { search: member } : {}),
+          ...(branch !== 'Semua Cabang' && branchCodesByName[branch]
+            ? { branchCode: branchCodesByName[branch] }
+            : {}),
+        };
+        const firstPage = await getMembersApi(memberParams);
+        const remainingPages = await Promise.all(
+          Array.from({ length: Math.max(0, firstPage.pagination.totalPages - 1) }, (_, index) =>
+            getMembersApi({ ...memberParams, page: index + 2 })),
+        );
+        const members = [firstPage, ...remainingPages].flatMap((page) => page.members);
+        nextRows = buildMemberReportRows(
+          branch === 'Semua Cabang' || branchCodesByName[branch]
+            ? members
+            : members.filter((item) => item.registrationBranch === branch),
+          { status, member, startDate, endDate },
+        );
+      } else if (reportType === 'Payment') {
+        const invoiceParams = {
+          search: member || undefined,
+          limit: 100,
+          ...(branch !== 'Semua Cabang' ? { branchId: branchIdsByName[branch] } : {}),
+          ...(startDate ? { dateFrom: startDate } : {}),
+          ...(endDate ? { dateTo: endDate } : {}),
+        };
+        const firstPage = await invoiceApi.getInvoices(invoiceParams);
+        const remainingPages = await Promise.all(
+          Array.from({ length: Math.max(0, firstPage.pagination.totalPages - 1) }, (_, index) =>
+            invoiceApi.getInvoices({ ...invoiceParams, page: index + 2 })),
+        );
+        const invoices = [firstPage, ...remainingPages].flatMap((page) => page.data);
+        nextRows = buildPaymentReportRows(
+          invoices.filter((item) => branch === 'Semua Cabang' || item.branchId === branchIdsByName[branch]),
+          { status, member, startDate, endDate },
+        );
+      } else {
+        const inventoryParams = {
+          ...(branch !== 'Semua Cabang' ? { branchId: branchIdsByName[branch] } : {}),
+          limit: 100,
+        };
+        const firstPage = await logisticsReportApi.valuation(inventoryParams);
+        const remainingPages = await Promise.all(
+          Array.from({ length: Math.max(0, firstPage.meta.totalPages - 1) }, (_, index) =>
+            logisticsReportApi.valuation({ ...inventoryParams, page: index + 2 })),
+        );
+        nextRows = buildInventoryReportRows(
+          [firstPage, ...remainingPages].flatMap((page) => page.data),
+          { status, member },
+        );
+      }
 
       setRows(nextRows);
       setEmpty(nextRows.length === 0);

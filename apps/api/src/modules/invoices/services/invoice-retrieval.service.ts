@@ -68,7 +68,7 @@ export class InvoiceRetrievalService {
    */
   async getInvoices(
     user: { userId: string; role: string; branchId: string | null },
-    options: { search?: string; status?: string; page?: number; limit?: number } = {}
+    options: { search?: string; status?: string; branchId?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number } = {}
   ) {
     const page = Math.max(1, Number(options.page || 1));
     const limit = Math.min(100, Math.max(1, Number(options.limit || 50)));
@@ -103,6 +103,16 @@ export class InvoiceRetrievalService {
       : {};
     if (user.role !== Role.MEMBER) {
       where.branchId = { in: branchIds };
+      if (options.branchId) {
+        where.branchId = branchIds.includes(options.branchId) ? options.branchId : { in: [] };
+      }
+    }
+
+    if (options.dateFrom || options.dateTo) {
+      where.createdAt = {
+        ...(options.dateFrom ? { gte: new Date(`${options.dateFrom}T00:00:00+07:00`) } : {}),
+        ...(options.dateTo ? { lte: new Date(`${options.dateTo}T23:59:59.999+07:00`) } : {}),
+      };
     }
 
     if (options.status && Object.values(InvoiceStatus).includes(options.status as InvoiceStatus)) {

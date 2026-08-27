@@ -29,6 +29,9 @@ export const invoiceController = {
       const invoices = await invoiceService.getInvoices(req.user, {
         search: req.query.search as string | undefined,
         status: req.query.status as string | undefined,
+        branchId: req.query.branchId as string | undefined,
+        dateFrom: req.query.dateFrom as string | undefined,
+        dateTo: req.query.dateTo as string | undefined,
         page: req.query.page ? Number(req.query.page) : undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
       });

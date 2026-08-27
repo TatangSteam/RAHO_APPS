@@ -46,7 +46,7 @@ export const invoiceService = {
    */
   async getInvoices(
     user: { userId: string; role: string; branchId: string | null },
-    options: { search?: string; status?: string; page?: number; limit?: number } = {}
+    options: { search?: string; status?: string; branchId?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number } = {}
   ) {
     return this.retrievalService.getInvoices(user, options);
   },

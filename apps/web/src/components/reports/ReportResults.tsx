@@ -22,7 +22,7 @@ export function ReportResults({
   rows,
 }: ReportResultsProps) {
   const statusCounts = rows.reduce<Record<string, number>>((counts, row) => {
-    counts[row.status] = (counts[row.status] || 0) + Number(row.total || 0);
+    counts[row.status] = (counts[row.status] || 0) + 1;
     return counts;
   }, {});
   return (

@@ -29,6 +29,95 @@ export interface SessionReportSource {
   };
 }
 
+export interface MemberReportSource {
+  memberNo: string;
+  fullName: string;
+  registrationBranch: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PaymentReportSource {
+  invoiceNumber: string;
+  memberName: string;
+  memberNo?: string;
+  branchName: string;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+}
+
+export interface InventoryReportSource {
+  inventoryValue: string;
+  quantityReconciled: boolean;
+  branch: { name: string };
+  masterProduct: { sku: string; name: string };
+  stockLocation: { name: string };
+}
+
+function inDateRange(value: string, startDate: string, endDate: string): boolean {
+  const date = value.slice(0, 10);
+  return (!startDate || date >= startDate) && (!endDate || date <= endDate);
+}
+
+export function buildMemberReportRows(
+  members: MemberReportSource[],
+  filters: { status: string; member: string; startDate: string; endDate: string },
+): ReportRow[] {
+  const search = filters.member.trim().toLocaleLowerCase('id-ID');
+  return members.filter((item) => {
+    const status = item.isActive ? 'Completed' : 'Cancelled';
+    const text = `${item.fullName} ${item.memberNo}`.toLocaleLowerCase('id-ID');
+    return (filters.status === 'Semua Status' || filters.status === status)
+      && (!search || text.includes(search))
+      && inDateRange(item.createdAt, filters.startDate, filters.endDate);
+  }).map((item) => ({
+    name: `${item.fullName} · ${item.memberNo}`,
+    branch: item.registrationBranch,
+    status: item.isActive ? 'Completed' : 'Cancelled',
+    total: '1',
+  }));
+}
+
+export function buildPaymentReportRows(
+  invoices: PaymentReportSource[],
+  filters: { status: string; member: string; startDate: string; endDate: string },
+): ReportRow[] {
+  const search = filters.member.trim().toLocaleLowerCase('id-ID');
+  return invoices.filter((item) => {
+    const normalizedStatus = item.status === 'PAID'
+      ? 'Paid'
+      : item.status === 'CANCELLED' ? 'Cancelled' : 'Pending';
+    const text = `${item.memberName} ${item.memberNo || ''} ${item.invoiceNumber}`.toLocaleLowerCase('id-ID');
+    return (filters.status === 'Semua Status' || filters.status === normalizedStatus)
+      && (!search || text.includes(search))
+      && inDateRange(item.createdAt, filters.startDate, filters.endDate);
+  }).map((item) => ({
+    name: `${item.invoiceNumber} · ${item.memberName}`,
+    branch: item.branchName,
+    status: item.status === 'PAID' ? 'Paid' : item.status === 'CANCELLED' ? 'Cancelled' : 'Pending',
+    total: new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.totalAmount),
+  }));
+}
+
+export function buildInventoryReportRows(
+  items: InventoryReportSource[],
+  filters: { status: string; member: string },
+): ReportRow[] {
+  const search = filters.member.trim().toLocaleLowerCase('id-ID');
+  return items.filter((item) => {
+    const status = item.quantityReconciled ? 'Completed' : 'Pending';
+    const text = `${item.masterProduct.name} ${item.masterProduct.sku} ${item.stockLocation.name}`.toLocaleLowerCase('id-ID');
+    return (filters.status === 'Semua Status' || filters.status === status)
+      && (!search || text.includes(search));
+  }).map((item) => ({
+    name: `${item.masterProduct.name} · ${item.masterProduct.sku}`,
+    branch: item.branch.name,
+    status: item.quantityReconciled ? 'Completed' : 'Pending',
+    total: new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(item.inventoryValue)),
+  }));
+}
+
 export function buildSessionReportRows(
   sessions: SessionReportSource[],
   filters: { status: string; member: string; doctor: string },
@@ -59,41 +148,6 @@ export function buildSessionReportRows(
         : session.isCompleted ? 'Completed' : 'Pending',
       total: '1',
     }));
-}
-
-export function buildReportRows(
-  reportType: ReportType,
-  branch: string,
-  status: string,
-  availableBranches: string[] = [],
-): ReportRow[] {
-  const fallbackBranch = branch === 'Semua Cabang' ? 'Semua Cabang' : branch;
-  const reportBranches = branch === 'Semua Cabang' && availableBranches.length > 0
-    ? availableBranches
-    : [fallbackBranch];
-  const branchAt = (index: number) => reportBranches[index % reportBranches.length];
-  const statusText = status === 'Semua Status' ? 'Completed' : status;
-
-  return [
-    {
-      name: reportType === 'Payment' ? 'INV-RAHO-260630-001' : `${reportType} Utama`,
-      branch: branchAt(0),
-      status: statusText,
-      total: reportType === 'Payment' ? 'Rp 27.000.000' : '128',
-    },
-    {
-      name: reportType === 'Inventory' ? 'IFA 250' : `${reportType} Reguler`,
-      branch: branchAt(1),
-      status: reportType === 'Payment' ? 'Paid' : 'Completed',
-      total: reportType === 'Payment' ? 'Rp 9.500.000' : '64',
-    },
-    {
-      name: reportType === 'Session' ? 'Terapi O3' : `${reportType} Follow Up`,
-      branch: branchAt(2),
-      status: 'Pending',
-      total: reportType === 'Payment' ? 'Rp 4.250.000' : '32',
-    },
-  ];
 }
 
 export function isFutureStartDate(startDate: string): boolean {

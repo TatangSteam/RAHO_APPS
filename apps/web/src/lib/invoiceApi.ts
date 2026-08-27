@@ -16,6 +16,9 @@ export const invoiceApi = {
   getInvoices: async (params?: {
     search?: string;
     status?: string;
+    branchId?: string;
+    dateFrom?: string;
+    dateTo?: string;
     page?: number;
     limit?: number;
   }) => {
