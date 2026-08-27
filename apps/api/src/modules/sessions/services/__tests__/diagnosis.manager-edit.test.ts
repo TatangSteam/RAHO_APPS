@@ -22,13 +22,13 @@ const mockedPrisma = prisma as unknown as {
   treatmentSession: { findFirst: jest.Mock };
 };
 
-describe('DiagnosisService Admin Manager edit access', () => {
+describe('DiagnosisService doctor-only edit access', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedPrisma.treatmentSession.findFirst.mockResolvedValue({ isCompleted: false, completedAt: null });
   });
 
-  it('allows ADMIN_MANAGER to update a session diagnosis and writes an audit log', async () => {
+  it('allows DOCTOR to update a session diagnosis and writes an audit log', async () => {
     mockedPrisma.diagnosis.findUnique.mockResolvedValue({
       id: 'diagnosis-1',
       diagnosisCode: 'DXS-001',
@@ -36,7 +36,7 @@ describe('DiagnosisService Admin Manager edit access', () => {
       kategoriDiagnosaList: [],
       encounter: { branch: { id: 'branch-1' } },
     });
-    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'manager-1', role: Role.ADMIN_MANAGER });
+    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'doctor-1', role: Role.DOCTOR });
     mockedPrisma.diagnosis.update.mockResolvedValue({
       id: 'diagnosis-1',
       diagnosisCode: 'DXS-001',
@@ -46,7 +46,7 @@ describe('DiagnosisService Admin Manager edit access', () => {
     const result = await new DiagnosisService().updateDiagnosis(
       'encounter-1',
       { diagnosa: 'Diagnosa terkoreksi' },
-      'manager-1',
+      'doctor-1',
     );
 
     expect(result.diagnosa).toBe('Diagnosa terkoreksi');
@@ -55,7 +55,7 @@ describe('DiagnosisService Admin Manager edit access', () => {
       data: expect.objectContaining({ diagnosa: 'Diagnosa terkoreksi' }),
     }));
     expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'manager-1',
+      userId: 'doctor-1',
       action: AuditAction.UPDATE,
       resource: 'Diagnosis',
       resourceId: 'diagnosis-1',
@@ -70,12 +70,12 @@ describe('DiagnosisService Admin Manager edit access', () => {
       kategoriDiagnosaList: [],
       encounter: { branch: { id: 'branch-1' } },
     });
-    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'admin-service-1', role: Role.ADMIN_LAYANAN });
+    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'nurse-1', role: Role.NURSE });
 
     await expect(new DiagnosisService().updateDiagnosis(
       'encounter-1',
       { diagnosa: 'Tidak boleh' },
-      'admin-service-1',
+      'nurse-1',
     )).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
     expect(mockedPrisma.diagnosis.update).not.toHaveBeenCalled();
   });

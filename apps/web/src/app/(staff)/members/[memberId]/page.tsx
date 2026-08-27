@@ -290,7 +290,7 @@ export default function MemberDetailPage() {
   const canEditVerifiedPackage = canPrivilegedEditPackage;
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canEditDiagnosis = [
+  const canCreateDiagnosis = [
     'DOCTOR',
     'NURSE',
     'ADMIN_LAYANAN',
@@ -1017,7 +1017,7 @@ export default function MemberDetailPage() {
               aria-labelledby="member-tab-diagnosa"
               hidden={activeTab !== 'diagnosa'}
             >
-              <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canEditDiagnosis} />
+              <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canCreateDiagnosis} />
             </section>
           )}
           

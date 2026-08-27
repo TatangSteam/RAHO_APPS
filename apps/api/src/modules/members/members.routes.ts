@@ -209,7 +209,7 @@ router.post(
 router.put(
   '/:memberId/diagnoses/:diagnosisId',
   authenticate,
-  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
+  authorize([Role.DOCTOR]),
   assertBranchAccess,
   controller.updateMemberDiagnosis.bind(controller)
 );

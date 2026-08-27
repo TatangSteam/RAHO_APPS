@@ -8,10 +8,7 @@ import { Role, AuditAction, NotificationStatus, Prisma } from '@prisma/client';
 import { assertSessionEditWindow } from './session-edit-window';
 
 const DIAGNOSIS_EDITORS: Role[] = [
-  Role.SUPER_ADMIN,
-  Role.ADMIN_MANAGER,
   Role.DOCTOR,
-  Role.NURSE,
 ];
 
 export class DiagnosisService {
@@ -178,7 +175,7 @@ export class DiagnosisService {
   /**
    * Update an existing diagnosis linked to an encounter.
    * Only allows updating certain fields, doktorPemeriksa cannot be changed.
-   * Medical staff and authorized management can update diagnoses.
+   * Only doctors can update a diagnosis after it has been saved.
    */
   async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
     // Check if diagnosis exists for this encounter
@@ -205,7 +202,7 @@ export class DiagnosisService {
       throw {
         status: 403,
         code: 'FORBIDDEN',
-        message: 'Hanya dokter, nakes, Super Admin, atau Admin Manager yang dapat mengedit diagnosa',
+        message: 'Diagnosa yang sudah tersimpan hanya dapat diedit oleh Dokter',
       };
     }
 

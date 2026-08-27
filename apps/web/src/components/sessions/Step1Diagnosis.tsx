@@ -66,7 +66,7 @@ export default function Step1Diagnosis({
   const [error, setError] = useState<string | null>(null);
   const [memberDiagnoses, setMemberDiagnoses] = useState<Diagnosis[]>([]);
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-  const canEditDiagnosis = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'NURSE'].includes(user?.role || '');
+  const canEditDiagnosis = user?.role === 'DOCTOR';
   const { initialDraft, updateDraft, clearDraft } = useSessionWorkflowDraft<CreateDiagnosisInput>('diagnosis');
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
@@ -474,6 +474,9 @@ export default function Step1Diagnosis({
                 )}
               </div>
             </div>
+          )}
+          {!canEditDiagnosis && (
+            <p className={styles.helpText}>Diagnosa yang sudah tersimpan hanya dapat diedit oleh Dokter.</p>
           )}
         </div>
       </div>

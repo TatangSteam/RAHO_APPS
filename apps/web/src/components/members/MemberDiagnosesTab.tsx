@@ -65,12 +65,14 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const { user } = useAuthStore();
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   
-  // Check if current user can edit diagnosis based on their role and parent permission.
-  const canEditDiagnosis = Boolean(
+  // Nakes/MSO may create an initial diagnosis. Medical corrections to an
+  // existing diagnosis are restricted to doctors and enforced again by API.
+  const canCreateDiagnosis = Boolean(
     canEdit &&
       user?.role &&
       ['DOCTOR', 'NURSE', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'SUPER_ADMIN'].includes(user.role)
   );
+  const canEditDiagnosis = Boolean(canEdit && user?.role === 'DOCTOR');
   const canDeleteDiagnosis = Boolean(
     canEdit &&
       user?.role &&
@@ -733,7 +735,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
             <Stethoscope className="h-5 w-5 text-amber-500" />
             Diagnosa Member
           </h3>
-          {canEditDiagnosis && (
+          {canCreateDiagnosis && (
             <button
               onClick={handleOpenModal}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
@@ -755,7 +757,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
               Diagnosa wajib dibuat sebelum memulai sesi terapi
             </p>
-            {canEditDiagnosis && (
+            {canCreateDiagnosis && (
               <button
                 onClick={handleOpenModal}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"

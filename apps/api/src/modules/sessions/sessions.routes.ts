@@ -28,6 +28,10 @@ const CLINICAL_WRITERS: Role[] = [
   Role.ADMIN_CABANG,
   ...MEDICAL_STAFF,
 ];
+const DIAGNOSIS_WRITERS: Role[] = [
+  ...CLINICAL_WRITERS,
+  Role.ADMIN_LAYANAN,
+];
 const VITAL_WRITERS: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
@@ -133,7 +137,7 @@ router.patch(
 router.post(
   '/encounters/:encounterId/diagnoses',
   authenticate,
-  authorize(CLINICAL_WRITERS),
+  authorize(DIAGNOSIS_WRITERS),
   controller.createDiagnosis.bind(controller)
 );
 
@@ -147,7 +151,7 @@ router.get(
 router.patch(
   '/encounters/:encounterId/diagnoses',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, ...MEDICAL_STAFF]),
+  authorize([Role.DOCTOR]),
   controller.updateDiagnosis.bind(controller)
 );
 
