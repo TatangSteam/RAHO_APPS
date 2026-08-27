@@ -55,6 +55,7 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState('');
   const [member, setMember] = useState('');
   const [doctor, setDoctor] = useState('');
+  const [staff, setStaff] = useState('');
   const [generated, setGenerated] = useState(false);
   const [empty, setEmpty] = useState(false);
   const [viewMode, setViewMode] = useState<ReportViewMode>('table');
@@ -124,7 +125,7 @@ export default function ReportsPage() {
             ...(startDate ? { dateFrom: startDate } : {}),
             ...(endDate ? { dateTo: endDate } : {}),
             status: 'all',
-          }), { status, member, doctor });
+          }), { status, member, doctor, staff });
       } else if (reportType === 'Member') {
         const memberParams = {
           limit: 100,
@@ -201,6 +202,7 @@ export default function ReportsPage() {
     setEndDate('');
     setMember('');
     setDoctor('');
+    setStaff('');
     setEmpty(false);
     setGenerated(false);
     setRows([]);
@@ -346,6 +348,19 @@ export default function ReportsPage() {
                   {doctor}
                 </button>
               )}
+            </div>
+            <div>
+              <label htmlFor="staff-filter" className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Staff
+              </label>
+              <input
+                id="staff-filter"
+                value={staff}
+                onChange={(event) => setStaff(event.target.value)}
+                disabled={reportType !== 'Session'}
+                className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-amber-500 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:disabled:bg-neutral-800"
+                placeholder={reportType === 'Session' ? 'Cari dokter, nakes, atau admin' : 'Khusus laporan sesi'}
+              />
             </div>
             <div className="flex items-end gap-2">
               <button

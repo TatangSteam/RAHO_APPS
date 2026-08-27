@@ -55,6 +55,22 @@ describe('session report presentation', () => {
       expect.objectContaining({ name: 'Budi Santoso · SES-BGR-001', status: 'Pending' }),
     ]);
   });
+
+  it('filters sessions by assigned doctor, nurse, or service admin', () => {
+    const assignedSession = {
+      session: {
+        ...sessions[0].session,
+        adminLayanan: { fullName: 'Sari Admin' },
+        nurse: { fullName: 'Nina Nakes' },
+      },
+    };
+    expect(buildSessionReportRows([assignedSession], {
+      status: 'Semua Status', member: '', doctor: '', staff: 'nina',
+    })).toHaveLength(1);
+    expect(buildSessionReportRows([assignedSession], {
+      status: 'Semua Status', member: '', doctor: '', staff: 'tidak ada',
+    })).toHaveLength(0);
+  });
 });
 
 describe('other real report presentations', () => {

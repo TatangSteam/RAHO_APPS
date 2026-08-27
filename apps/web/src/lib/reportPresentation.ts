@@ -25,7 +25,10 @@ export interface SessionReportSource {
     completionStatus?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
     member: { fullName: string; memberNo: string };
     doctor?: { fullName: string } | null;
+    adminLayanan?: { fullName: string } | null;
+    nurse?: { fullName: string } | null;
     sessionDoctors?: Array<{ doctor: { fullName: string } }>;
+    sessionNurses?: Array<{ nurse: { fullName: string } }>;
   };
 }
 
@@ -120,10 +123,11 @@ export function buildInventoryReportRows(
 
 export function buildSessionReportRows(
   sessions: SessionReportSource[],
-  filters: { status: string; member: string; doctor: string },
+  filters: { status: string; member: string; doctor: string; staff?: string },
 ): ReportRow[] {
   const memberSearch = filters.member.trim().toLocaleLowerCase('id-ID');
   const doctorSearch = filters.doctor.trim().toLocaleLowerCase('id-ID');
+  const staffSearch = (filters.staff || '').trim().toLocaleLowerCase('id-ID');
 
   return sessions
     .filter(({ session }) => {
@@ -135,10 +139,18 @@ export function buildSessionReportRows(
         session.doctor?.fullName,
         ...(session.sessionDoctors || []).map((assignment) => assignment.doctor.fullName),
       ].filter(Boolean).join(' ').toLocaleLowerCase('id-ID');
+      const staffText = [
+        session.adminLayanan?.fullName,
+        session.nurse?.fullName,
+        session.doctor?.fullName,
+        ...(session.sessionDoctors || []).map((assignment) => assignment.doctor.fullName),
+        ...(session.sessionNurses || []).map((assignment) => assignment.nurse.fullName),
+      ].filter(Boolean).join(' ').toLocaleLowerCase('id-ID');
 
       return (filters.status === 'Semua Status' || filters.status === status)
         && (!memberSearch || memberText.includes(memberSearch))
-        && (!doctorSearch || doctorText.includes(doctorSearch));
+        && (!doctorSearch || doctorText.includes(doctorSearch))
+        && (!staffSearch || staffText.includes(staffSearch));
     })
     .map(({ session }) => ({
       name: `${session.member.fullName} · ${session.sessionCode}`,
