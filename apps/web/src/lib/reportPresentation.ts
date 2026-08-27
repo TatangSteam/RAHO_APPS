@@ -17,6 +17,50 @@ export interface ReportRow {
   total: string;
 }
 
+export interface SessionReportSource {
+  session: {
+    sessionCode: string;
+    branchName?: string;
+    isCompleted: boolean;
+    completionStatus?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+    member: { fullName: string; memberNo: string };
+    doctor?: { fullName: string } | null;
+    sessionDoctors?: Array<{ doctor: { fullName: string } }>;
+  };
+}
+
+export function buildSessionReportRows(
+  sessions: SessionReportSource[],
+  filters: { status: string; member: string; doctor: string },
+): ReportRow[] {
+  const memberSearch = filters.member.trim().toLocaleLowerCase('id-ID');
+  const doctorSearch = filters.doctor.trim().toLocaleLowerCase('id-ID');
+
+  return sessions
+    .filter(({ session }) => {
+      const status = session.completionStatus === 'CANCELLED'
+        ? 'Cancelled'
+        : session.isCompleted ? 'Completed' : 'Pending';
+      const memberText = `${session.member.fullName} ${session.member.memberNo}`.toLocaleLowerCase('id-ID');
+      const doctorText = [
+        session.doctor?.fullName,
+        ...(session.sessionDoctors || []).map((assignment) => assignment.doctor.fullName),
+      ].filter(Boolean).join(' ').toLocaleLowerCase('id-ID');
+
+      return (filters.status === 'Semua Status' || filters.status === status)
+        && (!memberSearch || memberText.includes(memberSearch))
+        && (!doctorSearch || doctorText.includes(doctorSearch));
+    })
+    .map(({ session }) => ({
+      name: `${session.member.fullName} · ${session.sessionCode}`,
+      branch: session.branchName || 'Cabang tidak diketahui',
+      status: session.completionStatus === 'CANCELLED'
+        ? 'Cancelled'
+        : session.isCompleted ? 'Completed' : 'Pending',
+      total: '1',
+    }));
+}
+
 export function buildReportRows(
   reportType: ReportType,
   branch: string,

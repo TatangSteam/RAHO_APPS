@@ -21,6 +21,10 @@ export function ReportResults({
   viewMode,
   rows,
 }: ReportResultsProps) {
+  const statusCounts = rows.reduce<Record<string, number>>((counts, row) => {
+    counts[row.status] = (counts[row.status] || 0) + Number(row.total || 0);
+    return counts;
+  }, {});
   return (
     <section
       data-report-content
@@ -86,9 +90,9 @@ export function ReportResults({
             aria-label={`Chart laporan ${reportType}`}
           />
           <div className="mt-3 grid grid-cols-3 gap-3 text-xs text-neutral-500 dark:text-neutral-400">
-            <span>Aktif: 128</span>
-            <span>Selesai: 64</span>
-            <span>Pending: 32</span>
+            <span>Selesai: {statusCounts.Completed || 0}</span>
+            <span>Pending: {statusCounts.Pending || 0}</span>
+            <span>Dibatalkan: {statusCounts.Cancelled || 0}</span>
           </div>
         </div>
       )}

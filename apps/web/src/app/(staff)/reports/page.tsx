@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
+import { sessionApi } from '@/lib/sessionApi';
 import { devError } from '@/lib/logger';
 import { ReportAccessDenied } from '@/components/reports/ReportAccessDenied';
 import { ReportDropdown } from '@/components/reports/ReportDropdown';
@@ -24,6 +25,7 @@ import {
   REPORT_STATUSES,
   REPORT_TYPES,
   buildReportRows,
+  buildSessionReportRows,
   exportReportFile,
   isFutureStartDate,
   type ReportBranch,
@@ -54,7 +56,10 @@ export default function ReportsPage() {
   const [frequency, setFrequency] = useState<ReportFrequency>('Daily');
   const [toast, setToast] = useState('');
   const [branches, setBranches] = useState<string[]>([]);
+  const [branchIdsByName, setBranchIdsByName] = useState<Record<string, string>>({});
   const [branchesLoading, setBranchesLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [rows, setRows] = useState<ReturnType<typeof buildReportRows>>([]);
 
   useEffect(() => {
     let active = true;
@@ -62,14 +67,15 @@ export default function ReportsPage() {
     const loadBranches = async () => {
       try {
         setBranchesLoading(true);
-        const names = role === 'ADMIN_MANAGER'
-          ? (await doctorBranchApi.getManagedBranches(false)).map((item) => item.branchName)
+        const branchRecords = role === 'ADMIN_MANAGER'
+          ? (await doctorBranchApi.getManagedBranches(false)).map((item) => ({ id: item.branchId, name: item.branchName }))
           : ((await branchesApi.getAllBranches()).data?.data || [])
               .filter((item) => item.isActive)
-              .map((item) => item.name);
+              .map((item) => ({ id: item.id, name: item.name }));
 
         if (active) {
-          setBranches(Array.from(new Set(names)));
+          setBranches(Array.from(new Set(branchRecords.map((item) => item.name))));
+          setBranchIdsByName(Object.fromEntries(branchRecords.map((item) => [item.name, item.id])));
         }
       } catch (error) {
         devError('Gagal memuat cabang laporan:', error);
@@ -90,15 +96,41 @@ export default function ReportsPage() {
 
   const branchOptions = useMemo(() => ['Semua Cabang', ...branches], [branches]);
 
-  const rows = useMemo(
-    () => buildReportRows(reportType, branch, status, branches),
-    [branch, branches, reportType, status],
-  );
+  const generateReport = async () => {
+    if (isFutureStartDate(startDate)) {
+      setRows([]);
+      setEmpty(true);
+      setGenerated(true);
+      setViewMode('table');
+      return;
+    }
 
-  const generateReport = () => {
-    setEmpty(isFutureStartDate(startDate));
-    setGenerated(true);
-    setViewMode('table');
+    try {
+      setGenerating(true);
+      setToast('');
+      const nextRows = reportType === 'Session'
+        ? buildSessionReportRows(await sessionApi.getAllSessions({
+            limit: 1000,
+            ...(branch !== 'Semua Cabang' ? { branchId: branchIdsByName[branch] } : {}),
+            ...(startDate ? { dateFrom: startDate } : {}),
+            ...(endDate ? { dateTo: endDate } : {}),
+            status: 'all',
+          }), { status, member, doctor })
+        : buildReportRows(reportType, branch, status, branches);
+
+      setRows(nextRows);
+      setEmpty(nextRows.length === 0);
+      setGenerated(true);
+      setViewMode('table');
+    } catch (error) {
+      devError('Gagal generate laporan:', error);
+      setRows([]);
+      setEmpty(true);
+      setGenerated(true);
+      setToast('Gagal memuat data laporan. Silakan coba lagi.');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const resetFilters = () => {
@@ -109,6 +141,8 @@ export default function ReportsPage() {
     setMember('');
     setDoctor('');
     setEmpty(false);
+    setGenerated(false);
+    setRows([]);
   };
 
   const exportReport = async (format: ReportExportFormat) => {
@@ -255,11 +289,12 @@ export default function ReportsPage() {
             <div className="flex items-end gap-2">
               <button
                 type="button"
-                onClick={generateReport}
+                onClick={() => void generateReport()}
+                disabled={generating || branchesLoading}
                 className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400"
               >
                 <FileText size={16} />
-                Generate Laporan
+                {generating ? 'Memuat...' : 'Generate Laporan'}
               </button>
               <button
                 type="button"
@@ -273,14 +308,16 @@ export default function ReportsPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={generateReport}
+              onClick={() => void generateReport()}
+              disabled={generating || branchesLoading}
               className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold hover:border-amber-500 dark:border-neutral-700"
             >
               Terapkan Filter
             </button>
             <button
               type="button"
-              onClick={generateReport}
+              onClick={() => void generateReport()}
+              disabled={generating || branchesLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold hover:border-amber-500 dark:border-neutral-700"
             >
               <RefreshCw size={16} />
