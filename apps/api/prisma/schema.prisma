@@ -1205,11 +1205,13 @@ model JournalSequence {
 // ============================================================
 
 model Member {
-  id                   String  @id @default(cuid())
-  userId               String  @unique
-  memberNo             String  @unique
-  registrationBranchId String
-  referralCodeId       String?
+  id                    String       @id @default(cuid())
+  userId                String       @unique
+  memberNo              String       @unique
+  registrationBranchId  String
+  referralCodeId        String?
+  isEmployee            Boolean      @default(false)
+  employeeTreatmentType PackageType?
 
   // Incentive Settings (per member)
   firstIncentiveType  IncentiveType?
@@ -1261,6 +1263,7 @@ model Member {
   @@index([nik])
   @@index([dateOfBirth])
   @@index([voucherCount])
+  @@index([isEmployee, isActive])
   @@map("members")
 }
 

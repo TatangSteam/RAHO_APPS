@@ -29,11 +29,25 @@ const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
 // Roles that can edit therapy plans and add rows to active therapy plan sets.
 const THERAPY_PLAN_EDITORS = [
   Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
   Role.DOCTOR,
   Role.NURSE,
 ];
+
+router.get(
+  '/employees/enrollment-options',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  controller.getEmployeeEnrollmentOptions.bind(controller),
+);
+router.post(
+  '/employees/enroll',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  controller.enrollEmployee.bind(controller),
+);
 
 // GET /api/v1/members - List members
 router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(controller));

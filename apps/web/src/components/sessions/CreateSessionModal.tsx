@@ -46,6 +46,7 @@ export default function CreateSessionModal({
   const [memberId, setMemberId] = useState(preselectedMemberId || '');
   const [memberNo, setMemberNo] = useState('');
   const [memberName, setMemberName] = useState('');
+  const [isEmployeeMember, setIsEmployeeMember] = useState(false);
   const [sessionBranchId, setSessionBranchId] = useState(user?.branchId || '');
   const [voucherCount, setVoucherCount] = useState(0);
   const [outstandingDebtSessions, setOutstandingDebtSessions] = useState(0);
@@ -312,6 +313,7 @@ export default function CreateSessionModal({
       const memberDetail = await memberApi.getMemberById(id);
       setMemberNo(memberDetail.memberNo);
       setMemberName(memberDetail.profile?.fullName || '');
+      setIsEmployeeMember(Boolean(memberDetail.isEmployee));
 
       // Load infus set stock based on member's registration branch
       // This is important for Admin Manager who doesn't have direct branchId
@@ -389,7 +391,10 @@ export default function CreateSessionModal({
       const basicPackage =
         usablePackages.find((p) => p.packageType === 'BASIC' && p.status === 'ACTIVE') ||
         usablePackages.find((p) => p.packageType === 'BASIC');
-      if (basicPackage) {
+      if (memberDetail.isEmployee) {
+        setSelectedPackageId('__WITHOUT_PACKAGE__');
+        setSessionBranchId(user?.branchId || memberBranchId || '');
+      } else if (basicPackage) {
         setSelectedPackageId(basicPackage.packageId);
         setSessionBranchId(basicPackage.branchId || memberBranchId || user?.branchId || '');
       } else {
@@ -724,6 +729,7 @@ export default function CreateSessionModal({
       setMemberId('');
       setMemberNo('');
       setMemberName('');
+      setIsEmployeeMember(false);
       setSessionBranchId(user?.branchId || '');
       setVoucherCount(0);
       setOutstandingDebtSessions(0);
@@ -950,7 +956,7 @@ export default function CreateSessionModal({
                       value={selectedPackageId}
                       onChange={(e) => setSelectedPackageId(e.target.value)}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-                      disabled={loading}
+                      disabled={loading || isEmployeeMember}
                     >
                       <option value="">Pilih paket...</option>
                       <option value="__WITHOUT_PACKAGE__">Tanpa Paket Basic dan Booster</option>
@@ -960,7 +966,12 @@ export default function CreateSessionModal({
                     </select>
                     {selectedPackageId === '__WITHOUT_PACKAGE__' && (
                       <p className="text-sm text-amber-700 dark:text-amber-400">
-                        Voucher tidak akan berkurang. Material terapi tetap dicatat dan stok akan berkurang saat sesi diselesaikan.
+                        Voucher tidak akan berkurang. Untuk karyawan, sesi Basic ini gratis. Material terapi tetap dicatat dan stok akan berkurang saat sesi diselesaikan.
+                      </p>
+                    )}
+                    {isEmployeeMember && (
+                      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                        Karyawan RAHO: layanan default Basic dan gratis. Perubahan dosis atau bahan harus dilakukan melalui Therapy Plan.
                       </p>
                     )}
                     {selectedPackage && isDebtEligiblePackage(selectedPackage, outstandingDebtSessions) && (

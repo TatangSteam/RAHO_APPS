@@ -18,6 +18,8 @@ export interface Member {
   lastPurchaseDiscountPercent?: number | null;
   lastPackagePurchaseAt?: string | null;
   isActive: boolean;
+  isEmployee?: boolean;
+  employeeTreatmentType?: 'BASIC' | 'BOOSTER' | null;
   isDeceased?: boolean;
   isLintas: boolean;
   registrationBranch: string;
@@ -88,6 +90,8 @@ export interface MemberDetail {
   lastPackagePurchaseAt?: string | null;
   isConsentToPhoto: boolean;
   isActive: boolean;
+  isEmployee?: boolean;
+  employeeTreatmentType?: 'BASIC' | 'BOOSTER' | null;
   isDeceased: boolean;
   createdAt: string;
 }

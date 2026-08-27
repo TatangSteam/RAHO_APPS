@@ -1,7 +1,14 @@
 import type { TherapyPlan as SessionTherapyPlan } from '@/types/session';
 import type { TherapyPlan } from '@/lib/therapyPlanApi';
 
-export const SESSION_THERAPY_PLAN_EDITORS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'NURSE'] as const;
+export const SESSION_THERAPY_PLAN_EDITORS = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_CABANG',
+  'ADMIN_LAYANAN',
+  'DOCTOR',
+  'NURSE',
+] as const;
 
 export function canEditSessionTherapyPlan(role?: string | null): boolean {
   return Boolean(role && SESSION_THERAPY_PLAN_EDITORS.includes(role as (typeof SESSION_THERAPY_PLAN_EDITORS)[number]));

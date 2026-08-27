@@ -11,11 +11,13 @@ import { LookupMemberModal } from '@/components/members/LookupMemberModal';
 import ExportMembersModal from '@/components/members/ExportMembersModal';
 import { ColumnConfigModal } from '@/components/members/ColumnConfigModal';
 import { MemberTableCell } from '@/components/members/MemberTableCell';
+import { EnrollEmployeeMemberModal } from '@/components/members/EnrollEmployeeMemberModal';
 import { useMemberColumns } from '@/hooks/useMemberColumns';
 import { devLog, devError } from '@/lib/logger';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 import {
   Building2,
+  BriefcaseMedical,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -49,6 +51,7 @@ export default function MembersPage() {
   const [showLookupModal, setShowLookupModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showColumnConfigModal, setShowColumnConfigModal] = useState(false);
+  const [showEmployeeMemberModal, setShowEmployeeMemberModal] = useState(false);
 
   // Custom columns hook
   const { columns, visibleColumns, toggleColumn, resetColumns } = useMemberColumns();
@@ -260,6 +263,16 @@ export default function MembersPage() {
             >
               <Plus size={18} />
               Daftarkan Member
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowEmployeeMemberModal(true)}
+              className={styles.primaryAction}
+            >
+              <BriefcaseMedical size={18} />
+              Member Karyawan
             </button>
           )}
         </div>
@@ -497,6 +510,11 @@ export default function MembersPage() {
         columns={columns}
         onToggleColumn={toggleColumn}
         onReset={resetColumns}
+      />
+      <EnrollEmployeeMemberModal
+        isOpen={showEmployeeMemberModal}
+        onClose={() => setShowEmployeeMemberModal(false)}
+        onSuccess={() => void loadMembers()}
       />
     </main>
   );

@@ -1028,7 +1028,10 @@ export default function MemberDetailPage() {
               aria-labelledby="member-tab-therapy-plan"
               hidden={activeTab !== 'therapy-plan'}
             >
-              <MemberTherapyPlansTab memberId={memberId} canEdit={!isAdminManager} />
+              <MemberTherapyPlansTab
+                memberId={memberId}
+                canEdit={['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(user?.role || '')}
+              />
             </section>
           )}
           

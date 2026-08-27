@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { type MemberDocument, Prisma, Role } from '@prisma/client';
+import { type MemberDocument, PackageType, Prisma, Role } from '@prisma/client';
 import {
   buildMemberRankMap,
   EMPTY_MEMBER_RANK,
@@ -44,6 +44,8 @@ interface MemberListSource {
   nik: string | null;
   dateOfBirth: Date | null;
   voucherCount: number;
+  isEmployee: boolean;
+  employeeTreatmentType: PackageType | null;
   isActive: boolean;
   isDeceased: boolean;
   createdAt: Date;
@@ -259,9 +261,15 @@ export class MemberRetrievalService {
           ? [where.OR]
           : [];
       if (branchConditions.length > 0) {
+        // Employee members are globally discoverable only through an explicit
+        // search. Browsing without a search remains branch-scoped.
+        const visibilityConditions: Prisma.MemberWhereInput[] = [
+          ...branchConditions,
+          { isEmployee: true },
+        ];
         // Combine branch conditions with search conditions using AND
         where.AND = [
-          { OR: branchConditions },
+          { OR: visibilityConditions },
           { OR: searchConditions },
         ];
         delete where.OR;
@@ -817,6 +825,8 @@ export class MemberRetrievalService {
       sumberInfoRaho: member.sumberInfoRaho,
       postalCode: member.postalCode,
       voucherCount: member.voucherCount,
+      isEmployee: member.isEmployee,
+      employeeTreatmentType: member.employeeTreatmentType,
       isConsentToPhoto: member.isConsentToPhoto,
       isActive: member.isActive,
       isDeceased: member.isDeceased,
@@ -867,6 +877,8 @@ export class MemberRetrievalService {
       username: member.user?.email || '',
       age: calculateAge(member.dateOfBirth),
       voucherCount: member.voucherCount || 0,
+      isEmployee: member.isEmployee,
+      employeeTreatmentType: member.employeeTreatmentType,
       basicPackageCount: basicVoucherCount,
       sessionCount: sessionStats.sessionCount,
       lastInfusionDate: sessionStats.lastInfusionDate?.toISOString() || null,

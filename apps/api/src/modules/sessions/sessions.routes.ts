@@ -186,7 +186,7 @@ router.get(
 router.put(
   '/:sessionId/therapy-plan-set',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, ...MEDICAL_STAFF]),
+  authorize(ALLSTAFF),
   validate(bulkEditTherapyPlanSetSchema),
   controller.updateTherapyPlanSet.bind(controller)
 );

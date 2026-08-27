@@ -53,6 +53,8 @@ export interface MemberDetail {
   memberId: string;
   memberNo: string;
   voucherCount: number;
+  isEmployee?: boolean;
+  employeeTreatmentType?: 'BASIC' | 'BOOSTER' | null;
   profile?: {
     fullName: string;
     phone?: string;

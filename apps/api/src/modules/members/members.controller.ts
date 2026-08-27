@@ -6,6 +6,7 @@ import {
   grantAccessSchema,
   sendNotificationSchema,
   memberUsernameSchema,
+  enrollEmployeeMemberSchema,
 } from './members.schema';
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
@@ -15,6 +16,10 @@ import { MemberAccountImportService } from './services/member-account-import.ser
 import { SupportingPhotosService } from '../sessions/services/supporting-photos.service';
 import { logAudit } from '../../utils/auditLog';
 import { prisma } from '../../lib/prisma';
+import {
+  enrollEmployeeAsMember,
+  getEmployeeMemberEnrollmentOptions,
+} from './services/employee-member.service';
 
 const membersService = new MembersService();
 const exportService = new MemberExportService();
@@ -31,6 +36,23 @@ function getErrorCode(error: unknown): string {
 }
 
 export class MembersController {
+  async getEmployeeEnrollmentOptions(_req: Request, res: Response, next: NextFunction) {
+    try {
+      sendSuccess(res, await getEmployeeMemberEnrollmentOptions());
+    } catch (error) { next(error); }
+  }
+
+  async enrollEmployee(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = enrollEmployeeMemberSchema.parse(req.body);
+      sendSuccess(res, await enrollEmployeeAsMember(
+        input.staffUserId,
+        input.registrationBranchId,
+        req.user!.userId,
+      ), 201);
+    } catch (error) { next(error); }
+  }
+
   async getMembers(req: Request, res: Response, next: NextFunction) {
     try {
       const { search, status, branchCode, page, limit } = req.query;

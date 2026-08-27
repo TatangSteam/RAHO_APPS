@@ -32,7 +32,15 @@ export class SessionCreationService {
     const sessionData = await this.autoFillStaffIds(data, userId, userRole);
 
     // 1. Validate member access
-    await this.validateMemberAccess(sessionData.memberId, branchId);
+    const member = await this.validateMemberAccess(sessionData.memberId, branchId);
+
+    if (member.isEmployee && (sessionData.memberPackageId || sessionData.boosterPackageId)) {
+      throw {
+        status: 422,
+        code: 'EMPLOYEE_SESSION_MUST_BE_FREE',
+        message: 'Sesi karyawan harus gratis dan tidak boleh memakai paket Basic atau Booster berbayar.',
+      };
+    }
 
     // 2. Validate the optional Basic package. Package-less sessions consume
     // inventory normally, but never consume vouchers or package revenue.
@@ -132,6 +140,7 @@ export class SessionCreationService {
         branchName: branch.name,
         createdByRole: userRole,
         packageMode: memberPackage ? 'BASIC' : 'WITHOUT_PACKAGE',
+        isEmployeeFreeSession: member.isEmployee,
         packageStatusAtCreation: memberPackage?.status ?? null,
         isDebtSession: memberPackage ? memberPackage.status !== PackageStatus.ACTIVE : false,
       },
@@ -150,7 +159,9 @@ export class SessionCreationService {
           ? `Infus ke-${globalInfusKe} (Infus pertama di ${branch.name})`
           : `Infus ke-${globalInfusKe} (Infus ke-${branchInfusKe} di ${branch.name})`,
       message:
-        !memberPackage
+        member.isEmployee
+          ? 'Sesi Basic karyawan berhasil dibuat gratis. Voucher dan paket tidak berkurang; stok tetap diproses saat sesi diselesaikan.'
+          : !memberPackage
           ? 'Sesi terapi tanpa paket berhasil dibuat. Voucher tidak berkurang; stok tetap diproses saat sesi diselesaikan.'
           : memberPackage.status === PackageStatus.ACTIVE
             ? 'Sesi terapi berhasil dibuat'
@@ -223,6 +234,7 @@ export class SessionCreationService {
     }
 
     const hasAccess =
+      member.isEmployee ||
       member.registrationBranchId === branchId ||
       member.branchAccesses.some((access) => access.branchId === branchId);
 

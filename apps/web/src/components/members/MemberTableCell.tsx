@@ -77,6 +77,11 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
             <p className="truncate font-bold text-neutral-900 dark:text-white">
               {member.fullName || 'Nama tidak tersedia'}
             </p>
+            {member.isEmployee && (
+              <span className="mt-1 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+                Karyawan · Basic Gratis
+              </span>
+            )}
             <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
               <Building2 size={12} />
               <span className="truncate">{member.registrationBranch || 'Cabang tidak tersedia'}</span>

@@ -30,6 +30,11 @@ const optionalPhoneSchema = z
     message: 'Nomor telepon minimal 10 digit',
   });
 
+export const enrollEmployeeMemberSchema = z.object({
+  staffUserId: z.string().cuid(),
+  registrationBranchId: z.string().cuid(),
+});
+
 const ifaSubstanceSchema = z.object({
   name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
   amount: z.number().min(0, 'Jumlah zat tidak boleh negatif'),
