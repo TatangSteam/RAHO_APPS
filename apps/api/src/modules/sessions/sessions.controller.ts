@@ -29,6 +29,7 @@ const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
 const supportingPhotosService = new SupportingPhotosService();
 const workflowBurdenService = new WorkflowBurdenService();
+const SESSION_WORKFLOW_WRITER_ROLES: Role[] = [Role.DOCTOR, Role.NURSE, Role.ADMIN_LAYANAN];
 
 const parseQueryIdList = (value: unknown): string[] | undefined => {
   if (!value) return undefined;
@@ -94,11 +95,12 @@ export class SessionsController {
 
     if (writesDoctorEvaluation) {
       const isSoapManager = user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_MANAGER;
-      if (user.role !== Role.DOCTOR && !isSoapManager) {
+      const isSessionWriter = SESSION_WORKFLOW_WRITER_ROLES.includes(user.role as Role);
+      if (!isSessionWriter && !isSoapManager) {
         throw {
           status: 403,
           code: 'DOCTOR_EVALUATION_ROLE_REQUIRED',
-          message: 'Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan, Admin Manager, atau Super Admin',
+          message: 'Evaluasi SOAP hanya dapat diisi oleh Dokter, Nakes, atau MSO yang ditugaskan',
         };
       }
 
@@ -109,6 +111,18 @@ export class SessionsController {
           code: 'DOCTOR_NOT_ASSIGNED',
           message: 'Anda bukan dokter yang ditugaskan pada sesi ini',
         };
+      }
+
+      if (user.role === Role.ADMIN_LAYANAN && session.adminLayananId !== user.userId) {
+        throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Sesi ini tidak ditugaskan kepada Anda' };
+      }
+
+      if (
+        user.role === Role.NURSE &&
+        session.nurseId !== user.userId &&
+        session.sessionNurses.length === 0
+      ) {
+        throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Sesi ini tidak ditugaskan kepada Anda' };
       }
 
       const prerequisitesReady =
@@ -1000,6 +1014,7 @@ export class SessionsController {
           'Header Idempotency-Key sepanjang 16–120 karakter wajib diisi.',
         );
       }
+
       const input = whatsappReportRequestSchema.parse(req.body ?? {});
       const result = await sessionsService.queueWhatsAppReport({
         sessionId: req.params.sessionId,

@@ -360,6 +360,51 @@ describe('staff performance service', () => {
     }));
   });
 
+  it('attributes performance to assigned roles instead of the staff member who fills the workflow', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      staff('doctor-1', 'Doctor One'),
+      { ...staff('nurse-1', 'Nurse One'), role: Role.NURSE },
+      { ...staff('mso-1', 'MSO One'), role: Role.ADMIN_LAYANAN },
+    ] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      doctorId: 'doctor-1',
+      nurseId: 'nurse-1',
+      adminLayananId: 'mso-1',
+      sessionDoctors: [],
+      sessionNurses: [],
+      isCompleted: true,
+    }] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+    const byId = new Map(result.staff.map((item) => [item.id, item.performance]));
+
+    expect(byId.get('doctor-1')).toEqual(expect.objectContaining({
+      asDoctor: 1,
+      asOperational: 0,
+      total: 1,
+    }));
+    expect(byId.get('nurse-1')).toEqual(expect.objectContaining({
+      asDoctor: 0,
+      asOperational: 1,
+      total: 1,
+    }));
+    expect(byId.get('mso-1')).toEqual(expect.objectContaining({
+      asDoctor: 0,
+      asOperational: 1,
+      total: 1,
+    }));
+    expect(result.summary).toEqual(expect.objectContaining({
+      uniqueSessions: 1,
+      participations: 3,
+      asDoctor: 1,
+      asOperational: 2,
+    }));
+  });
+
   it('filters staff history by the combined MSO and Nakes operational role', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       ...staff('operator-1', 'Operator One'),

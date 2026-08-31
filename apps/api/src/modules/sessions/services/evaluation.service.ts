@@ -58,9 +58,6 @@ export class EvaluationService {
         ? session.adminLayananId === userId
         : session.nurseId === userId || session.sessionNurses.some((item) => item.nurseId === userId);
       if (!assigned) throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Anda hanya dapat mengedit sesi yang ditugaskan kepada Anda.' };
-      if (doctorChanges.length > 0) {
-        throw { status: 403, code: 'FIELD_NOT_OWNED', message: 'Evaluasi SOAP hanya dapat diedit oleh dokter yang ditugaskan.' };
-      }
       return session;
     }
 

@@ -76,10 +76,8 @@ export function hasFilledDoctorEvaluation(evaluation: EvaluationSnapshot): boole
 }
 
 /**
- * Divides unfinished work by responsibility.
- * Doctors only receive work when every prerequisite is ready and the doctor
- * evaluation is still empty. Operational roles never receive the evaluation
- * as their task; after the evaluation is filled, they receive finalization.
+ * Divides unfinished work by assignment. Nakes and MSO may complete every
+ * workflow step, including the SOAP evaluation and finalization.
  */
 export function resolveUnfinishedSessionReminder(
   role: Role,
@@ -105,6 +103,13 @@ export function resolveUnfinishedSessionReminder(
 
   if (missingOperationalSteps.length > 0) {
     return { kind: 'OPERATIONAL_STEPS', missingSteps: missingOperationalSteps };
+  }
+
+  if (!state.doctorEvaluation && (role === Role.ADMIN_LAYANAN || role === Role.NURSE)) {
+    return {
+      kind: 'DOCTOR_EVALUATION',
+      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi SOAP' }],
+    };
   }
 
   if (state.doctorEvaluation) {

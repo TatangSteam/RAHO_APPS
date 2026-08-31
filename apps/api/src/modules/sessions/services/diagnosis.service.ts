@@ -9,6 +9,8 @@ import { assertSessionEditWindow } from './session-edit-window';
 
 const DIAGNOSIS_EDITORS: Role[] = [
   Role.DOCTOR,
+  Role.NURSE,
+  Role.ADMIN_LAYANAN,
 ];
 
 export class DiagnosisService {
@@ -175,7 +177,7 @@ export class DiagnosisService {
   /**
    * Update an existing diagnosis linked to an encounter.
    * Only allows updating certain fields, doktorPemeriksa cannot be changed.
-   * Only doctors can update a diagnosis after it has been saved.
+   * Doctors, assigned Nakes, and assigned MSO can update a saved session diagnosis.
    */
   async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
     // Check if diagnosis exists for this encounter
@@ -202,7 +204,7 @@ export class DiagnosisService {
       throw {
         status: 403,
         code: 'FORBIDDEN',
-        message: 'Diagnosa yang sudah tersimpan hanya dapat diedit oleh Dokter',
+        message: 'Diagnosa sesi hanya dapat diedit oleh Dokter, Nakes, atau MSO',
       };
     }
 

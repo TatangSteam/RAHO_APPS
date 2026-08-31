@@ -22,7 +22,7 @@ const mockedPrisma = prisma as unknown as {
   treatmentSession: { findFirst: jest.Mock };
 };
 
-describe('DiagnosisService doctor-only edit access', () => {
+describe('DiagnosisService session-writer edit access', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedPrisma.treatmentSession.findFirst.mockResolvedValue({ isCompleted: false, completedAt: null });
@@ -62,7 +62,7 @@ describe('DiagnosisService doctor-only edit access', () => {
     }));
   });
 
-  it('keeps unrelated roles from editing diagnosis data', async () => {
+  it.each([Role.NURSE, Role.ADMIN_LAYANAN])('allows %s to edit session diagnosis data', async (role) => {
     mockedPrisma.diagnosis.findUnique.mockResolvedValue({
       id: 'diagnosis-1',
       diagnosisCode: 'DXS-001',
@@ -70,13 +70,18 @@ describe('DiagnosisService doctor-only edit access', () => {
       kategoriDiagnosaList: [],
       encounter: { branch: { id: 'branch-1' } },
     });
-    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'nurse-1', role: Role.NURSE });
+    mockedPrisma.user.findUnique.mockResolvedValue({ id: 'operator-1', role });
+    mockedPrisma.diagnosis.update.mockResolvedValue({
+      id: 'diagnosis-1',
+      diagnosisCode: 'DXS-001',
+      diagnosa: 'Diperbarui operasional',
+    });
 
     await expect(new DiagnosisService().updateDiagnosis(
       'encounter-1',
-      { diagnosa: 'Tidak boleh' },
-      'nurse-1',
-    )).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
-    expect(mockedPrisma.diagnosis.update).not.toHaveBeenCalled();
+      { diagnosa: 'Diperbarui operasional' },
+      'operator-1',
+    )).resolves.toMatchObject({ diagnosa: 'Diperbarui operasional' });
+    expect(mockedPrisma.diagnosis.update).toHaveBeenCalled();
   });
 });

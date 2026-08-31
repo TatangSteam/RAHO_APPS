@@ -113,7 +113,7 @@ export function UnfinishedSessionReminderModal() {
   const title = isDoctor ? 'Evaluasi dokter menunggu' : 'Sesi terapi belum selesai';
   const subtitle = isDoctor
     ? 'Tahap sebelum evaluasi sudah lengkap. Silakan isi evaluasi pada sesi yang ditugaskan kepada Anda.'
-    : 'Lanjutkan bagian operasional yang masih kosong pada sesi berikut.';
+    : 'Lanjutkan langkah sesi yang masih kosong, termasuk evaluasi SOAP dan finalisasi.';
 
   return (
     <Modal

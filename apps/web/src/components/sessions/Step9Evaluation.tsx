@@ -57,9 +57,9 @@ export default function Step9Evaluation({
     updateDraft(formData);
   }, [formData, updateDraft]);
 
-  // Dokter tetap pemilik klinis utama. Super Admin dan Admin Manager dapat
-  // membantu koreksi terkontrol; perubahan tetap tercatat pada audit log.
-  const canEdit = ['DOCTOR', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '');
+  // Semua staff sesi yang ditugaskan dapat membantu penyelesaian workflow;
+  // perubahan tetap tercatat pada audit log berdasarkan akun pengisi.
+  const canEdit = ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '');
 
   const hasDoctorEvaluation = !!evaluation && [
     evaluation.subjective,
@@ -309,7 +309,7 @@ export default function Step9Evaluation({
           Evaluasi Dokter
         </h3>
         <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-          Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan, Admin Manager, atau Super Admin.
+          Evaluasi SOAP dapat diisi oleh Dokter, Nakes, atau MSO yang ditugaskan.
         </p>
       </div>
     );

@@ -18,13 +18,18 @@ const MANAGER_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'];
 export function canEditSessionStep(role: Role | undefined, step: number): boolean {
   if (!role) return false;
   if (MANAGER_ROLES.includes(role)) return true;
+  if (role === 'NURSE' || role === 'ADMIN_LAYANAN') return step >= 1 && step <= 9;
   if (step === 1 || step === 2 || step === 9) return role === 'DOCTOR';
-  if (step >= 3 && step <= 8) return role === 'NURSE' || role === 'ADMIN_LAYANAN';
   return false;
 }
 
 export function canFinalizeSession(role: Role | undefined): boolean {
-  return !!role && (MANAGER_ROLES.includes(role) || role === 'DOCTOR' || role === 'NURSE');
+  return !!role && (
+    MANAGER_ROLES.includes(role)
+    || role === 'DOCTOR'
+    || role === 'NURSE'
+    || role === 'ADMIN_LAYANAN'
+  );
 }
 
 export const REQUIRED_SESSION_STEPS: Array<{

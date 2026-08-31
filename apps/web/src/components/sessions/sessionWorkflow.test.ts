@@ -19,16 +19,18 @@ const completeSteps: StepCompletion = {
 };
 
 describe('sessionWorkflow', () => {
-  it('memisahkan langkah dokter dari langkah operasional Nakes dan MSO', () => {
+  it('mengizinkan Nakes dan MSO mengisi seluruh workflow sesi', () => {
     expect(canEditSessionStep('DOCTOR', 1)).toBe(true);
     expect(canEditSessionStep('DOCTOR', 9)).toBe(true);
     expect(canEditSessionStep('NURSE', 3)).toBe(true);
     expect(canEditSessionStep('NURSE', 8)).toBe(true);
     expect(canEditSessionStep('ADMIN_LAYANAN', 3)).toBe(true);
     expect(canEditSessionStep('ADMIN_LAYANAN', 8)).toBe(true);
-    expect(canEditSessionStep('ADMIN_LAYANAN', 1)).toBe(false);
-    expect(canEditSessionStep('ADMIN_LAYANAN', 9)).toBe(false);
-    expect(canFinalizeSession('ADMIN_LAYANAN')).toBe(false);
+    expect(canEditSessionStep('NURSE', 1)).toBe(true);
+    expect(canEditSessionStep('NURSE', 9)).toBe(true);
+    expect(canEditSessionStep('ADMIN_LAYANAN', 1)).toBe(true);
+    expect(canEditSessionStep('ADMIN_LAYANAN', 9)).toBe(true);
+    expect(canFinalizeSession('ADMIN_LAYANAN')).toBe(true);
   });
 
   it('menganggap foto opsional dan menunjukkan step wajib yang hilang', () => {

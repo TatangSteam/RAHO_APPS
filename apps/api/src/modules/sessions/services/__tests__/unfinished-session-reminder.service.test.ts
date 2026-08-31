@@ -33,7 +33,7 @@ describe('unfinished session reminder responsibility', () => {
   });
 
   it.each([Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.NURSE])(
-    'gives missing operational work to %s and excludes doctor evaluation',
+    'gives missing workflow work to %s',
     (role) => {
       const reminder = resolveUnfinishedSessionReminder(role, {
         ...completePrerequisites,
@@ -51,8 +51,18 @@ describe('unfinished session reminder responsibility', () => {
     },
   );
 
-  it('waits for the doctor when only evaluation is missing', () => {
-    expect(resolveUnfinishedSessionReminder(Role.ADMIN_LAYANAN, completePrerequisites)).toBeNull();
+  it.each([Role.ADMIN_LAYANAN, Role.NURSE])(
+    'lets %s continue with SOAP when prerequisites are complete',
+    (role) => {
+      expect(resolveUnfinishedSessionReminder(role, completePrerequisites)).toEqual({
+        kind: 'DOCTOR_EVALUATION',
+        missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi SOAP' }],
+      });
+    },
+  );
+
+  it('keeps Admin Cabang waiting when only evaluation is missing', () => {
+    expect(resolveUnfinishedSessionReminder(Role.ADMIN_CABANG, completePrerequisites)).toBeNull();
   });
 
   it('returns finalization to operational staff after evaluation is filled', () => {

@@ -868,7 +868,7 @@ export default function SessionDetailPage() {
         <div>
           {sessionInfo.isCompleted
             ? correctionWindowOpen
-              ? `Data klinis dapat diedit sesuai tanggung jawab role selama ${correctionHours} jam ${correctionMinutes} menit lagi. Semua perubahan direkam dalam Audit Log.`
+              ? `Data sesi dapat dikoreksi oleh role yang diizinkan selama ${correctionHours} jam ${correctionMinutes} menit lagi. Semua perubahan direkam dalam Audit Log.`
               : 'Batas edit 4 jam telah lewat. Koreksi berikutnya harus melalui Admin Manager dan prosedur koreksi formal.'
             : 'Setelah sesi diselesaikan, Nakes/MSO dapat mengoreksi data operasional dan dokter dapat mengoreksi evaluasi dokter selama 4 jam. Semua perubahan direkam.'}
         </div>
