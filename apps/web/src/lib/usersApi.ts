@@ -23,6 +23,7 @@ export interface StaffPerformance {
     asDoctor: number;
     asNurse: number;
     asAdminLayanan: number;
+    asOperational: number;
     total: number;
     incomplete: number;
   };
@@ -47,6 +48,13 @@ export interface StaffPerformanceSummaryResponse {
   dateRange: {
     startDate: string | null;
     endDate: string | null;
+  };
+  summary: {
+    uniqueSessions: number;
+    participations: number;
+    asDoctor: number;
+    asOperational: number;
+    incomplete: number;
   };
 }
 
@@ -92,6 +100,7 @@ export interface StaffSessionHistoryResponse {
     asDoctor: number;
     asNurse: number;
     asAdminLayanan: number;
+    asOperational: number;
     total: number;
     incomplete: number;
   };
@@ -109,13 +118,14 @@ export interface StaffPerformanceQuery {
   branchId?: string;
   startDate?: string;
   endDate?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }
 
 export interface StaffSessionHistoryQuery {
   branchId?: string;
-  position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
+  position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
   completion?: 'all' | 'complete' | 'incomplete';
   startDate?: string;
   endDate?: string;
@@ -155,7 +165,7 @@ export const usersApi = {
     return response.data.data;
   },
 
-  exportStaffPerformance: async (query: StaffPerformanceQuery & { search?: string } = {}): Promise<Blob> => {
+  exportStaffPerformance: async (query: StaffPerformanceQuery = {}): Promise<Blob> => {
     const response = await api.get('/users/performance/export', {
       params: query,
       responseType: 'blob',

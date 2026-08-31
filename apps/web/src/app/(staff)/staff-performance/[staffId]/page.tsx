@@ -32,7 +32,7 @@ const getRoleLabel = (role: string) => {
     DOCTOR: 'Dokter',
     NURSE: 'Nakes',
     ADMIN_CABANG: 'Admin Cabang',
-    ADMIN_LAYANAN: 'Admin Layanan',
+    ADMIN_LAYANAN: 'MSO',
   };
   return labels[role] || role;
 };
@@ -50,8 +50,7 @@ const getRoleColor = (role: string) => {
 const getPositionLabel = (position: string) => {
   const labels: Record<string, string> = {
     doctor: 'Dokter',
-    nurse: 'Nakes',
-    adminLayanan: 'Admin Layanan',
+    operational: 'MSO & Nakes',
   };
   return labels[position] || position;
 };
@@ -59,11 +58,15 @@ const getPositionLabel = (position: string) => {
 const getPositionColor = (position: string) => {
   const colors: Record<string, string> = {
     doctor: 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30',
-    nurse: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30',
-    adminLayanan: 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/30',
+    operational: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30',
   };
   return colors[position] || 'bg-neutral-100 dark:bg-neutral-500/20 text-neutral-700 dark:text-neutral-400';
 };
+
+const getDisplayPositions = (positions: string[]) => [
+  ...(positions.includes('doctor') ? ['doctor'] : []),
+  ...(positions.some((position) => position === 'nurse' || position === 'adminLayanan') ? ['operational'] : []),
+];
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('id-ID', {
@@ -110,7 +113,7 @@ export default function StaffPerformanceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
-  const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'nurse' | 'adminLayanan'>('all');
+  const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'operational'>('all');
   const [completionFilter, setCompletionFilter] = useState<'all' | 'complete' | 'incomplete'>(
     searchParams.get('completion') === 'incomplete' ? 'incomplete' : 'all',
   );
@@ -255,15 +258,8 @@ export default function StaffPerformanceDetailPage() {
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30">
                 <Heart size={18} className="text-green-600 dark:text-green-400" />
                 <div>
-                  <p className="text-lg font-bold text-green-700 dark:text-green-400">{data.summary.asNurse}</p>
-                  <p className="text-xs text-green-600 dark:text-green-400">Nakes</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
-                <UserCog size={18} className="text-purple-600 dark:text-purple-400" />
-                <div>
-                  <p className="text-lg font-bold text-purple-700 dark:text-purple-400">{data.summary.asAdminLayanan}</p>
-                  <p className="text-xs text-purple-600 dark:text-purple-400">Admin</p>
+                  <p className="text-lg font-bold text-green-700 dark:text-green-400">{data.summary.asOperational}</p>
+                  <p className="text-xs text-green-600 dark:text-green-400">MSO & Nakes</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
@@ -294,8 +290,7 @@ export default function StaffPerformanceDetailPage() {
         >
           <option value="all">Semua Posisi</option>
           <option value="doctor">Sebagai Dokter</option>
-          <option value="nurse">Sebagai Nakes</option>
-          <option value="adminLayanan">Sebagai Admin Layanan</option>
+          <option value="operational">Sebagai MSO & Nakes</option>
         </select>
 
         <select
@@ -432,14 +427,13 @@ export default function StaffPerformanceDetailPage() {
 
                   {/* Position Badges */}
                   <div className="flex flex-wrap gap-2">
-                    {session.positions.map((pos) => (
+                    {getDisplayPositions(session.positions).map((pos) => (
                       <span
                         key={pos}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${getPositionColor(pos)}`}
                       >
                         {pos === 'doctor' && <Stethoscope size={12} />}
-                        {pos === 'nurse' && <Heart size={12} />}
-                        {pos === 'adminLayanan' && <UserCog size={12} />}
+                        {pos === 'operational' && <Heart size={12} />}
                         {getPositionLabel(pos)}
                       </span>
                     ))}

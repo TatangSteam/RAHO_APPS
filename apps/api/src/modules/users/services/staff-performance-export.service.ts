@@ -13,7 +13,7 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
   [Role.DOCTOR]: 'Dokter',
   [Role.NURSE]: 'Nakes',
   [Role.ADMIN_CABANG]: 'Admin Cabang',
-  [Role.ADMIN_LAYANAN]: 'Admin Layanan',
+  [Role.ADMIN_LAYANAN]: 'MSO',
 };
 
 function formatFilterDate(value?: string) {
@@ -52,6 +52,7 @@ export async function exportStaffPerformanceService(
       branchId: query.branchId,
       startDate: query.startDate,
       endDate: query.endDate,
+      search: query.search,
       page: 1,
       limit: Number.MAX_SAFE_INTEGER,
     },
@@ -60,11 +61,7 @@ export async function exportStaffPerformanceService(
     callerUserId,
   );
 
-  const normalizedSearch = query.search?.trim().toLocaleLowerCase('id-ID');
-  const staff = normalizedSearch
-    ? report.staff.filter((item) => [item.fullName, item.staffCode, item.email]
-      .some((value) => value.toLocaleLowerCase('id-ID').includes(normalizedSearch)))
-    : report.staff;
+  const staff = report.staff;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'RAHO ERP';
@@ -94,13 +91,12 @@ export async function exportStaffPerformanceService(
     { key: 'role', width: 18 },
     { key: 'branch', width: 25 },
     { key: 'doctor', width: 14 },
-    { key: 'nurse', width: 14 },
-    { key: 'admin', width: 14 },
+    { key: 'operational', width: 20 },
     { key: 'total', width: 14 },
     { key: 'incomplete', width: 18 },
   ];
 
-  worksheet.mergeCells('A1:K1');
+  worksheet.mergeCells('A1:J1');
   const titleCell = worksheet.getCell('A1');
   titleCell.value = 'LAPORAN KINERJA STAFF';
   titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FF111827' } };
@@ -122,7 +118,7 @@ export async function exportStaffPerformanceService(
   metadata.forEach(([label, value], index) => {
     const rowNumber = index + 2;
     worksheet.mergeCells(rowNumber, 1, rowNumber, 2);
-    worksheet.mergeCells(rowNumber, 3, rowNumber, 11);
+    worksheet.mergeCells(rowNumber, 3, rowNumber, 10);
 
     const labelCell = worksheet.getCell(rowNumber, 1);
     labelCell.value = label;
@@ -139,7 +135,7 @@ export async function exportStaffPerformanceService(
   });
 
   const headerRowNumber = 7;
-  const headers = ['Peringkat', 'Kode Staff', 'Nama Staff', 'Email', 'Role', 'Cabang', 'Sebagai Dokter', 'Sebagai Nakes', 'Sebagai Admin', 'Total', 'Sesi Belum Lengkap'];
+  const headers = ['Peringkat', 'Kode Staff', 'Nama Staff', 'Email', 'Role', 'Cabang', 'Sebagai Dokter', 'Sebagai MSO & Nakes', 'Sesi Unik', 'Sesi Belum Lengkap'];
   const headerRow = worksheet.getRow(headerRowNumber);
   headerRow.values = headers;
   headerRow.height = 30;
@@ -159,8 +155,7 @@ export async function exportStaffPerformanceService(
       ROLE_LABELS[item.role as Role] || item.role,
       item.branch?.name || report.branch?.name || '-',
       item.performance.asDoctor,
-      item.performance.asNurse,
-      item.performance.asAdminLayanan,
+      item.performance.asOperational,
       item.performance.total,
       item.performance.incomplete,
     ]);
@@ -178,9 +173,9 @@ export async function exportStaffPerformanceService(
     });
 
     row.getCell(3).font = { bold: true, color: { argb: 'FF111827' } };
-    row.getCell(10).font = { bold: true, color: { argb: 'FFB45309' } };
-    row.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
-    row.getCell(11).font = { bold: true, color: { argb: 'FFDC2626' } };
+    row.getCell(9).font = { bold: true, color: { argb: 'FFB45309' } };
+    row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+    row.getCell(10).font = { bold: true, color: { argb: 'FFDC2626' } };
   });
 
   const firstDataRow = headerRowNumber + 1;
@@ -192,8 +187,7 @@ export async function exportStaffPerformanceService(
 
   const totalValues = [
     staff.reduce((sum, item) => sum + item.performance.asDoctor, 0),
-    staff.reduce((sum, item) => sum + item.performance.asNurse, 0),
-    staff.reduce((sum, item) => sum + item.performance.asAdminLayanan, 0),
+    staff.reduce((sum, item) => sum + item.performance.asOperational, 0),
     staff.reduce((sum, item) => sum + item.performance.total, 0),
     staff.reduce((sum, item) => sum + item.performance.incomplete, 0),
   ];
@@ -213,10 +207,10 @@ export async function exportStaffPerformanceService(
 
   worksheet.autoFilter = {
     from: { row: headerRowNumber, column: 1 },
-    to: { row: Math.max(headerRowNumber, lastDataRow), column: 11 },
+    to: { row: Math.max(headerRowNumber, lastDataRow), column: 10 },
   };
   worksheet.getColumn(1).numFmt = '0';
-  [7, 8, 9, 10, 11].forEach((column) => {
+  [7, 8, 9, 10].forEach((column) => {
     worksheet.getColumn(column).numFmt = '#,##0';
   });
   worksheet.headerFooter.oddFooter = '&LRAHO ERP&C&P / &N&R&D &T';

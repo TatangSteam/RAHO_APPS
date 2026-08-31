@@ -523,13 +523,14 @@ export async function setPrimaryBranch(req: Request, res: Response, next: NextFu
  */
 export async function getStaffPerformanceSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { branchId, startDate, endDate, page, limit } = req.query;
+    const { branchId, startDate, endDate, search, page, limit } = req.query;
     
     const result = await getStaffPerformanceSummaryService(
       {
         branchId: branchId as string | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
+        search: search as string | undefined,
         page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
       },
@@ -555,7 +556,7 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
       staffId,
       {
         branchId: branchId as string | undefined,
-        position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
+        position: position as 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         completion: completion as 'all' | 'complete' | 'incomplete' | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
@@ -583,7 +584,7 @@ export async function exportStaffPerformanceDetail(req: Request, res: Response, 
       staffId,
       {
         branchId: branchId as string | undefined,
-        position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
+        position: position as 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         completion: completion as 'all' | 'complete' | 'incomplete' | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,

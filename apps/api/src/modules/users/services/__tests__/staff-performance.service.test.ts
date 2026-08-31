@@ -90,6 +90,11 @@ describe('staff performance service', () => {
 
     expect(result.total).toBe(3);
     expect(result.staff.map((item) => item.id)).toEqual(['zulu', 'middle']);
+    expect(result.summary).toEqual(expect.objectContaining({
+      uniqueSessions: 3,
+      participations: 3,
+      asDoctor: 3,
+    }));
     expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.not.objectContaining({
@@ -97,6 +102,31 @@ describe('staff performance service', () => {
         }),
       }),
     );
+  });
+
+  it('applies staff search before aggregation and pagination', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([sessionForDoctor('doctor-1')] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1', search: 'doctor one', page: 1, limit: 1 },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.summary.uniqueSessions).toBe(1);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [{
+          OR: [
+            { email: { contains: 'doctor one', mode: 'insensitive' } },
+            { staffCode: { contains: 'doctor one', mode: 'insensitive' } },
+            { profile: { fullName: { contains: 'doctor one', mode: 'insensitive' } } },
+          ],
+        }],
+      }),
+    }));
   });
 
   it('filters performance using the treatment session date in Jakarta time', async () => {
@@ -294,6 +324,71 @@ describe('staff performance service', () => {
     );
   });
 
+  it('combines MSO and Nakes as one operational participation and keeps totals unique', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([staff('operator-1', 'Operator One')] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      doctorId: 'doctor-1',
+      nurseId: 'operator-1',
+      adminLayananId: 'operator-1',
+      sessionDoctors: [],
+      sessionNurses: [{ nurseId: 'operator-1' }],
+      isCompleted: false,
+    }] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    expect(result.staff[0].performance).toEqual(expect.objectContaining({
+      asNurse: 1,
+      asAdminLayanan: 1,
+      asOperational: 1,
+      total: 1,
+      incomplete: 1,
+    }));
+    expect(result.summary).toEqual(expect.objectContaining({
+      uniqueSessions: 1,
+      participations: 1,
+      asOperational: 1,
+    }));
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        role: { in: [Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
+      }),
+    }));
+  });
+
+  it('filters staff history by the combined MSO and Nakes operational role', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('operator-1', 'Operator One'),
+      branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(0 as any);
+
+    await getStaffSessionHistoryService(
+      'operator-1',
+      { branchId: 'branch-1', position: 'operational' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { nurseId: 'operator-1' },
+            { adminLayananId: 'operator-1' },
+            { sessionNurses: { some: { nurseId: 'operator-1' } } },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('exports a formatted workbook with active filters and totals', async () => {
     mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
     mockPrisma.treatmentSession.findMany.mockResolvedValue([sessionForDoctor('doctor-1')] as any);
@@ -314,9 +409,10 @@ describe('staff performance service', () => {
     expect(worksheet?.getCell('C3').value).toBe('01/08/2026 - 07/08/2026');
     expect(worksheet?.getCell('A7').value).toBe('Peringkat');
     expect(worksheet?.getCell('C8').value).toBe('Doctor One');
-    expect(worksheet?.getCell('J8').value).toBe(1);
-    expect(worksheet?.getCell('K8').value).toBe(0);
-    expect(worksheet?.getCell('J9').value).toEqual(expect.objectContaining({ result: 1 }));
+    expect(worksheet?.getCell('H7').value).toBe('Sebagai MSO & Nakes');
+    expect(worksheet?.getCell('I8').value).toBe(1);
+    expect(worksheet?.getCell('J8').value).toBe(0);
+    expect(worksheet?.getCell('I9').value).toEqual(expect.objectContaining({ result: 1 }));
     expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 7 }));
     expect(worksheet?.autoFilter).toBeDefined();
   });

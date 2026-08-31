@@ -5,7 +5,7 @@ import { getStaffSessionHistoryService } from './staff-performance.service';
 
 interface StaffPerformanceDetailExportQuery {
   branchId?: string;
-  position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
+  position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
   completion?: 'all' | 'complete' | 'incomplete';
   startDate?: string;
   endDate?: string;
@@ -52,7 +52,7 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
   [Role.DOCTOR]: 'Dokter',
   [Role.NURSE]: 'Nakes',
   [Role.ADMIN_CABANG]: 'Admin Cabang',
-  [Role.ADMIN_LAYANAN]: 'Admin Layanan',
+  [Role.ADMIN_LAYANAN]: 'MSO',
   [Role.ADMIN_MANAGER]: 'Admin Manager',
   [Role.SUPER_ADMIN]: 'Super Admin',
 };
@@ -60,7 +60,8 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
 const POSITION_LABELS: Record<string, string> = {
   doctor: 'Dokter',
   nurse: 'Nakes',
-  adminLayanan: 'Admin Layanan',
+  adminLayanan: 'MSO',
+  operational: 'MSO & Nakes',
   all: 'Semua posisi',
 };
 
@@ -324,9 +325,7 @@ export async function exportStaffPerformanceDetailService(
       { header: 'Telepon', width: 18 },
       { header: 'Cabang Utama', width: 25 },
       { header: 'Sebagai Dokter', width: 16 },
-      { header: 'Sebagai Nakes', width: 16 },
-      { header: 'Sebagai Admin', width: 16 },
-      { header: 'Total Peran', width: 14 },
+      { header: 'Sebagai MSO & Nakes', width: 22 },
       { header: 'Sesi Unik', width: 14 },
       { header: 'Sesi Belum Lengkap', width: 20 },
     ],
@@ -338,10 +337,8 @@ export async function exportStaffPerformanceDetailService(
       history.staff.phone || '-',
       history.staff.branch?.name || '-',
       history.summary.asDoctor,
-      history.summary.asNurse,
-      history.summary.asAdminLayanan,
+      history.summary.asOperational,
       history.summary.total,
-      history.total,
       history.summary.incomplete,
     ]],
   );
@@ -393,7 +390,7 @@ export async function exportStaffPerformanceDetailService(
       { header: 'Nama Member', width: 28 }, { header: 'Kode Paket', width: 22 },
       { header: 'Jenis Paket', width: 16 }, { header: 'Kode Booster', width: 22 },
       { header: 'Jenis Booster', width: 18 }, { header: 'Peran Staff', width: 22 },
-      { header: 'Admin Layanan', width: 26 }, { header: 'Dokter Utama', width: 26 },
+      { header: 'MSO', width: 26 }, { header: 'Dokter Utama', width: 26 },
       { header: 'Semua Dokter', width: 34 }, { header: 'Nakes Utama', width: 26 },
       { header: 'Semua Nakes', width: 34 }, { header: 'Cairan Pembawa', width: 22 },
       { header: 'Volume Cairan (ml)', width: 18 }, { header: 'Jenis Botol', width: 16 },

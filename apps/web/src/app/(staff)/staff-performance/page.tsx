@@ -42,7 +42,7 @@ const getRoleLabel = (role: string) => {
     DOCTOR: 'Dokter',
     NURSE: 'Nakes',
     ADMIN_CABANG: 'Admin Cabang',
-    ADMIN_LAYANAN: 'Admin Layanan',
+    ADMIN_LAYANAN: 'MSO',
   };
   return labels[role] || role;
 };
@@ -71,6 +71,7 @@ export default function StaffPerformancePage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState(searchParams.get('branchId') || '');
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
@@ -150,6 +151,7 @@ export default function StaffPerformancePage() {
         branchId: branchFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        search: debouncedSearch || undefined,
         page,
         limit,
       });
@@ -163,7 +165,7 @@ export default function StaffPerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, endDate, limit, page, startDate]);
+  }, [branchFilter, debouncedSearch, endDate, limit, page, startDate]);
 
   const handleViewDetail = (staffId: string, completion?: 'incomplete') => {
     const params = new URLSearchParams();
@@ -208,26 +210,29 @@ export default function StaffPerformancePage() {
   }, [fetchBranches]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     if (branchFilter || isAdminCabang) {
       void fetchPerformance();
     }
   }, [branchFilter, fetchPerformance, isAdminCabang]);
 
-  // Filter staff by search
-  const filteredStaff = data?.staff.filter((staff) =>
-    staff.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    staff.staffCode.toLowerCase().includes(search.toLowerCase()) ||
-    staff.email.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const filteredStaff = data?.staff || [];
 
   const totalPages = data ? Math.ceil(data.total / limit) : 0;
 
   // Calculate summary stats
-  const totalSessions = filteredStaff.reduce((sum, s) => sum + s.performance.total, 0);
-  const totalAsDoctor = filteredStaff.reduce((sum, s) => sum + s.performance.asDoctor, 0);
-  const totalAsNurse = filteredStaff.reduce((sum, s) => sum + s.performance.asNurse, 0);
-  const totalAsAdmin = filteredStaff.reduce((sum, s) => sum + s.performance.asAdminLayanan, 0);
-  const totalIncomplete = filteredStaff.reduce((sum, s) => sum + s.performance.incomplete, 0);
+  const totalSessions = data?.summary.uniqueSessions || 0;
+  const totalAsDoctor = data?.summary.asDoctor || 0;
+  const totalAsOperational = data?.summary.asOperational || 0;
+  const totalIncomplete = data?.summary.incomplete || 0;
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-6">
@@ -261,7 +266,7 @@ export default function StaffPerformancePage() {
 
       {/* Summary Cards */}
       {data && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-500/20 dark:to-amber-600/20">
@@ -269,7 +274,7 @@ export default function StaffPerformancePage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalSessions}</p>
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Total Sesi</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sesi Unik</p>
               </div>
             </div>
           </div>
@@ -290,19 +295,19 @@ export default function StaffPerformancePage() {
                 <Heart className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsNurse}</p>
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sbg Nakes</p>
+                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsOperational}</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">MSO & Nakes</p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-red-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-500/20 dark:to-purple-600/20">
-                <UserCog className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-red-100 to-red-200 dark:from-red-500/20 dark:to-red-600/20">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsAdmin}</p>
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sbg Admin</p>
+                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalIncomplete}</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Belum Lengkap</p>
               </div>
             </div>
           </div>
@@ -496,13 +501,7 @@ export default function StaffPerformancePage() {
                   <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
                     <div className="flex flex-col items-center gap-0.5">
                       <Heart size={14} className="text-green-500" />
-                      <span className="hidden sm:inline">Nakes</span>
-                    </div>
-                  </th>
-                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <UserCog size={14} className="text-purple-500" />
-                      <span className="hidden sm:inline">Admin</span>
+                      <span className="hidden sm:inline">MSO & Nakes</span>
                     </div>
                   </th>
                   <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
@@ -523,13 +522,13 @@ export default function StaffPerformancePage() {
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={branchFilter === 'all' ? 9 : 8} className="px-6 py-20 text-center">
+                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
                       <PageLoading text="Memuat data kinerja" />
                     </td>
                   </tr>
                 ) : filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={branchFilter === 'all' ? 9 : 8} className="px-6 py-20 text-center">
+                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800">
                           <Users className="h-8 w-8 text-neutral-400" />
@@ -615,20 +614,11 @@ export default function StaffPerformancePage() {
                         </td>
                         <td className="px-3 sm:px-4 py-4 text-center">
                           <div className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold transition-all ${
-                            staff.performance.asNurse > 0 
+                            staff.performance.asOperational > 0
                               ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' 
                               : 'text-neutral-300 dark:text-neutral-600'
                           }`}>
-                            {staff.performance.asNurse}
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-4 py-4 text-center">
-                          <div className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold transition-all ${
-                            staff.performance.asAdminLayanan > 0 
-                              ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400' 
-                              : 'text-neutral-300 dark:text-neutral-600'
-                          }`}>
-                            {staff.performance.asAdminLayanan}
+                            {staff.performance.asOperational}
                           </div>
                         </td>
                         <td className="px-3 sm:px-4 py-4 text-center">

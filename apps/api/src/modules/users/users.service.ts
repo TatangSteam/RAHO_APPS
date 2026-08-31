@@ -235,7 +235,7 @@ export async function listUsersService(
     : accessibleBranchIds === null
       ? undefined
       : accessibleBranchIds;
-  const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(userIds, {
+  const { doctorMap, nurseMap, adminMap, operationalMap, totalMap } = await getPositionCountMaps(userIds, {
     isCompleted: true,
     ...(countBranchIds && countBranchIds.length === 1
       ? { branchId: countBranchIds[0] }
@@ -249,15 +249,17 @@ export async function listUsersService(
     const asDoctor = doctorMap.get(user.id) || 0;
     const asNurse = nurseMap.get(user.id) || 0;
     const asAdminLayanan = adminMap.get(user.id) || 0;
+    const asOperational = operationalMap.get(user.id) || 0;
     
     return {
       ...user,
-      // Total therapy count (sum of all positions)
-      therapyCount: asDoctor + asNurse + asAdminLayanan,
+      // Count each therapy session once even when a user has multiple assignments.
+      therapyCount: totalMap.get(user.id) || 0,
       // Separated counts by position
       therapyCountAsDoctor: asDoctor,
       therapyCountAsNurse: asNurse,
       therapyCountAsAdminLayanan: asAdminLayanan,
+      therapyCountAsOperational: asOperational,
     };
   });
 

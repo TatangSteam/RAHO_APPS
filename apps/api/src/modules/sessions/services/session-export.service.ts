@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { Prisma, Role, SessionType, type VitalSign } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import { buildJakartaSessionDateRange } from './session-date-range';
 
 export interface SessionExportOptions {
   fields: Record<string, boolean>;
@@ -186,7 +187,7 @@ export class SessionExportService {
       memberPhone: { label: 'Telepon Member', getter: (s) => s.encounter?.member?.user?.profile?.phone || '-' },
       memberEmail: { label: 'Username Member', getter: (s) => s.encounter?.member?.user?.email || '-' },
       packageCode: { label: 'Kode Paket', getter: (s) => s.encounter?.memberPackage?.packageCode || '-' },
-      adminLayanan: { label: 'Admin Layanan', getter: (s) => s.adminLayanan?.profile?.fullName || '-' },
+      adminLayanan: { label: 'MSO', getter: (s) => s.adminLayanan?.profile?.fullName || '-' },
       doctorName: { label: 'Nama Dokter Utama', getter: (s) => s.doctor?.profile?.fullName || '-' },
       doctorCode: { label: 'Kode Dokter', getter: (s) => s.doctor?.staffCode || '-' },
       nurseName: { label: 'Nama Nakes Utama', getter: (s) => s.nurse?.profile?.fullName || '-' },
@@ -269,22 +270,28 @@ export class SessionExportService {
       }
       where.branchId = branchId;
     } else if (role === Role.DOCTOR) {
-      where.doctorId = userId;
+      addAndFilter({
+        OR: [
+          { doctorId: userId },
+          { sessionDoctors: { some: { doctorId: userId } } },
+        ],
+      });
     } else if (role === Role.NURSE) {
-      where.nurseId = userId;
+      addAndFilter({
+        OR: [
+          { nurseId: userId },
+          { sessionNurses: { some: { nurseId: userId } } },
+        ],
+      });
     }
 
     // Apply filters
     if (options.filters) {
       if (options.filters.dateFrom || options.filters.dateTo) {
-        where.treatmentDate = {
-          ...(options.filters.dateFrom
-            ? { gte: new Date(options.filters.dateFrom) }
-            : {}),
-          ...(options.filters.dateTo
-            ? { lte: new Date(options.filters.dateTo) }
-            : {}),
-        };
+        where.treatmentDate = buildJakartaSessionDateRange(
+          options.filters.dateFrom,
+          options.filters.dateTo,
+        );
       }
 
       if (options.filters.status) {

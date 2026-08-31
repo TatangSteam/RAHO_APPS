@@ -114,25 +114,25 @@ const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) 
   event.stopPropagation();
 };
 
-const TABLE_COLUMNS_STORAGE_VERSION = 2;
+const TABLE_COLUMNS_STORAGE_VERSION = 3;
 
 const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
-  memberName: true,
-  infusKe: true,
-  status: true,
+  sessionCode: false,
   treatmentDate: true,
   treatmentTime: true,
+  status: true,
   pelaksanaan: true,
-  sessionCode: false,
-  memberNo: false,
-  doctorName: true,
-  doctorEvaluationStatus: true,
-  nurseName: true,
+  infusKe: true,
   branchName: false,
   branchCode: false,
   boosterType: false,
-  adminLayanan: true,
+  memberNo: false,
+  memberName: true,
+  doctorName: true,
+  doctorEvaluationStatus: true,
   allDoctors: false,
+  adminLayanan: true,
+  nurseName: true,
   allNurses: false,
   sistolBefore: true,
   diastolBefore: true,
@@ -382,17 +382,24 @@ export default function SessionsPage() {
       ],
     },
     {
-      id: 'staff',
-      label: 'Info Staff',
+      id: 'doctorStaff',
+      label: 'Dokter',
       icon: '👨‍⚕️',
       fields: [
-        { key: 'adminLayanan', label: 'Admin Layanan' },
         { key: 'doctorName', label: 'Nama Dokter Utama' },
         { key: 'doctorEvaluationStatus', label: 'Status Evaluasi Dokter' },
         { key: 'doctorCode', label: 'Kode Dokter' },
-        { key: 'nurseName', label: 'Nama Nakes' },
-        { key: 'nurseCode', label: 'Kode Nakes' },
         { key: 'allDoctors', label: 'Semua Dokter' },
+      ],
+    },
+    {
+      id: 'operationalStaff',
+      label: 'MSO & Nakes',
+      icon: '👥',
+      fields: [
+        { key: 'adminLayanan', label: 'MSO' },
+        { key: 'nurseName', label: 'Nakes Utama' },
+        { key: 'nurseCode', label: 'Kode Nakes' },
         { key: 'allNurses', label: 'Semua Nakes' },
       ],
     },

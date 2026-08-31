@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, Image as ImageIcon, Link2, LogOut, MessageCircle, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Link2, LogOut, MessageCircle, RefreshCw, RotateCcw, Send, ServerCog, ShieldCheck, Smartphone } from 'lucide-react';
 import { api } from '@/lib/api';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
@@ -39,6 +39,12 @@ type DeliveryData = {
   deliveries: Delivery[];
   summary: Record<string, number>;
   pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
+type SetupStep = {
+  title: string;
+  description: string;
+  state: 'done' | 'active' | 'waiting';
 };
 
 const BACKGROUNDS: Array<{ key: BackgroundKey; name: string; colors: string }> = [
@@ -82,11 +88,68 @@ export default function WhatsAppSettingsPage() {
     } finally { setBusy(false); }
   };
 
+  const copyPairingCode = async () => {
+    if (!pairingCode) return;
+    try {
+      await navigator.clipboard.writeText(pairingCode);
+      showToast.success('Kode pairing disalin');
+    } catch {
+      showToast.error('Kode pairing tidak dapat disalin otomatis');
+    }
+  };
+
+  const connected = status?.ready === true;
+  const systemReady = status?.enabled === true && status.provider === 'BAILEYS';
+  const connectionStatus = status?.connection.status || 'DISCONNECTED';
+  const pairingRequested = pairingCode !== null || connectionStatus === 'PAIRING';
+  const connectionPending = pairingRequested || ['CONNECTING', 'RECONNECTING'].includes(connectionStatus);
+  const verificationInProgress = pairingRequested || connectionStatus === 'RECONNECTING';
+  const deliveryReady = connected && status?.workerEnabled === true;
+  const setupSteps: SetupStep[] = [
+    {
+      title: 'Kesiapan sistem',
+      description: systemReady ? 'Provider Baileys sudah aktif.' : 'Feature flag dan provider harus diaktifkan oleh admin server.',
+      state: systemReady ? 'done' : 'active',
+    },
+    {
+      title: 'Pair nomor pengirim',
+      description: connected
+        ? 'Nomor WhatsApp sudah tertaut.'
+        : pairingRequested
+          ? 'Kode pairing sudah dibuat.'
+          : 'Masukkan nomor WhatsApp pusat dengan format 628...',
+      state: connected ? 'done' : systemReady ? 'active' : 'waiting',
+    },
+    {
+      title: 'Verifikasi koneksi',
+      description: connected
+        ? 'Socket Baileys sudah terhubung.'
+        : connectionStatus === 'RECONNECTING'
+          ? 'Menunggu koneksi WhatsApp pulih.'
+          : 'Masukkan kode melalui menu Perangkat tertaut di ponsel.',
+      state: connected ? 'done' : verificationInProgress ? 'active' : 'waiting',
+    },
+    {
+      title: 'Siap mengirim',
+      description: deliveryReady
+        ? 'Koneksi dan worker pengiriman sudah aktif.'
+        : connected
+          ? 'Aktifkan worker pada server, lalu restart API.'
+          : 'Selesaikan pairing sebelum mengaktifkan pengiriman.',
+      state: deliveryReady ? 'done' : connected ? 'active' : 'waiting',
+    },
+  ];
+
+  useEffect(() => {
+    if (user?.role !== 'SUPER_ADMIN' || connected || !connectionPending) return;
+    const timer = window.setInterval(() => { void load(); }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [user?.role, connected, connectionPending, load]);
+
   if (user?.role !== 'SUPER_ADMIN') {
     return <div className="card" style={{ padding: 24 }}>Pengaturan WhatsApp hanya dapat diakses Super Admin.</div>;
   }
 
-  const connected = status?.ready === true;
   return (
     <div style={{ maxWidth: 1050, margin: '0 auto', padding: '28px 20px 48px' }}>
       <header style={{ marginBottom: 22 }}>
@@ -95,6 +158,57 @@ export default function WhatsAppSettingsPage() {
         </h1>
         <p style={{ color: 'var(--text-secondary)', marginTop: 6 }}>Nomor pengirim dan tampilan laporan dikelola terpusat oleh Super Admin.</p>
       </header>
+
+      <section className="card" style={{ padding: 22, marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 750, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ServerCog size={20} /> Alur Setup Super Admin
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>
+              Ikuti langkah berikut sampai koneksi dan worker siap mengirim laporan sesi.
+            </p>
+          </div>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => undefined, 'Status WhatsApp diperbarui')}>
+            <RefreshCw size={16} /> Periksa status
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10, marginTop: 18 }}>
+          {setupSteps.map((step, index) => {
+            const color = step.state === 'done' ? '#16a34a' : step.state === 'active' ? '#f59e0b' : 'var(--text-muted)';
+            return (
+              <div key={step.title} style={{ padding: 14, borderRadius: 12, border: `1px solid ${step.state === 'active' ? '#f59e0b' : 'var(--surface-border)'}`, background: step.state === 'active' ? 'rgba(245, 158, 11, 0.06)' : 'var(--surface-input)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color, fontSize: 12, fontWeight: 750 }}>
+                  {step.state === 'done' ? <CheckCircle2 size={17} /> : <span style={{ width: 18, height: 18, borderRadius: 999, border: `1px solid ${color}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{index + 1}</span>}
+                  {step.state === 'done' ? 'SELESAI' : step.state === 'active' ? 'LANGKAH AKTIF' : 'MENUNGGU'}
+                </div>
+                <strong style={{ display: 'block', marginTop: 9, fontSize: 14 }}>{index + 1}. {step.title}</strong>
+                <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.5 }}>{step.description}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {!systemReady && status && (
+          <div role="alert" style={{ display: 'flex', gap: 9, marginTop: 15, padding: 12, borderRadius: 10, background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontSize: 12 }}>
+            <AlertTriangle size={17} style={{ flexShrink: 0 }} />
+            <span>Setup belum dapat dimulai. Minta admin server mengaktifkan <strong>WHATSAPP_ENABLED</strong>, memilih provider <strong>BAILEYS</strong>, dan menyiapkan encryption key.</span>
+          </div>
+        )}
+        {connected && !status?.workerEnabled && (
+          <div role="alert" style={{ display: 'flex', gap: 9, marginTop: 15, padding: 12, borderRadius: 10, background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontSize: 12 }}>
+            <AlertTriangle size={17} style={{ flexShrink: 0 }} />
+            <span>Nomor sudah terhubung, tetapi worker belum aktif. Aktifkan <strong>WHATSAPP_WORKER_ENABLED</strong> pada server dan restart API agar antrean dapat dikirim.</span>
+          </div>
+        )}
+        {deliveryReady && (
+          <div role="status" style={{ display: 'flex', gap: 9, marginTop: 15, padding: 12, borderRadius: 10, background: 'rgba(22, 163, 74, 0.1)', color: '#15803d', fontSize: 12 }}>
+            <CheckCircle2 size={17} style={{ flexShrink: 0 }} />
+            <span>Setup selesai. WhatsApp siap memproses antrean laporan sesi.</span>
+          </div>
+        )}
+      </section>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 18 }}>
         <section className="card" style={{ padding: 22 }}>
@@ -106,16 +220,31 @@ export default function WhatsAppSettingsPage() {
           {!connected && (
             <div style={{ marginTop: 16 }}>
               <label style={{ fontSize: 13, fontWeight: 650 }}>Nomor dengan kode negara</label>
-              <input className="form-control" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Contoh: 6281234567890" style={{ marginTop: 7 }} />
-              <button className="btn btn-primary" disabled={busy || phone.length < 8} style={{ marginTop: 10 }} onClick={() => void perform(async () => {
+              <input className="form-control" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Contoh: 6281234567890" disabled={!systemReady || busy} style={{ marginTop: 7 }} />
+              <small style={{ display: 'block', marginTop: 6, color: 'var(--text-muted)' }}>Gunakan nomor aktif yang dapat membuka menu Perangkat tertaut.</small>
+              <button className="btn btn-primary" disabled={busy || !systemReady || phone.trim().length < 8} style={{ marginTop: 10 }} onClick={() => void perform(async () => {
                 const response = await api.post<{ data: { pairingCode: string } }>('/integrations/whatsapp/connection/pair', { phone });
                 setPairingCode(response.data.data.pairingCode);
               }, 'Kode pairing berhasil dibuat')}><Link2 size={16} /> Buat kode pairing</button>
-              {pairingCode && <div style={{ marginTop: 14, padding: 16, border: '1px solid #22c55e', borderRadius: 12, textAlign: 'center' }}><small>Masukkan di WhatsApp → Perangkat tertaut</small><div style={{ fontSize: 27, letterSpacing: 5, fontWeight: 800, marginTop: 6 }}>{pairingCode}</div></div>}
+              {pairingCode && (
+                <div style={{ marginTop: 14, padding: 16, border: '1px solid #22c55e', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 750, fontSize: 13 }}><Smartphone size={17} /> Selesaikan pairing di ponsel</div>
+                  <ol style={{ margin: '10px 0 0', paddingLeft: 20, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.7 }}>
+                    <li>Buka WhatsApp di ponsel pengirim.</li>
+                    <li>Pilih <strong>Perangkat tertaut</strong> lalu <strong>Tautkan dengan nomor telepon</strong>.</li>
+                    <li>Masukkan kode berikut sebelum kedaluwarsa.</li>
+                  </ol>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12, padding: 12, borderRadius: 10, background: 'var(--surface-input)' }}>
+                    <strong style={{ fontSize: 25, letterSpacing: 4 }}>{pairingCode}</strong>
+                    <button type="button" className="btn btn-secondary" onClick={() => void copyPairingCode()} aria-label="Salin kode pairing"><Copy size={15} /></button>
+                  </div>
+                  <p style={{ margin: '10px 0 0', color: '#f59e0b', fontSize: 11 }}><RefreshCw size={12} className="animate-spin" style={{ display: 'inline', marginRight: 5 }} />Status diperiksa otomatis setiap 3 detik.</p>
+                </div>
+              )}
             </div>
           )}
           <div style={{ display: 'flex', gap: 9, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/reconnect'); }, 'Reconnect dijalankan')}><RefreshCw size={16} /> Reconnect</button>
+            <button className="btn btn-secondary" disabled={busy || !systemReady} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/reconnect'); }, 'Reconnect dijalankan')}><RefreshCw size={16} /> Reconnect</button>
             {connected && <button className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/logout'); setPairingCode(null); }, 'Nomor WhatsApp dilepas')}><LogOut size={16} /> Logout nomor</button>}
           </div>
         </section>
@@ -138,7 +267,7 @@ export default function WhatsAppSettingsPage() {
       <section className="card" style={{ padding: 22, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><Clock3 size={19} /> Monitoring Pengiriman</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><Send size={19} /> Monitoring Pengiriman</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>Hanya nomor tersamarkan dan error aman yang ditampilkan.</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

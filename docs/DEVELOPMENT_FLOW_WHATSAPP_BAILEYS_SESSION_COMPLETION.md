@@ -73,7 +73,8 @@ Gap yang perlu ditutup:
 - belum ada persetujuan khusus pengiriman laporan medis melalui WhatsApp;
 - belum ada normalisasi dan validasi nomor WhatsApp;
 - belum ada template gambar/caption laporan sesi;
-- belum ada penyimpanan kredensial Baileys yang aman;
+- belum ada penyimpanan kredensial Bail
+eys yang aman;
 - belum ada antrean, retry, idempotency, dan audit pengiriman;
 - panel penyelesaian sesi langsung memanggil API tanpa dialog opsi pengiriman;
 - belum ada tombol pengiriman manual dan status delivery pada detail sesi.

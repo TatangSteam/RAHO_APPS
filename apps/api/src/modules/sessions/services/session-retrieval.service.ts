@@ -7,6 +7,7 @@ import {
   Prisma,
   SessionType,
 } from '@prisma/client';
+import { buildJakartaSessionDateRange } from './session-date-range';
 
 const sessionRetrievalInclude = {
   encounter: {
@@ -251,16 +252,7 @@ export class SessionRetrievalService {
 
     // Filter by date range
     if (dateFrom || dateTo) {
-      let endDate: Date | undefined;
-      if (dateTo) {
-        // Add 1 day to include the end date
-        endDate = new Date(dateTo);
-        endDate.setDate(endDate.getDate() + 1);
-      }
-      where.treatmentDate = {
-        ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-        ...(endDate ? { lt: endDate } : {}),
-      };
+      where.treatmentDate = buildJakartaSessionDateRange(dateFrom, dateTo);
     }
 
     // Filter by status

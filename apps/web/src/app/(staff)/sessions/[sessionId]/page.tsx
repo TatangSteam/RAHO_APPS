@@ -925,15 +925,15 @@ export default function SessionDetailPage() {
               alignItems: 'center',
               gap: '8px'
             }}>
-              <span>👥</span> Tim Medis & Admin
+              <span>👥</span> Tim Dokter & Operasional
             </h4>
             
             <div className={styles.staffGrid} style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
               gap: '16px'
             }}>
-              {/* Admin Layanan */}
+              {/* MSO dan Nakes */}
               <div style={{
                 padding: '16px',
                 background: 'var(--surface-card)',
@@ -948,7 +948,7 @@ export default function SessionDetailPage() {
                   letterSpacing: '0.5px',
                   marginBottom: '8px'
                 }}>
-                  Admin Layanan
+                  MSO & Nakes
                 </div>
                 <div style={{
                   fontSize: '15px',
@@ -959,7 +959,36 @@ export default function SessionDetailPage() {
                   gap: '8px'
                 }}>
                   <span style={{ fontSize: '18px' }}>👤</span>
-                  <span>{sessionInfo.adminLayanan?.fullName || 'Data admin lama tidak tersedia'}</span>
+                  <strong style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>MSO</strong>
+                  <span>{sessionInfo.adminLayanan?.fullName || 'Data MSO lama tidak tersedia'}</span>
+                </div>
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
+                  <div style={{
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{ fontSize: '18px' }}>👩‍⚕️</span>
+                    <strong style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Nakes Utama</strong>
+                    <span>{sessionInfo.nurse?.fullName || 'Data nakes lama tidak tersedia'}</span>
+                  </div>
+                  {(sessionInfo.sessionNurses?.length || 0) > 1 && (
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                        Nakes Tambahan:
+                      </div>
+                      {sessionInfo.sessionNurses
+                        ?.filter((assignment) => !assignment.isPrimary && assignment.nurse)
+                        .map((assignment) => (
+                          <div key={assignment.id} style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px', paddingLeft: '26px' }}>
+                            • {assignment.nurse.fullName || 'Data nakes lama tidak tersedia'}
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1034,60 +1063,6 @@ export default function SessionDetailPage() {
                 )}
               </div>
 
-              {/* Nakes */}
-              <div style={{
-                padding: '16px',
-                background: 'var(--surface-card)',
-                border: '1px solid var(--surface-border)',
-                borderRadius: '8px',
-              }}>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'var(--text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  marginBottom: '8px'
-                }}>
-                  Nakes Utama
-                </div>
-                <div style={{
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: 'var(--text-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <span style={{ fontSize: '18px' }}>👩‍⚕️</span>
-                  <span>{sessionInfo.nurse?.fullName || 'Data nakes lama tidak tersedia'}</span>
-                </div>
-                {/* Additional Nurses - will be added when backend returns them */}
-                {(sessionInfo.sessionNurses?.length || 0) > 1 && (
-                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: 'var(--text-muted)',
-                      marginBottom: '8px'
-                    }}>
-                      Nakes Tambahan:
-                    </div>
-                    {sessionInfo.sessionNurses
-                      ?.filter((assignment) => !assignment.isPrimary && assignment.nurse)
-                      .map((assignment) => (
-                        <div key={assignment.id} style={{
-                          fontSize: '13px',
-                          color: 'var(--text-secondary)',
-                          marginBottom: '4px',
-                          paddingLeft: '26px'
-                        }}>
-                          • {assignment.nurse.fullName || 'Data nakes lama tidak tersedia'}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
@@ -1726,7 +1701,7 @@ export default function SessionDetailPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
-                  Admin Layanan
+                  MSO
                 </label>
                 <select
                   value={sessionEditAdminLayananId}
@@ -1741,7 +1716,7 @@ export default function SessionDetailPage() {
                     color: 'var(--text-primary)',
                   }}
                 >
-                  <option value="">Pilih admin layanan</option>
+                  <option value="">Pilih MSO</option>
                   {adminLayananOptions.map((staff) => (
                     <option key={staff.userId} value={staff.userId}>
                       {staff.fullName}
