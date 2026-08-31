@@ -1,4 +1,4 @@
-import { Prisma, Role } from '@prisma/client';
+import { Prisma, Role, VitalTiming } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { errors } from '../../../middleware/errorHandler';
 import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
@@ -84,6 +84,138 @@ function incrementCount(map: Map<string, number>, userId: string) {
   map.set(userId, (map.get(userId) || 0) + 1);
 }
 
+const doctorWorkflowCompleteFilter: Prisma.TreatmentSessionWhereInput = {
+  AND: [
+    { encounter: { diagnoses: { some: {} } } },
+    { therapyPlan: { isNot: null } },
+    {
+      evaluation: {
+        is: {
+          OR: [
+            { subjective: { not: '' } },
+            { objective: { not: '' } },
+            { assessment: { not: '' } },
+            { plan: { not: '' } },
+            { generalNotes: { not: '' } },
+          ],
+        },
+      },
+    },
+  ],
+};
+
+const operationalStepsCompleteFilter: Prisma.TreatmentSessionWhereInput = {
+  AND: [
+    { vitalSigns: { some: { waktuCatat: VitalTiming.SEBELUM } } },
+    { infusion: { isNot: null } },
+    { materials: { some: {} } },
+    { vitalSigns: { some: { waktuCatat: VitalTiming.SESUDAH } } },
+  ],
+};
+
+const operationalResponsibilityCompleteFilter: Prisma.TreatmentSessionWhereInput = {
+  AND: [
+    operationalStepsCompleteFilter,
+    {
+      OR: [
+        { NOT: doctorWorkflowCompleteFilter },
+        { isCompleted: true },
+      ],
+    },
+  ],
+};
+
+function doctorParticipationFilter(staffId: string): Prisma.TreatmentSessionWhereInput {
+  return {
+    OR: [
+      { doctorId: staffId },
+      { sessionDoctors: { some: { doctorId: staffId } } },
+    ],
+  };
+}
+
+function operationalParticipationFilter(staffId: string): Prisma.TreatmentSessionWhereInput {
+  return {
+    OR: [
+      { nurseId: staffId },
+      { adminLayananId: staffId },
+      { sessionNurses: { some: { nurseId: staffId } } },
+    ],
+  };
+}
+
+function buildStaffCompletionFilter(
+  staffId: string,
+  position: StaffSessionHistoryQuery['position'],
+  completion: StaffSessionHistoryQuery['completion'],
+): Prisma.TreatmentSessionWhereInput {
+  if (!completion || completion === 'all') return {};
+
+  const doctorStatusFilter = completion === 'complete'
+    ? doctorWorkflowCompleteFilter
+    : { NOT: doctorWorkflowCompleteFilter };
+  const operationalStatusFilter = completion === 'complete'
+    ? operationalResponsibilityCompleteFilter
+    : { NOT: operationalResponsibilityCompleteFilter };
+
+  if (position === 'doctor') {
+    return { AND: [doctorParticipationFilter(staffId), doctorStatusFilter] };
+  }
+  if (position === 'operational' || position === 'nurse' || position === 'adminLayanan') {
+    return { AND: [operationalParticipationFilter(staffId), operationalStatusFilter] };
+  }
+
+  return {
+    OR: [
+      { AND: [doctorParticipationFilter(staffId), doctorStatusFilter] },
+      { AND: [operationalParticipationFilter(staffId), operationalStatusFilter] },
+    ],
+  };
+}
+
+interface PerformanceWorkflowState {
+  isCompleted?: boolean;
+  encounter?: { diagnoses: Array<{ id: string }> };
+  therapyPlan?: { id: string } | null;
+  vitalSigns?: Array<{ waktuCatat: VitalTiming }>;
+  infusion?: { id: string } | null;
+  materials?: Array<{ id: string }>;
+  evaluation: {
+    subjective: string | null;
+    objective: string | null;
+    assessment: string | null;
+    plan: string | null;
+    generalNotes: string | null;
+  } | null;
+}
+
+function hasDoctorWorkflowCompleted(session: PerformanceWorkflowState) {
+  const evaluationValues = session.evaluation
+    ? [
+      session.evaluation.subjective,
+      session.evaluation.objective,
+      session.evaluation.assessment,
+      session.evaluation.plan,
+      session.evaluation.generalNotes,
+    ]
+    : [];
+
+  return (session.encounter?.diagnoses.length || 0) > 0
+    && Boolean(session.therapyPlan)
+    && evaluationValues.some((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
+function hasOperationalResponsibilityCompleted(session: PerformanceWorkflowState) {
+  const vitalSigns = session.vitalSigns || [];
+  const operationalStepsComplete = vitalSigns.some((vital) => vital.waktuCatat === VitalTiming.SEBELUM)
+    && Boolean(session.infusion)
+    && (session.materials?.length || 0) > 0
+    && vitalSigns.some((vital) => vital.waktuCatat === VitalTiming.SESUDAH);
+
+  if (!operationalStepsComplete) return false;
+  return !hasDoctorWorkflowCompleted(session) || session.isCompleted;
+}
+
 export async function getPositionCountMaps(
   staffIds: string[],
   sessionWhere: Prisma.TreatmentSessionWhereInput,
@@ -116,6 +248,20 @@ export async function getPositionCountMaps(
       nurseId: true,
       adminLayananId: true,
       isCompleted: true,
+      encounter: { select: { diagnoses: { take: 1, select: { id: true } } } },
+      therapyPlan: { select: { id: true } },
+      vitalSigns: { select: { waktuCatat: true } },
+      infusion: { select: { id: true } },
+      materials: { take: 1, select: { id: true } },
+      evaluation: {
+        select: {
+          subjective: true,
+          objective: true,
+          assessment: true,
+          plan: true,
+          generalNotes: true,
+        },
+      },
       sessionDoctors: { select: { doctorId: true } },
       sessionNurses: { select: { nurseId: true } },
     },
@@ -147,8 +293,11 @@ export async function getPositionCountMaps(
 
     const involvedStaffIds = new Set([...doctorIds, ...operationalIds]);
     involvedStaffIds.forEach((userId) => incrementCount(totalMap, userId));
-    if (!session.isCompleted) {
-      involvedStaffIds.forEach((userId) => incrementCount(incompleteMap, userId));
+    if (!hasDoctorWorkflowCompleted(session)) {
+      doctorIds.forEach((userId) => incrementCount(incompleteMap, userId));
+    }
+    if (!hasOperationalResponsibilityCompleted(session)) {
+      operationalIds.forEach((userId) => incrementCount(incompleteMap, userId));
     }
   }
 
@@ -469,12 +618,6 @@ export async function getStaffSessionHistoryService(
 
   const dateFilter = buildDateFilter(startDate, endDate);
   const sessionBranchFilter = buildBranchFilter(allowedBranchIds);
-  const completionFilter: Prisma.TreatmentSessionWhereInput = completion === 'complete'
-    ? { isCompleted: true }
-    : completion === 'incomplete'
-      ? { isCompleted: false }
-      : {};
-
   // Build position filter
   const positionFilter: Prisma.TreatmentSessionWhereInput = {};
   if (position === 'doctor') {
@@ -505,16 +648,24 @@ export async function getStaffSessionHistoryService(
       { sessionNurses: { some: { nurseId: staffId } } },
     ];
   }
+  const completionFilter = buildStaffCompletionFilter(staffId, position, completion);
+  const positionAndCompletionFilter = completion === 'all'
+    ? positionFilter
+    : completionFilter;
+  const sessionHistoryWhere: Prisma.TreatmentSessionWhereInput = completion === 'all'
+    ? {
+      ...positionFilter,
+      ...sessionBranchFilter,
+      ...dateFilter,
+    }
+    : {
+      AND: [positionAndCompletionFilter, sessionBranchFilter, dateFilter],
+    };
 
   // Get sessions
   const [sessions, totalSessions] = await Promise.all([
     prisma.treatmentSession.findMany({
-      where: {
-        ...positionFilter,
-        ...sessionBranchFilter,
-        ...dateFilter,
-        ...completionFilter,
-      },
+      where: sessionHistoryWhere,
       select: {
         id: true,
         sessionCode: true,
@@ -572,12 +723,7 @@ export async function getStaffSessionHistoryService(
       take: limit,
     }),
     prisma.treatmentSession.count({
-      where: {
-        ...positionFilter,
-        ...sessionBranchFilter,
-        ...dateFilter,
-        ...completionFilter,
-      },
+      where: sessionHistoryWhere,
     }),
   ]);
 
@@ -673,16 +819,11 @@ export async function getStaffSessionHistoryService(
     }),
     prisma.treatmentSession.count({
       where: {
-        OR: [
-          { doctorId: staffId },
-          { nurseId: staffId },
-          { adminLayananId: staffId },
-          { sessionDoctors: { some: { doctorId: staffId } } },
-          { sessionNurses: { some: { nurseId: staffId } } },
+        AND: [
+          buildStaffCompletionFilter(staffId, 'all', 'incomplete'),
+          sessionBranchFilter,
+          dateFilter,
         ],
-        ...sessionBranchFilter,
-        ...dateFilter,
-        isCompleted: false,
       },
     }),
   ]);

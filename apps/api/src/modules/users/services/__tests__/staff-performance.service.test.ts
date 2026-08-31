@@ -57,6 +57,21 @@ function sessionForDoctor(doctorId: string, isCompleted = true) {
     sessionDoctors: [],
     sessionNurses: [],
     isCompleted,
+    encounter: { diagnoses: [{ id: 'diagnosis-1' }] },
+    therapyPlan: { id: 'therapy-plan-1' },
+    vitalSigns: [
+      { waktuCatat: 'SEBELUM' },
+      { waktuCatat: 'SESUDAH' },
+    ],
+    infusion: { id: 'infusion-1' },
+    materials: [{ id: 'material-1' }],
+    evaluation: {
+      subjective: 'Stabil',
+      objective: null,
+      assessment: null,
+      plan: null,
+      generalNotes: null,
+    },
   };
 }
 
@@ -293,6 +308,7 @@ describe('staff performance service', () => {
       {
         ...sessionForDoctor('doctor-1', false),
         sessionDoctors: [{ doctorId: 'doctor-1' }],
+        evaluation: null,
       },
     ] as any);
 
@@ -317,11 +333,13 @@ describe('staff performance service', () => {
       Role.SUPER_ADMIN,
       null,
     );
-    expect(mockPrisma.treatmentSession.findMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ isCompleted: false }),
-      }),
-    );
+    const historyWhere = mockPrisma.treatmentSession.findMany.mock.calls.at(-1)[0].where;
+    expect(historyWhere).toEqual(expect.objectContaining({
+      AND: expect.arrayContaining([
+        expect.objectContaining({ OR: expect.any(Array) }),
+      ]),
+    }));
+    expect(JSON.stringify(historyWhere)).not.toContain('"isCompleted":false');
   });
 
   it('combines MSO and Nakes as one operational participation and keeps totals unique', async () => {
@@ -403,6 +421,56 @@ describe('staff performance service', () => {
       asDoctor: 1,
       asOperational: 2,
     }));
+  });
+
+  it('does not mark MSO and Nakes incomplete when only the doctor workflow is pending', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      staff('doctor-1', 'Doctor One'),
+      { ...staff('nurse-1', 'Nurse One'), role: Role.NURSE },
+      { ...staff('mso-1', 'MSO One'), role: Role.ADMIN_LAYANAN },
+    ] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      ...sessionForDoctor('doctor-1', false),
+      nurseId: 'nurse-1',
+      adminLayananId: 'mso-1',
+      evaluation: null,
+    }] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+    const byId = new Map(result.staff.map((item) => [item.id, item.performance]));
+
+    expect(byId.get('doctor-1')?.incomplete).toBe(1);
+    expect(byId.get('nurse-1')?.incomplete).toBe(0);
+    expect(byId.get('mso-1')?.incomplete).toBe(0);
+  });
+
+  it('does not mark the doctor incomplete when only the operational workflow is pending', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      staff('doctor-1', 'Doctor One'),
+      { ...staff('nurse-1', 'Nurse One'), role: Role.NURSE },
+      { ...staff('mso-1', 'MSO One'), role: Role.ADMIN_LAYANAN },
+    ] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      ...sessionForDoctor('doctor-1', false),
+      nurseId: 'nurse-1',
+      adminLayananId: 'mso-1',
+      vitalSigns: [{ waktuCatat: 'SEBELUM' }],
+    }] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+    const byId = new Map(result.staff.map((item) => [item.id, item.performance]));
+
+    expect(byId.get('doctor-1')?.incomplete).toBe(0);
+    expect(byId.get('nurse-1')?.incomplete).toBe(1);
+    expect(byId.get('mso-1')?.incomplete).toBe(1);
   });
 
   it('filters staff history by the combined MSO and Nakes operational role', async () => {
