@@ -45,6 +45,9 @@ describe('production deployment workflow safety', () => {
 
   it('uses persistent npm cache mounts and network retry settings in both images', () => {
     for (const dockerfile of [apiDockerfile, webDockerfile]) {
+      // Use BuildKit's bundled Dockerfile frontend so a transient Docker Hub
+      // failure cannot stop the build before the first FROM instruction.
+      expect(dockerfile).not.toMatch(/^#\s*syntax=/m);
       expect(dockerfile).toContain('--mount=type=cache');
       expect(dockerfile).toContain('target=/root/.npm');
       expect(dockerfile).toContain('npm ci --prefer-offline');
