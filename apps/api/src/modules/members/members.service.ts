@@ -21,6 +21,7 @@ import {
   MemberTherapyPlanSetEditService,
   type BulkEditSetInput,
 } from './services/member-therapy-plan-set-edit.service';
+import { MemberDestructionService } from './services/member-destruction.service';
 
 /**
  * Main Members Service - Orchestrates all member-related operations
@@ -43,6 +44,7 @@ export class MembersService {
   private therapyPlanBulkService: MemberTherapyPlanBulkService;
   private therapyPlanEditService: MemberTherapyPlanEditService;
   private therapyPlanSetEditService: MemberTherapyPlanSetEditService;
+  private destructionService: MemberDestructionService;
 
   constructor() {
     this.retrievalService = new MemberRetrievalService();
@@ -53,6 +55,7 @@ export class MembersService {
     this.therapyPlanBulkService = new MemberTherapyPlanBulkService();
     this.therapyPlanEditService = new MemberTherapyPlanEditService();
     this.therapyPlanSetEditService = new MemberTherapyPlanSetEditService();
+    this.destructionService = new MemberDestructionService();
   }
 
   // ============================================================
@@ -156,6 +159,18 @@ export class MembersService {
    */
   async deleteMember(memberId: string, userId: string) {
     return await this.updateService.deleteMember(memberId, userId);
+  }
+
+  async previewMemberDestruction(memberId: string) {
+    return await this.destructionService.preview(memberId);
+  }
+
+  async destroyMember(
+    memberId: string,
+    input: Parameters<MemberDestructionService['destroy']>[1],
+    userId: string,
+  ) {
+    return await this.destructionService.destroy(memberId, input, userId);
   }
 
   // ============================================================

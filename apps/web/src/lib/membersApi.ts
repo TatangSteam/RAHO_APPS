@@ -115,6 +115,42 @@ export async function deleteMemberApi(memberId: string): Promise<{ message: stri
   return data.data;
 }
 
+export type MemberDestructionPreview = {
+  member: { id: string; memberNo: string; fullName: string };
+  allowed: boolean;
+  confirmationPhrase: 'DESTRUCTION MEMBER';
+  blockers: Array<{ code: string; message: string; count: number }>;
+  counts: {
+    sessions: number;
+    packages: number;
+    invoices: number;
+    diagnoses: number;
+    therapyPlans: number;
+    labResults: number;
+    documents: number;
+    addOns: number;
+    nonTherapyPurchases: number;
+  };
+};
+
+export async function getMemberDestructionPreviewApi(memberId: string): Promise<MemberDestructionPreview> {
+  const { data } = await api.get<{ data: MemberDestructionPreview }>(
+    `/members/${memberId}/destruction-preview`,
+  );
+  return data.data;
+}
+
+export async function destroyMemberApi(
+  memberId: string,
+  input: { confirmation: 'DESTRUCTION MEMBER'; memberNo: string },
+): Promise<{ message: string }> {
+  const { data } = await api.delete<{ data: { message: string } }>(
+    `/members/${memberId}/destruction`,
+    { data: input },
+  );
+  return data.data;
+}
+
 // ── Send Notification ──────────────────────────────────────────
 export async function sendNotificationApi(
   memberId: string,

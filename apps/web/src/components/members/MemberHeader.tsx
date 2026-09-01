@@ -12,6 +12,7 @@ import {
   KeyRound,
   Loader2,
   Pencil,
+  ShieldAlert,
   Trash2,
 } from 'lucide-react';
 import { MemberDetail } from '@/types/member';
@@ -24,6 +25,7 @@ interface MemberHeaderProps {
   onSendNotification: () => void;
   onEdit: () => void;
   onDelete?: () => void;
+  onDestroy?: () => void;
   onManageCredentials?: () => void;
   onUploadDocuments?: () => void;
   isSuperAdmin: boolean;
@@ -82,6 +84,7 @@ export default function MemberHeader({
   onSendNotification,
   onEdit,
   onDelete,
+  onDestroy,
   onManageCredentials,
   onUploadDocuments,
   isSuperAdmin,
@@ -237,7 +240,12 @@ export default function MemberHeader({
                 tone="danger"
                 icon={isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
               >
-                {isDeleting ? 'Menghapus...' : 'Hapus Member'}
+                {isDeleting ? 'Menonaktifkan...' : 'Nonaktifkan'}
+              </HeaderAction>
+            )}
+            {isSuperAdmin && onDestroy && (
+              <HeaderAction onClick={onDestroy} tone="danger" icon={<ShieldAlert size={15} />}>
+                Destruction Member
               </HeaderAction>
             )}
           </div>

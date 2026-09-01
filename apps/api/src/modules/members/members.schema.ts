@@ -258,7 +258,13 @@ export const sendNotificationSchema = z.object({
   message: z.string().min(1, 'Pesan wajib diisi'),
 });
 
+export const destroyMemberSchema = z.object({
+  confirmation: z.literal('DESTRUCTION MEMBER'),
+  memberNo: z.string().trim().min(1, 'Nomor member wajib diisi'),
+});
+
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 export type GrantAccessInput = z.infer<typeof grantAccessSchema>;
 export type SendNotificationInput = z.infer<typeof sendNotificationSchema>;
+export type DestroyMemberInput = z.infer<typeof destroyMemberSchema>;

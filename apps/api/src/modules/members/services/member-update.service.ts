@@ -411,7 +411,7 @@ export class MemberUpdateService {
     });
     await enqueueContactSafely('MEMBER', memberId);
 
-    return { message: 'Member berhasil dihapus' };
+    return { message: 'Member berhasil dinonaktifkan' };
   }
 
   /**

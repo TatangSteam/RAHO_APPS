@@ -34,6 +34,7 @@ import MemberCredentialsModal from '@/components/members/MemberCredentialsModal'
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 import MemberEditModal from '@/components/members/MemberEditModal';
+import MemberDestructionModal from '@/components/members/MemberDestructionModal';
 import { getActiveMemberPackagesByType } from '@/components/members/memberStatusPresentation';
 import {
   ClipboardList,
@@ -267,6 +268,7 @@ export default function MemberDetailPage() {
   // Edit member modal state
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
   const [deletingMember, setDeletingMember] = useState(false);
+  const [showDestructionModal, setShowDestructionModal] = useState(false);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -390,13 +392,17 @@ export default function MemberDetailPage() {
     if (!member || !canDeleteMember || deletingMember) return;
 
     const memberName = member.profile?.fullName || member.memberNo || 'member ini';
-    const confirmed = await confirmDialog.delete(memberName);
+    const confirmed = await confirmDialog.action(
+      'Nonaktifkan Member',
+      `${memberName} akan dinonaktifkan dan tetap tersimpan dalam riwayat.`,
+      'Nonaktifkan',
+    );
     if (!confirmed) return;
 
     try {
       setDeletingMember(true);
       await deleteMemberApi(memberId);
-      showToast.success('Member berhasil dihapus');
+      showToast.success('Member berhasil dinonaktifkan');
       router.push('/members');
     } catch (error) {
       assertCaughtError(error);
@@ -803,6 +809,7 @@ export default function MemberDetailPage() {
         onSendNotification={() => setShowNotifModal(true)}
         onEdit={() => setShowEditMemberModal(true)}
         onDelete={handleDeleteMember}
+        onDestroy={() => setShowDestructionModal(true)}
         onManageCredentials={() => setShowCredentialsModal(true)}
         onUploadDocuments={() => setShowUploadModal(true)}
         isSuperAdmin={isSuperAdmin}
@@ -1068,6 +1075,14 @@ export default function MemberDetailPage() {
         onClose={() => setShowAssignModal(false)}
         onAssignDataChange={handleAssignDataChange}
         onSubmit={handleAssignPackage}
+      />
+
+      <MemberDestructionModal
+        open={showDestructionModal}
+        memberId={memberId}
+        member={member}
+        onClose={() => setShowDestructionModal(false)}
+        onDestroyed={() => router.push('/members')}
       />
 
       <VerifyPaymentModal

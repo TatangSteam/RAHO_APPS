@@ -7,6 +7,7 @@ import {
   sendNotificationSchema,
   memberUsernameSchema,
   enrollEmployeeMemberSchema,
+  destroyMemberSchema,
 } from './members.schema';
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
@@ -261,6 +262,32 @@ export class MembersController {
 
       const result = await membersService.deleteMember(memberId, userId);
 
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async previewMemberDestruction(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await membersService.previewMemberDestruction(req.params.memberId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async destroyMember(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validated = destroyMemberSchema.parse(req.body);
+      const result = await membersService.destroyMember(
+        req.params.memberId,
+        {
+          confirmation: validated.confirmation!,
+          memberNo: validated.memberNo!,
+        },
+        req.user!.userId,
+      );
       sendSuccess(res, result);
     } catch (error) {
       next(error);

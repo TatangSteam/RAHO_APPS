@@ -227,6 +227,22 @@ router.delete(
 // MEMBER CRUD (must be after specific routes)
 // ============================================================
 
+router.get(
+  '/:memberId/destruction-preview',
+  authenticate,
+  authorize(MEMBER_DELETERS),
+  assertBranchAccess,
+  controller.previewMemberDestruction.bind(controller),
+);
+
+router.delete(
+  '/:memberId/destruction',
+  authenticate,
+  authorize(MEMBER_DELETERS),
+  assertBranchAccess,
+  controller.destroyMember.bind(controller),
+);
+
 // GET /api/v1/members/:memberId - Get member detail
 router.get(
   '/:memberId',
