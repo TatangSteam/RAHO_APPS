@@ -7,7 +7,7 @@ import * as controller from './whatsapp-connection.controller';
 const router = Router();
 router.use(authenticate, authorize([Role.SUPER_ADMIN]));
 router.get('/connection', controller.status);
-router.post('/connection/pair', controller.pair);
+router.post('/connection/qr', controller.qr);
 router.post('/connection/reconnect', controller.reconnect);
 router.post('/connection/logout', controller.logout);
 router.put('/config', controller.updateConfig);

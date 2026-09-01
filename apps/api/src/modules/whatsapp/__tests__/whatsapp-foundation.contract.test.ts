@@ -52,17 +52,25 @@ describe('WhatsApp session report foundation contract', () => {
     expect(provider).toContain('this.socket.sendMessage');
   });
 
-  it('stores Baileys auth encrypted in PostgreSQL and limits pairing controls to super admin', () => {
+  it('stores Baileys auth encrypted in PostgreSQL and limits QR pairing to super admin', () => {
     const schema = readFileSync(resolve(apiRoot, 'prisma/schema.prisma'), 'utf8');
     const repository = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-auth-state.repository.ts'), 'utf8');
     const routes = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp.routes.ts'), 'utf8');
     const runtime = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-runtime.ts'), 'utf8');
+    const manager = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-connection.manager.ts'), 'utf8');
+    const controller = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-connection.controller.ts'), 'utf8');
     expect(schema).toContain('model WhatsAppConnection');
     expect(schema).toContain('authStateEncrypted String?');
     expect(repository).toContain('encryptWhatsAppValue');
     expect(repository).not.toContain('useMultiFileAuthState');
     expect(routes).toContain('authorize([Role.SUPER_ADMIN])');
-    expect(routes).toContain("'/connection/pair'");
+    expect(routes).not.toContain("'/connection/pair'");
+    expect(routes).toContain("router.post('/connection/qr', controller.qr)");
+    expect(manager).toContain('qrCode: this.connected ? null : this.qrCode');
+    expect(manager).toContain("connection.update', async ({ connection, lastDisconnect, qr })");
+    expect(manager).toContain('async requestQr(actorId: string)');
+    expect(manager).toContain('staleSocket?.end(undefined)');
+    expect(controller).toContain("res.setHeader('Cache-Control', 'no-store')");
     expect(runtime).toContain('WHATSAPP_WORKER_ENABLED');
   });
 

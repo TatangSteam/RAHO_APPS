@@ -6,7 +6,6 @@ import { SESSION_REPORT_BACKGROUND_KEYS } from './whatsapp-backgrounds';
 import { WhatsAppDeliveryStatus } from '@prisma/client';
 import * as adminService from './whatsapp-admin.service';
 
-const pairSchema = z.object({ phone: z.string().trim().min(8).max(24) });
 const configSchema = z.object({ backgroundKey: z.enum(SESSION_REPORT_BACKGROUND_KEYS) });
 const deliveryQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -16,18 +15,16 @@ const deliveryQuerySchema = z.object({
 
 export async function status(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    res.setHeader('Cache-Control', 'no-store');
     sendSuccess(res, await whatsappConnectionManager.status());
   } catch (error) { next(error); }
 }
 
-export async function pair(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function qr(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { phone } = pairSchema.parse(req.body);
-    const pairingCode = await whatsappConnectionManager.requestPairingCode(phone, req.user.userId);
-    sendSuccess(res, {
-      pairingCode,
-      instruction: 'Buka WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon, lalu masukkan kode ini.',
-    });
+    await whatsappConnectionManager.requestQr(req.user.userId);
+    res.setHeader('Cache-Control', 'no-store');
+    sendSuccess(res, await whatsappConnectionManager.status());
   } catch (error) { next(error); }
 }
 

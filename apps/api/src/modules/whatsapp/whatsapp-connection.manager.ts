@@ -10,7 +10,7 @@ import { logger } from '@lib/logger';
 import { prisma } from '@lib/prisma';
 import { BaileysWhatsAppProvider } from './baileys-whatsapp.provider';
 import type { WhatsAppProvider, WhatsAppSendImageInput } from './whatsapp-provider';
-import { maskWhatsAppNumber, normalizeIndonesianWhatsAppNumber } from './whatsapp-phone.util';
+import { maskWhatsAppNumber } from './whatsapp-phone.util';
 import { GLOBAL_WHATSAPP_CONNECTION_ID, loadDatabaseAuthState } from './whatsapp-auth-state.repository';
 import type { SessionReportBackgroundKey } from './whatsapp-backgrounds';
 import { logAudit } from '@utils/auditLog';
@@ -34,6 +34,8 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private stopped = false;
   private authClear: (() => Promise<void>) | null = null;
+  private qrCode: string | null = null;
+  private qrRestarting: Promise<void> | null = null;
 
   isReady(): boolean { return this.connected && this.socket !== null; }
 
@@ -60,6 +62,9 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       provider: env.WHATSAPP_PROVIDER,
       workerEnabled: env.WHATSAPP_WORKER_ENABLED,
       ready: this.isReady(),
+      // QR is intentionally ephemeral and is only exposed by the
+      // SUPER_ADMIN-protected connection status endpoint.
+      qrCode: this.connected ? null : this.qrCode,
       connection: row ?? { status: WhatsAppConnectionStatus.DISCONNECTED },
     };
   }
@@ -99,26 +104,18 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
     return this.starting;
   }
 
-  async requestPairingCode(phone: string, actorId: string): Promise<string> {
+  async requestQr(actorId: string): Promise<void> {
     if (!env.WHATSAPP_ENABLED || env.WHATSAPP_PROVIDER !== 'BAILEYS') {
       throw new Error('Provider WhatsApp Baileys belum diaktifkan');
     }
-    const normalized = normalizeIndonesianWhatsAppNumber(phone);
-    if (!normalized) throw new Error('Nomor WhatsApp tidak valid');
     if (this.isReady()) throw new Error('WhatsApp sudah terhubung. Logout sebelum mengganti nomor.');
-    await this.start(actorId);
-    if (!this.socket) throw new Error('Socket WhatsApp gagal dibuat');
-    const code = await this.socket.requestPairingCode(normalized);
-    await prisma.whatsAppConnection.update({
-      where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
-      data: {
-        status: WhatsAppConnectionStatus.PAIRING,
-        phoneMasked: maskWhatsAppNumber(normalized),
-        updatedBy: actorId,
-        lastErrorSanitized: null,
-      },
+    if (this.qrCode) return;
+    if (this.qrRestarting) return this.qrRestarting;
+
+    this.qrRestarting = this.restartForQr(actorId).finally(() => {
+      this.qrRestarting = null;
     });
-    return code;
+    return this.qrRestarting;
   }
 
   async logout(actorId: string): Promise<void> {
@@ -128,6 +125,7 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
     const socket = this.socket;
     this.socket = null;
     this.connected = false;
+    this.qrCode = null;
     if (socket) await socket.logout().catch(() => undefined);
     await this.authClear?.();
     await prisma.whatsAppConnection.upsert({
@@ -153,12 +151,30 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.connected = false;
+    this.qrCode = null;
     const socket = this.socket;
     this.socket = null;
     socket?.end(undefined);
   }
 
+  private async restartForQr(actorId: string): Promise<void> {
+    // A Baileys QR expires after a limited number of refreshes. Recreate the
+    // socket on demand so opening the admin page never depends on a QR that
+    // was generated earlier during server startup.
+    if (this.starting) await this.starting;
+    if (this.isReady() || this.qrCode) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const staleSocket = this.socket;
+    this.socket = null;
+    this.connected = false;
+    this.qrCode = null;
+    staleSocket?.end(undefined);
+    await this.start(actorId);
+  }
+
   private async createSocket(actorId: string): Promise<void> {
+    this.qrCode = null;
     const auth = await loadDatabaseAuthState(actorId);
     this.authClear = auth.clear;
     await prisma.whatsAppConnection.update({
@@ -178,10 +194,23 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       Object.assign(auth.state.creds, update);
       await auth.saveCreds();
     });
-    socket.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+    socket.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (socket !== this.socket) return;
+      if (qr) {
+        this.qrCode = qr;
+        await prisma.whatsAppConnection.update({
+          where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
+          data: {
+            status: WhatsAppConnectionStatus.PAIRING,
+            phoneMasked: null,
+            lastErrorSanitized: null,
+            updatedBy: actorId,
+          },
+        });
+      }
       if (connection === 'open') {
         this.connected = true;
+        this.qrCode = null;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
         const ownNumber = auth.state.creds.me?.id?.split(':')[0]?.split('@')[0];
@@ -199,6 +228,7 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       }
       if (connection === 'close') {
         this.connected = false;
+        this.qrCode = null;
         this.socket = null;
         const code = disconnectCode(lastDisconnect?.error);
         const loggedOut = code === DisconnectReason.loggedOut;

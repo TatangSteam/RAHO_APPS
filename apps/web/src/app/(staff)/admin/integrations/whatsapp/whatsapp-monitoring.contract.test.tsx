@@ -17,12 +17,16 @@ describe('WhatsApp delivery monitoring contract', () => {
     const page = readFileSync(resolve(__dirname, 'page.tsx'), 'utf8');
     expect(page).toContain('Alur Setup Super Admin');
     expect(page).toContain('Kesiapan sistem');
-    expect(page).toContain('Pair nomor pengirim');
+    expect(page).toContain('Pindai QR pengirim');
     expect(page).toContain('Verifikasi koneksi');
     expect(page).toContain('Siap mengirim');
     expect(page).toContain('WHATSAPP_ENABLED');
     expect(page).toContain('WHATSAPP_WORKER_ENABLED');
     expect(page).toContain('window.setInterval');
-    expect(page).toContain('Status diperiksa otomatis setiap 3 detik.');
+    expect(page).toContain('QR dan status diperbarui otomatis setiap 3 detik.');
+    expect(page).toContain('QRCodeSVG');
+    expect(page).not.toContain('connection/pair');
+    expect(page).toContain("'/integrations/whatsapp/connection/qr'");
+    expect(page).toContain('Buat ulang QR');
   });
 });

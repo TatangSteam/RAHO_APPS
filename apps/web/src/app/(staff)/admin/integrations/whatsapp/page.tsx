@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Link2, LogOut, MessageCircle, RefreshCw, RotateCcw, Send, ServerCog, ShieldCheck, Smartphone } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Image as ImageIcon, LogOut, MessageCircle, QrCode, RefreshCw, RotateCcw, Send, ServerCog, ShieldCheck } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
@@ -13,6 +14,7 @@ type StatusData = {
   provider: string;
   workerEnabled: boolean;
   ready: boolean;
+  qrCode?: string | null;
   connection: {
     status: string;
     phoneMasked?: string | null;
@@ -57,10 +59,9 @@ const BACKGROUNDS: Array<{ key: BackgroundKey; name: string; colors: string }> =
 export default function WhatsAppSettingsPage() {
   const { user } = useAuthStore();
   const [status, setStatus] = useState<StatusData | null>(null);
-  const [phone, setPhone] = useState('');
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [background, setBackground] = useState<BackgroundKey>('RAHO_RED');
   const [busy, setBusy] = useState(false);
+  const qrRequestStarted = useRef(false);
   const [deliveryData, setDeliveryData] = useState<DeliveryData>({ deliveries: [], summary: {}, pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
   const [deliveryFilter, setDeliveryFilter] = useState('');
 
@@ -88,20 +89,10 @@ export default function WhatsAppSettingsPage() {
     } finally { setBusy(false); }
   };
 
-  const copyPairingCode = async () => {
-    if (!pairingCode) return;
-    try {
-      await navigator.clipboard.writeText(pairingCode);
-      showToast.success('Kode pairing disalin');
-    } catch {
-      showToast.error('Kode pairing tidak dapat disalin otomatis');
-    }
-  };
-
   const connected = status?.ready === true;
   const systemReady = status?.enabled === true && status.provider === 'BAILEYS';
   const connectionStatus = status?.connection.status || 'DISCONNECTED';
-  const pairingRequested = pairingCode !== null || connectionStatus === 'PAIRING';
+  const pairingRequested = Boolean(status?.qrCode) || connectionStatus === 'PAIRING';
   const connectionPending = pairingRequested || ['CONNECTING', 'RECONNECTING'].includes(connectionStatus);
   const verificationInProgress = pairingRequested || connectionStatus === 'RECONNECTING';
   const deliveryReady = connected && status?.workerEnabled === true;
@@ -112,12 +103,12 @@ export default function WhatsAppSettingsPage() {
       state: systemReady ? 'done' : 'active',
     },
     {
-      title: 'Pair nomor pengirim',
+      title: 'Pindai QR pengirim',
       description: connected
         ? 'Nomor WhatsApp sudah tertaut.'
         : pairingRequested
-          ? 'Kode pairing sudah dibuat.'
-          : 'Masukkan nomor WhatsApp pusat dengan format 628...',
+          ? 'QR pairing siap dipindai.'
+          : 'Tunggu QR pairing muncul.',
       state: connected ? 'done' : systemReady ? 'active' : 'waiting',
     },
     {
@@ -126,7 +117,7 @@ export default function WhatsAppSettingsPage() {
         ? 'Socket Baileys sudah terhubung.'
         : connectionStatus === 'RECONNECTING'
           ? 'Menunggu koneksi WhatsApp pulih.'
-          : 'Masukkan kode melalui menu Perangkat tertaut di ponsel.',
+          : 'Pindai QR melalui menu Perangkat tertaut di ponsel.',
       state: connected ? 'done' : verificationInProgress ? 'active' : 'waiting',
     },
     {
@@ -145,6 +136,18 @@ export default function WhatsAppSettingsPage() {
     const timer = window.setInterval(() => { void load(); }, 3_000);
     return () => window.clearInterval(timer);
   }, [user?.role, connected, connectionPending, load]);
+
+  useEffect(() => {
+    if (user?.role !== 'SUPER_ADMIN' || !status || !systemReady || connected || status.qrCode || qrRequestStarted.current) return;
+    qrRequestStarted.current = true;
+    void api.post('/integrations/whatsapp/connection/qr')
+      .then(() => load())
+      .catch((error) => {
+        qrRequestStarted.current = false;
+        assertCaughtError(error);
+        showToast.error(error.response?.data?.error?.message || error.message || 'QR WhatsApp gagal dibuat');
+      });
+  }, [user?.role, status, systemReady, connected, load]);
 
   if (user?.role !== 'SUPER_ADMIN') {
     return <div className="card" style={{ padding: 24 }}>Pengaturan WhatsApp hanya dapat diakses Super Admin.</div>;
@@ -212,40 +215,37 @@ export default function WhatsAppSettingsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 18 }}>
         <section className="card" style={{ padding: 22 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><Link2 size={19} /> Nomor WhatsApp Pengirim</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><QrCode size={19} /> QR WhatsApp Pengirim</h2>
           <div style={{ marginTop: 15, padding: 14, borderRadius: 12, background: 'var(--surface-input)' }}>
             <strong style={{ color: connected ? '#22c55e' : '#f59e0b' }}>{status?.connection.status || 'Memuat...'}</strong>
             <p style={{ marginTop: 5, fontSize: 13 }}>{status?.connection.phoneMasked || 'Belum ada nomor tertaut'}</p>
           </div>
           {!connected && (
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 13, fontWeight: 650 }}>Nomor dengan kode negara</label>
-              <input className="form-control" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Contoh: 6281234567890" disabled={!systemReady || busy} style={{ marginTop: 7 }} />
-              <small style={{ display: 'block', marginTop: 6, color: 'var(--text-muted)' }}>Gunakan nomor aktif yang dapat membuka menu Perangkat tertaut.</small>
-              <button className="btn btn-primary" disabled={busy || !systemReady || phone.trim().length < 8} style={{ marginTop: 10 }} onClick={() => void perform(async () => {
-                const response = await api.post<{ data: { pairingCode: string } }>('/integrations/whatsapp/connection/pair', { phone });
-                setPairingCode(response.data.data.pairingCode);
-              }, 'Kode pairing berhasil dibuat')}><Link2 size={16} /> Buat kode pairing</button>
-              {pairingCode && (
-                <div style={{ marginTop: 14, padding: 16, border: '1px solid #22c55e', borderRadius: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 750, fontSize: 13 }}><Smartphone size={17} /> Selesaikan pairing di ponsel</div>
-                  <ol style={{ margin: '10px 0 0', paddingLeft: 20, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.7 }}>
-                    <li>Buka WhatsApp di ponsel pengirim.</li>
-                    <li>Pilih <strong>Perangkat tertaut</strong> lalu <strong>Tautkan dengan nomor telepon</strong>.</li>
-                    <li>Masukkan kode berikut sebelum kedaluwarsa.</li>
-                  </ol>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12, padding: 12, borderRadius: 10, background: 'var(--surface-input)' }}>
-                    <strong style={{ fontSize: 25, letterSpacing: 4 }}>{pairingCode}</strong>
-                    <button type="button" className="btn btn-secondary" onClick={() => void copyPairingCode()} aria-label="Salin kode pairing"><Copy size={15} /></button>
+            <div style={{ marginTop: 16, padding: 16, border: '1px solid #22c55e', borderRadius: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 750, fontSize: 13 }}><QrCode size={17} /> Pindai dengan WhatsApp</div>
+              <ol style={{ margin: '10px 0 0', paddingLeft: 20, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.7 }}>
+                <li>Buka WhatsApp di ponsel pengirim.</li>
+                <li>Pilih <strong>Perangkat tertaut</strong> lalu <strong>Tautkan perangkat</strong>.</li>
+                <li>Pindai QR di bawah sebelum kedaluwarsa.</li>
+              </ol>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 256, marginTop: 12, padding: 12, borderRadius: 10, background: '#fff' }}>
+                {!systemReady ? (
+                  <div style={{ color: '#4b5563', textAlign: 'center', fontSize: 12 }}>Aktifkan provider Baileys untuk membuat QR.</div>
+                ) : status?.qrCode ? (
+                  <QRCodeSVG value={status.qrCode} size={224} level="M" marginSize={2} title="QR pairing WhatsApp" />
+                ) : (
+                  <div style={{ color: '#4b5563', textAlign: 'center', fontSize: 12 }}>
+                    <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 9px' }} />
+                    Menyiapkan QR pairing...
                   </div>
-                  <p style={{ margin: '10px 0 0', color: '#f59e0b', fontSize: 11 }}><RefreshCw size={12} className="animate-spin" style={{ display: 'inline', marginRight: 5 }} />Status diperiksa otomatis setiap 3 detik.</p>
-                </div>
-              )}
+                )}
+              </div>
+              <p style={{ margin: '10px 0 0', color: '#f59e0b', fontSize: 11 }}><RefreshCw size={12} className="animate-spin" style={{ display: 'inline', marginRight: 5 }} />QR dan status diperbarui otomatis setiap 3 detik.</p>
             </div>
           )}
           <div style={{ display: 'flex', gap: 9, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" disabled={busy || !systemReady} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/reconnect'); }, 'Reconnect dijalankan')}><RefreshCw size={16} /> Reconnect</button>
-            {connected && <button className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/logout'); setPairingCode(null); }, 'Nomor WhatsApp dilepas')}><LogOut size={16} /> Logout nomor</button>}
+            {!connected && <button className="btn btn-secondary" disabled={busy || !systemReady} onClick={() => void perform(async () => { qrRequestStarted.current = true; await api.post('/integrations/whatsapp/connection/qr'); }, 'QR WhatsApp dibuat ulang')}><RefreshCw size={16} /> Buat ulang QR</button>}
+            {connected && <button className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => { await api.post('/integrations/whatsapp/connection/logout'); qrRequestStarted.current = false; }, 'Nomor WhatsApp dilepas')}><LogOut size={16} /> Logout nomor</button>}
           </div>
         </section>
 
