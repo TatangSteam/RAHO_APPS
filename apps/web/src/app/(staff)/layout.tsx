@@ -69,6 +69,20 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router, user]);
 
+  useEffect(() => {
+    if (
+      user?.role === 'VOUCHER_OPERATOR' &&
+      !(
+        pathname === '/extra/vouchers' ||
+        pathname.startsWith('/extra/vouchers/') ||
+        pathname === '/profile' ||
+        pathname.startsWith('/profile/')
+      )
+    ) {
+      router.replace('/extra/vouchers');
+    }
+  }, [pathname, router, user?.role]);
+
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileOpen) {

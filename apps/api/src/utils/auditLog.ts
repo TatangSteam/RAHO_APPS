@@ -74,6 +74,10 @@ const SENSITIVE_KEYWORDS = [
   'base64',
   'raw',
   'signature',
+  'nik',
+  'dateOfBirth',
+  'tanggalLahir',
+  'voucherCode',
 ];
 
 const RESOURCE_MODULE_MAP: Record<string, string> = {
@@ -138,6 +142,10 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   ReferralCode: 'REFERRAL',
   File: 'UPLOAD_DOCUMENT',
   Upload: 'UPLOAD_DOCUMENT',
+  VoucherCampaign: 'VOUCHER',
+  CampaignVoucher: 'VOUCHER',
+  VoucherClaimLocation: 'VOUCHER',
+  VoucherOperator: 'VOUCHER',
 };
 
 function isUsableUserId(userId?: string | null): userId is string {

@@ -36,6 +36,8 @@ export const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
   E2E_DISABLE_RATE_LIMIT: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
+  VOUCHER_CODE_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined, z.string().min(32).optional()),
+
   WHATSAPP_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   WHATSAPP_WORKER_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   WHATSAPP_PROVIDER: z.enum(['DISABLED', 'BAILEYS']).default('DISABLED'),

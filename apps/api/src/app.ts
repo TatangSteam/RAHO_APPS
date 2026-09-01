@@ -42,6 +42,7 @@ import financeReportRouter from './modules/finance-report/finance-report.routes'
 import notificationRouter from './modules/notifications/notification.routes';
 import zohoRouter from './modules/zoho/zoho.routes';
 import whatsappRouter from './modules/whatsapp/whatsapp.routes';
+import voucherRouter from './modules/vouchers/voucher.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -153,6 +154,7 @@ export function createApp(): Application {
   app.use(`${prefix}/notifications`, notificationRouter);
   app.use(`${prefix}/integrations/zoho`, zohoRouter);
   app.use(`${prefix}/integrations/whatsapp`, whatsappRouter);
+  app.use(`${prefix}/vouchers`, voucherRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

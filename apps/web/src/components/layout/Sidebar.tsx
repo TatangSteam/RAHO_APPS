@@ -13,6 +13,7 @@ import {
   ListTree, CircleDollarSign,
   PlugZap,
   UsersRound,
+  TicketPercent,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -46,6 +47,7 @@ interface MenuGroup {
 
 const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'];
 const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
+  VOUCHER_OPERATOR: new Set(['/extra/vouchers', '/extra/vouchers/history']),
   ADMIN_LAYANAN: new Set([
     '/dashboard',
     '/members',
@@ -343,6 +345,47 @@ const MENU_GROUPS: MenuGroup[] = [
     ],
   },
   {
+    title: 'Ekstra',
+    items: [
+      {
+        label: 'Klaim Voucher',
+        href: '/extra/vouchers',
+        icon: <TicketPercent size={20} />,
+        roles: ['SUPER_ADMIN', 'VOUCHER_OPERATOR'],
+      },
+      {
+        label: 'Riwayat Klaim',
+        href: '/extra/vouchers/history',
+        icon: <History size={20} />,
+        roles: ['SUPER_ADMIN', 'VOUCHER_OPERATOR'],
+      },
+      {
+        label: 'Daftar Voucher',
+        href: '/extra/vouchers/registry',
+        icon: <ClipboardList size={20} />,
+        roles: ['SUPER_ADMIN'],
+      },
+      {
+        label: 'Campaign',
+        href: '/extra/vouchers/campaigns',
+        icon: <ListTree size={20} />,
+        roles: ['SUPER_ADMIN'],
+      },
+      {
+        label: 'Lokasi Klaim',
+        href: '/extra/vouchers/locations',
+        icon: <Building2 size={20} />,
+        roles: ['SUPER_ADMIN'],
+      },
+      {
+        label: 'Akun Pengelola',
+        href: '/extra/vouchers/operators',
+        icon: <UserCog size={20} />,
+        roles: ['SUPER_ADMIN'],
+      },
+    ],
+  },
+  {
     title: 'Manajemen Sistem',
     items: [
       {
@@ -516,6 +559,7 @@ export function Sidebar({
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === href;
     if (href === '/inventory') return pathname === '/inventory';
+    if (href === '/extra/vouchers') return pathname === href;
     if (pathname === href) return true;
     return pathname.startsWith(href + '/');
   };

@@ -32,10 +32,12 @@ const STAFF_ROUTES = [
   '/staff-performance',
   '/branches',
   '/referrals',
+  '/extra',
 ];
 
 function getRoleHomePath(role: string | null, adminManagerAccessScope: string | null): string {
   if (role === 'MEMBER') return '/me/dashboard';
+  if (role === 'VOUCHER_OPERATOR') return '/extra/vouchers';
   if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') return '/members';
   if (role === 'ADMIN_LOGISTIK' || role === 'FINANCE_LOGISTICS_CONTROLLER') {
     return '/inventory/dashboard';
@@ -110,6 +112,19 @@ export function middleware(request: NextRequest): NextResponse {
   ) {
     middlewareLog('[Middleware] member-only Admin Manager trying to access non-member route');
     return NextResponse.redirect(new URL('/members', request.url));
+  }
+
+  if (
+    role === 'VOUCHER_OPERATOR' &&
+    !(
+      pathname === '/extra/vouchers' ||
+      pathname === '/extra/vouchers/history' ||
+      pathname === '/profile' ||
+      pathname.startsWith('/profile/')
+    )
+  ) {
+    middlewareLog('[Middleware] Voucher Operator trying to access a route outside voucher scope');
+    return NextResponse.redirect(new URL('/extra/vouchers', request.url));
   }
 
   // Staff trying to access member-only routes

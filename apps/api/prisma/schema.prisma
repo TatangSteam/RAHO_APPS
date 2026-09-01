@@ -19,6 +19,7 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
+  VOUCHER_OPERATOR
   ADMIN_MANAGER
   ADMIN_CABANG
   ADMIN_LAYANAN
@@ -27,6 +28,37 @@ enum Role {
   DOCTOR
   NURSE
   MEMBER
+}
+
+enum VoucherCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum VoucherLocationPolicy {
+  ALL_ACTIVE
+  SPECIFIC
+}
+
+enum VoucherCodeMode {
+  AUTO
+  MANUAL
+}
+
+enum CampaignVoucherStatus {
+  AVAILABLE
+  ISSUED
+  CLAIMED
+  EXHAUSTED
+  EXPIRED
+  CANCELLED
+}
+
+enum VoucherClaimAttemptResult {
+  SUCCESS
+  FAILURE
 }
 
 enum AdminManagerAccessScope {
@@ -769,6 +801,7 @@ model Branch {
   stockOpnames            StockOpname[]
   invoicePaymentRefunds   InvoicePaymentRefund[]
   whatsappDeliveries      WhatsAppDelivery[]
+  voucherClaimLocations   VoucherClaimLocation[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -791,50 +824,51 @@ model User {
   updatedAt               DateTime                @updatedAt
 
   // Relations
-  branch                        Branch?                  @relation(fields: [branchId], references: [id])
-  roleTemplate                  RoleTemplate?            @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
+  branch                        Branch?                   @relation(fields: [branchId], references: [id])
+  roleTemplate                  RoleTemplate?             @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
   profile                       UserProfile?
   member                        Member?
   auditLogs                     AuditLog[]
   notifications                 Notification[]
   chatMessages                  ChatMessage[]
-  chatRooms                     ChatRoom[]               @relation("ChatRoomStaff")
+  chatRooms                     ChatRoom[]                @relation("ChatRoomStaff")
   managedBranches               ManagerBranch[]
-  staffBranches                 StaffBranch[]            @relation("StaffBranches")
-  permissionOverrides           UserPermissionOverride[] @relation("PermissionOverrideUser")
-  permissionOverridesCreated    UserPermissionOverride[] @relation("PermissionOverrideCreatedBy")
-  journalEntriesCreated         JournalEntry[]           @relation("JournalEntryCreatedBy")
-  journalEntriesPosted          JournalEntry[]           @relation("JournalEntryPostedBy")
-  accountingPeriodsCreated      AccountingPeriod[]       @relation("AccountingPeriodCreatedBy")
-  accountingPeriodsClosed       AccountingPeriod[]       @relation("AccountingPeriodClosedBy")
-  paymentsVerified              InvoicePayment[]         @relation("PaymentVerifiedBy")
-  invoicePaymentRefundsCreated  InvoicePaymentRefund[]   @relation("InvoicePaymentRefundCreatedBy")
-  cashBankAccountsCreated       CashBankAccount[]        @relation("CashBankAccountCreatedBy")
-  cashBankTransactionsCreated   CashBankTransaction[]    @relation("CashBankTransactionCreatedBy")
-  openingBalancesCreated        OpeningBalance[]         @relation("OpeningBalanceCreatedBy")
-  openingBalancesReviewed       OpeningBalance[]         @relation("OpeningBalanceReviewedBy")
-  expensesCreated               Expense[]                @relation("ExpenseCreatedBy")
-  expensesReviewed              Expense[]                @relation("ExpenseReviewedBy")
-  expensesPaid                  Expense[]                @relation("ExpensePaidBy")
-  reimbursementsClaimed         Reimbursement[]          @relation("ReimbursementClaimant")
-  reimbursementsReviewed        Reimbursement[]          @relation("ReimbursementReviewedBy")
-  reimbursementsPaid            Reimbursement[]          @relation("ReimbursementPaidBy")
-  socialProgramsRequested       SocialProgramRequest[]   @relation("SocialProgramRequestedBy")
-  suppliersCreated              Supplier[]               @relation("SupplierCreatedBy")
-  purchaseRequestsCreated       PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
-  purchaseRequestsReviewed      PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
-  purchaseOrdersCreated         PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
-  goodsReceiptsCreated          GoodsReceipt[]           @relation("GoodsReceiptCreatedBy")
-  supplierInvoicesCreated       SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
-  supplierPaymentsCreated       SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
-  supplierPaymentRefundsCreated SupplierPaymentRefund[]  @relation("SupplierPaymentRefundCreatedBy")
-  revenuePoliciesCreated        PackageRevenuePolicy[]   @relation("RevenuePolicyCreatedBy")
-  approvalInstancesMade         ApprovalInstance[]       @relation("ApprovalInstanceMaker")
-  approvalDecisions             ApprovalDecision[]       @relation("ApprovalDecisionApprover")
-  approvalAuditLogs             ApprovalAuditLog[]       @relation("ApprovalAuditActor")
-  stockOpnamesCreated           StockOpname[]            @relation("StockOpnameCreatedBy")
-  zohoConnectionsCreated        ZohoConnection[]         @relation("ZohoConnectionCreatedBy")
-  zohoConnectionsUpdated        ZohoConnection[]         @relation("ZohoConnectionUpdatedBy")
+  staffBranches                 StaffBranch[]             @relation("StaffBranches")
+  permissionOverrides           UserPermissionOverride[]  @relation("PermissionOverrideUser")
+  permissionOverridesCreated    UserPermissionOverride[]  @relation("PermissionOverrideCreatedBy")
+  journalEntriesCreated         JournalEntry[]            @relation("JournalEntryCreatedBy")
+  journalEntriesPosted          JournalEntry[]            @relation("JournalEntryPostedBy")
+  accountingPeriodsCreated      AccountingPeriod[]        @relation("AccountingPeriodCreatedBy")
+  accountingPeriodsClosed       AccountingPeriod[]        @relation("AccountingPeriodClosedBy")
+  paymentsVerified              InvoicePayment[]          @relation("PaymentVerifiedBy")
+  invoicePaymentRefundsCreated  InvoicePaymentRefund[]    @relation("InvoicePaymentRefundCreatedBy")
+  cashBankAccountsCreated       CashBankAccount[]         @relation("CashBankAccountCreatedBy")
+  cashBankTransactionsCreated   CashBankTransaction[]     @relation("CashBankTransactionCreatedBy")
+  openingBalancesCreated        OpeningBalance[]          @relation("OpeningBalanceCreatedBy")
+  openingBalancesReviewed       OpeningBalance[]          @relation("OpeningBalanceReviewedBy")
+  expensesCreated               Expense[]                 @relation("ExpenseCreatedBy")
+  expensesReviewed              Expense[]                 @relation("ExpenseReviewedBy")
+  expensesPaid                  Expense[]                 @relation("ExpensePaidBy")
+  reimbursementsClaimed         Reimbursement[]           @relation("ReimbursementClaimant")
+  reimbursementsReviewed        Reimbursement[]           @relation("ReimbursementReviewedBy")
+  reimbursementsPaid            Reimbursement[]           @relation("ReimbursementPaidBy")
+  socialProgramsRequested       SocialProgramRequest[]    @relation("SocialProgramRequestedBy")
+  suppliersCreated              Supplier[]                @relation("SupplierCreatedBy")
+  purchaseRequestsCreated       PurchaseRequest[]         @relation("PurchaseRequestCreatedBy")
+  purchaseRequestsReviewed      PurchaseRequest[]         @relation("PurchaseRequestReviewedBy")
+  purchaseOrdersCreated         PurchaseOrder[]           @relation("PurchaseOrderCreatedBy")
+  goodsReceiptsCreated          GoodsReceipt[]            @relation("GoodsReceiptCreatedBy")
+  supplierInvoicesCreated       SupplierInvoice[]         @relation("SupplierInvoiceCreatedBy")
+  supplierPaymentsCreated       SupplierPayment[]         @relation("SupplierPaymentCreatedBy")
+  supplierPaymentRefundsCreated SupplierPaymentRefund[]   @relation("SupplierPaymentRefundCreatedBy")
+  revenuePoliciesCreated        PackageRevenuePolicy[]    @relation("RevenuePolicyCreatedBy")
+  approvalInstancesMade         ApprovalInstance[]        @relation("ApprovalInstanceMaker")
+  approvalDecisions             ApprovalDecision[]        @relation("ApprovalDecisionApprover")
+  approvalAuditLogs             ApprovalAuditLog[]        @relation("ApprovalAuditActor")
+  stockOpnamesCreated           StockOpname[]             @relation("StockOpnameCreatedBy")
+  zohoConnectionsCreated        ZohoConnection[]          @relation("ZohoConnectionCreatedBy")
+  zohoConnectionsUpdated        ZohoConnection[]          @relation("ZohoConnectionUpdatedBy")
+  voucherOperatorLocations      VoucherOperatorLocation[]
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -1256,6 +1290,7 @@ model Member {
   labResults            LabResult[]
   communicationConsent  MemberCommunicationConsent?
   whatsappDeliveries    WhatsAppDelivery[]
+  campaignVouchers      CampaignVoucher[]
 
   @@index([memberNo])
   @@index([registrationBranchId, isActive])
@@ -1447,6 +1482,7 @@ model MemberPackage {
   serviceType            String? // HC, PS, PHC, PTY, PDA
   purchaseGroupId        String? // Group BASIC + BOOSTER purchased together
   socialProgramRequestId String?
+  campaignVoucherId      String?
   upgradedFromId         String? // Track if this is an upgrade from another package
   // 1 = paket legacy sebelum cutover finance; 2 = paket baru yang wajib deferred revenue
   revenueFlowVersion     Int             @default(2)
@@ -1498,6 +1534,7 @@ model MemberPackage {
   deferredRevenueMovements DeferredRevenueMovement[]
   revenueRecognitions      RevenueRecognition[]
   socialProgramRequest     SocialProgramRequest?     @relation(fields: [socialProgramRequestId], references: [id], onDelete: Restrict)
+  campaignVoucher          CampaignVoucher?          @relation(fields: [campaignVoucherId], references: [id], onDelete: Restrict)
 
   @@index([memberId, status])
   @@index([branchId, status])
@@ -1505,10 +1542,158 @@ model MemberPackage {
   @@index([memberId, packageType, status])
   @@index([purchaseGroupId])
   @@index([socialProgramRequestId])
+  @@index([campaignVoucherId])
   @@index([paymentProofUrl])
   @@index([refundedAt])
   @@index([refundProofUrl])
   @@map("member_packages")
+}
+
+// ============================================================
+// VOUCHER PARTNERSHIP
+// ============================================================
+
+model VoucherCampaign {
+  id                  String                @id @default(cuid())
+  code                String
+  version             Int                   @default(1)
+  title               String
+  description         String
+  quota               Int
+  issuedCount         Int                   @default(0)
+  claimedCount        Int                   @default(0)
+  basicSessions       Int                   @default(0)
+  boosterSessions     Int                   @default(0)
+  boosterType         String?
+  unitPrice           Decimal?              @db.Decimal(15, 2)
+  totalPrice          Decimal?              @db.Decimal(15, 2)
+  currency            String                @default("IDR")
+  issueStartAt        DateTime?
+  issueEndAt          DateTime?
+  claimStartAt        DateTime?
+  claimEndAt          DateTime?
+  benefitValidityDays Int?
+  termsSnapshot       String?
+  locationPolicy      VoucherLocationPolicy @default(ALL_ACTIVE)
+  codeMode            VoucherCodeMode       @default(AUTO)
+  status              VoucherCampaignStatus @default(DRAFT)
+  createdBy           String
+  updatedBy           String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  vouchers CampaignVoucher[]
+
+  @@unique([code, version])
+  @@index([status])
+  @@map("voucher_campaigns")
+}
+
+model VoucherClaimLocation {
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  displayName            String
+  partnerName            String?
+  city                   String
+  address                String?
+  phone                  String?
+  mapsUrl                String?
+  frontPhotoUrl          String?
+  branchId               String?
+  sourceReference        String?
+  dataCompletenessStatus String   @default("INCOMPLETE")
+  isActive               Boolean  @default(true)
+  createdBy              String
+  updatedBy              String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  branch              Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  operatorAssignments VoucherOperatorLocation[]
+  allowedVouchers     CampaignVoucher[]         @relation("VoucherAllowedLocation")
+  claimedVouchers     CampaignVoucher[]         @relation("VoucherClaimedLocation")
+  claimAttempts       VoucherClaimAttempt[]
+
+  @@index([city, isActive])
+  @@index([branchId])
+  @@map("voucher_claim_locations")
+}
+
+model VoucherOperatorLocation {
+  id         String    @id @default(cuid())
+  userId     String
+  locationId String
+  assignedBy String
+  assignedAt DateTime  @default(now())
+  validUntil DateTime?
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location VoucherClaimLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, locationId])
+  @@index([locationId])
+  @@map("voucher_operator_locations")
+}
+
+model CampaignVoucher {
+  id                    String                @id @default(cuid())
+  campaignId            String
+  codeHash              String                @unique
+  codeEncrypted         String?               @db.Text
+  codeLast4             String
+  recipientMemberId     String?
+  recipientNameSnapshot String?
+  recipientNikHash      String?
+  recipientDateOfBirth  DateTime?
+  nikLast4              String?
+  allowedLocationId     String?
+  status                CampaignVoucherStatus @default(ISSUED)
+  issuedAt              DateTime              @default(now())
+  claimDeadline         DateTime?
+  cancelledAt           DateTime?
+  cancelReason          String?
+  claimedAt             DateTime?
+  claimedLocationId     String?
+  claimedBy             String?
+  createdBy             String
+  updatedBy             String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  campaign        VoucherCampaign       @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  recipientMember Member?               @relation(fields: [recipientMemberId], references: [id], onDelete: Restrict)
+  allowedLocation VoucherClaimLocation? @relation("VoucherAllowedLocation", fields: [allowedLocationId], references: [id], onDelete: Restrict)
+  claimedLocation VoucherClaimLocation? @relation("VoucherClaimedLocation", fields: [claimedLocationId], references: [id], onDelete: Restrict)
+  memberPackages  MemberPackage[]
+  claimAttempts   VoucherClaimAttempt[]
+
+  @@unique([campaignId, recipientMemberId])
+  @@index([campaignId, status])
+  @@index([recipientMemberId])
+  @@index([recipientNikHash])
+  @@index([allowedLocationId])
+  @@index([claimedLocationId, claimedAt])
+  @@map("campaign_vouchers")
+}
+
+model VoucherClaimAttempt {
+  id          String                    @id @default(cuid())
+  voucherId   String?
+  operatorId  String
+  locationId  String
+  result      VoucherClaimAttemptResult
+  failureCode String?
+  requestId   String
+  attemptedAt DateTime                  @default(now())
+
+  voucher  CampaignVoucher?     @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  location VoucherClaimLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@unique([operatorId, requestId])
+  @@index([operatorId, attemptedAt])
+  @@index([voucherId, attemptedAt])
+  @@index([locationId, attemptedAt])
+  @@map("voucher_claim_attempts")
 }
 
 // ============================================================
@@ -3579,19 +3764,19 @@ model WhatsAppDelivery {
 }
 
 model WhatsAppConnection {
-  id                 String                   @id
-  status             WhatsAppConnectionStatus @default(DISCONNECTED)
-  phoneMasked        String?
-  authStateEncrypted String?                  @db.Text
-  authKeyVersion     Int                      @default(1)
-  defaultBackgroundKey String                 @default("RAHO_RED")
-  lastConnectedAt    DateTime?
-  lastDisconnectedAt DateTime?
-  lastErrorSanitized String?                  @db.Text
-  createdBy          String
-  updatedBy          String
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  id                   String                   @id
+  status               WhatsAppConnectionStatus @default(DISCONNECTED)
+  phoneMasked          String?
+  authStateEncrypted   String?                  @db.Text
+  authKeyVersion       Int                      @default(1)
+  defaultBackgroundKey String                   @default("RAHO_RED")
+  lastConnectedAt      DateTime?
+  lastDisconnectedAt   DateTime?
+  lastErrorSanitized   String?                  @db.Text
+  createdBy            String
+  updatedBy            String
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@map("whatsapp_connections")
 }

@@ -92,24 +92,26 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
         </button>
 
         {/* Notifications */}
-        <Link 
-          href="/notifications"
-          className={clsx(
-            'relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
-            'text-neutral-500 dark:text-neutral-400',
-            'hover:text-amber-600 dark:hover:text-amber-400',
-            'hover:bg-amber-50 dark:hover:bg-amber-500/10'
-          )}
-          aria-label="Notifikasi" 
-          id="btn-notifications"
-        >
-          <Bell size={20} />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-[#0a0a0a]">
-              {formatNotificationBadge(unreadCount)}
-            </span>
-          )}
-        </Link>
+        {role !== 'VOUCHER_OPERATOR' && (
+          <Link
+            href="/notifications"
+            className={clsx(
+              'relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
+              'text-neutral-500 dark:text-neutral-400',
+              'hover:text-amber-600 dark:hover:text-amber-400',
+              'hover:bg-amber-50 dark:hover:bg-amber-500/10'
+            )}
+            aria-label="Notifikasi"
+            id="btn-notifications"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-[#0a0a0a]">
+                {formatNotificationBadge(unreadCount)}
+              </span>
+            )}
+          </Link>
+        )}
 
         {/* User Chip - Links to Profile */}
         <Link 

@@ -2,6 +2,7 @@ import type { Role } from '@/types/auth';
 
 export const ROLE_LABELS: Record<Role, string> = {
   SUPER_ADMIN: 'Super Admin',
+  VOUCHER_OPERATOR: 'Pengelola Voucher',
   ADMIN_MANAGER: 'Admin Manager',
   ADMIN_CABANG: 'Admin Cabang',
   ADMIN_LAYANAN: 'Admin Layanan',
@@ -14,6 +15,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const ROLE_TEXT_COLORS: Record<Role, string> = {
   SUPER_ADMIN: 'text-rose-500 dark:text-rose-400',
+  VOUCHER_OPERATOR: 'text-orange-500 dark:text-orange-400',
   ADMIN_MANAGER: 'text-purple-500 dark:text-purple-400',
   ADMIN_CABANG: 'text-amber-600 dark:text-amber-400',
   ADMIN_LAYANAN: 'text-emerald-500 dark:text-emerald-400',

@@ -11,15 +11,15 @@ Menyediakan fitur voucher terpusat untuk Program Sosial dan Special Gift Voucher
 - mengikat voucher kepada nama penerima, NIK, dan tanggal lahir;
 - membatasi atau mencatat tempat klaim dari master cabang/partner;
 - diklaim satu kali oleh petugas yang berwenang;
-- mengaktifkan manfaat BASIC dan/atau BOOSTER pada member tanpa membuat saldo ganda;
+- mencatat klaim manfaat BASIC dan/atau BOOSTER secara mandiri tanpa membuat member, paket, atau sesi terapi;
 - dikelola oleh Super Admin dan akun pengelola khusus;
-- diaudit dari penerbitan sampai seluruh manfaat selesai digunakan.
+- diaudit dari penerbitan sampai klaim selesai.
 
 ## 2. Definisi dan asumsi dasar
 
 1. Satu **kode voucher campaign** adalah satu hak klaim, bukan satu sesi terapi.
-2. Setelah kode berhasil diklaim, manfaat voucher diwujudkan menjadi `MemberPackage` BASIC dan/atau BOOSTER yang sudah digunakan ERP.
-3. Pemakaian setiap sesi selanjutnya tetap memakai flow sesi, stok, HPP, revenue, dan audit yang sudah ada.
+2. Setelah kode berhasil diklaim, sistem hanya mencatat identitas penerima, lokasi, operator, waktu, dan ringkasan manfaat pada voucher.
+3. Voucher Partnership fase ini tidak membuat `MemberPackage`, saldo sesi, invoice, atau `TreatmentSession`.
 4. **Klaim** berarti aktivasi pertama kode voucher untuk penerima. Klaim berbeda dari pemakaian sesi terapi.
 5. Kuota 50/100/50 adalah batas kode yang dapat diterbitkan pada masing-masing campaign, sehingga total awal adalah 200 kode.
 6. Data NIK dan tanggal lahir adalah data sensitif. Nilai lengkap tidak boleh tampil pada tabel, log aplikasi, audit description, atau export operator.
@@ -129,7 +129,7 @@ Setelah login, `VOUCHER_OPERATOR` langsung diarahkan ke `/extra/vouchers`.
 
 ## 6. Form registrasi/penerbitan voucher
 
-Hanya Super Admin yang dapat menerbitkan dan mengikat voucher ke penerima.
+Super Admin dapat menerbitkan dan mengikat voucher ke penerima sebelum klaim. Kode cetak berstatus `AVAILABLE` juga dapat langsung diikat ke identitas penerima pada klaim pertama. Penerima tidak harus terdaftar sebagai member ERP.
 
 ### 6.1 Field wajib
 
@@ -165,9 +165,6 @@ DRAFT/AVAILABLE
       │ klaim sukses           ▲
       ▼                        │ hanya sebelum klaim
     CLAIMED
-      │ seluruh sesi habis atau kedaluwarsa
-      ├──────────────► EXHAUSTED
-      └──────────────► EXPIRED
 ```
 
 Aturan:
@@ -175,8 +172,7 @@ Aturan:
 - `AVAILABLE`: kode sudah dialokasikan ke campaign tetapi belum diikat ke penerima.
 - `ISSUED`: kode sudah memiliki penerima dan dapat diklaim.
 - `CLAIMED`: kode sudah diaktivasi tepat satu kali dan tidak dapat diklaim ulang.
-- `EXHAUSTED`: seluruh manfaat paket hasil klaim sudah digunakan.
-- `EXPIRED`: masa klaim/manfaat berakhir.
+- `EXPIRED`: masa klaim berakhir sebelum voucher diklaim.
 - `CANCELLED`: dibatalkan Super Admin sebelum klaim dengan alasan wajib.
 - Status historis tidak boleh dihapus secara fisik.
 
@@ -215,28 +211,24 @@ flowchart TD
     A[Pengelola login] --> B[Sistem menentukan lokasi yang boleh dikelola]
     B --> C[Pengelola pilih lokasi aktual jika memiliki lebih dari satu]
     C --> D[Input/scan kode voucher]
-    D --> E[Input NIK dan tanggal lahir untuk verifikasi]
-    E --> F{Kode valid, ISSUED, belum kedaluwarsa, lokasi sesuai?}
+    D --> E[Input nama penerima, NIK, dan tanggal lahir untuk verifikasi]
+    E --> E1{Status kode AVAILABLE?}
+    E1 -- Ya --> E2[Ikat identitas penerima ke kode secara atomik]
+    E1 -- Tidak --> F
+    E2 --> F{Kode valid, ISSUED atau aktivasi pertama, belum kedaluwarsa, lokasi sesuai?}
     F -- Tidak --> G[Tolak, rate-limit percobaan, simpan audit aman]
     F -- Ya --> H[Tampilkan nama tersamarkan dan ringkasan manfaat]
     H --> I[Pengelola konfirmasi klaim]
-    I --> J{Member dengan NIK sudah ada?}
-    J -- Ya --> K[Tautkan ke member existing setelah verifikasi DOB]
-    J -- Tidak --> L[Buat registrasi member minimum sesuai kebijakan]
-    K --> M[Buat paket BASIC/BOOSTER secara transaksional]
-    L --> M
-    M --> N[Tandai voucher CLAIMED dan simpan lokasi/operator/waktu]
-    N --> O[Tampilkan bukti klaim dan saldo manfaat]
+    I --> J[Tandai voucher CLAIMED dan simpan identitas/lokasi/operator/waktu]
+    J --> K[Tampilkan bukti klaim dan ringkasan manfaat]
 ```
 
-### 8.4 Konsumsi manfaat
+### 8.4 Pemenuhan manfaat
 
-1. Sesi terapi dibuat melalui flow sesi yang sudah ada.
-2. Paket BASIC hasil voucher dipilih sebagai sumber voucher BASIC.
-3. Jika campaign mempunyai BOOSTER, paket BOOSTER hasil voucher dipilih sesuai aturan jenis BOOSTER.
-4. Sesi hanya mengurangi saldo saat titik posting yang sudah berlaku pada ERP.
-5. Pembatalan atau penghapusan sesi mengikuti mekanisme pengembalian saldo existing.
-6. Ketika semua manfaat habis, voucher campaign ditandai `EXHAUSTED` oleh sinkronisasi status.
+1. Sistem Voucher Partnership hanya mencatat bahwa voucher sudah diklaim.
+2. Nilai BASIC/BOOSTER ditampilkan sebagai ringkasan campaign, bukan saldo sesi ERP.
+3. Tidak dibuat `MemberPackage`, invoice, pembayaran, atau sesi terapi pada saat klaim.
+4. Pelaksanaan manfaat setelah klaim berada di luar integrasi fase ini dan tidak mengubah status berdasarkan pemakaian sesi.
 
 ## 9. Master lokasi klaim awal
 
@@ -296,8 +288,7 @@ Sumber: `List Cabang dan Partner Raho Non Format - NEW PARTNERSHIP.csv` dari pen
 - `recipientName`, `nikEncrypted`, `nikHash`, `nikLast4`, `dateOfBirth`;
 - `allowedLocationId` nullable untuk semua lokasi;
 - `status`, `issuedAt`, `claimDeadline`, `cancelledAt`, `cancelReason`;
-- `claimedMemberId`, `claimedAt`, `claimedLocationId`, `claimedBy`;
-- `basicMemberPackageId`, `boosterMemberPackageId`;
+- `claimedAt`, `claimedLocationId`, `claimedBy`;
 - `createdBy`, `updatedBy`, timestamps.
 
 ### `VoucherClaimLocation`
@@ -318,18 +309,14 @@ Sumber: `List Cabang dan Partner Raho Non Format - NEW PARTNERSHIP.csv` dari pen
 - `requestId/idempotencyKey`, `attemptedAt`;
 - tidak menyimpan kode voucher, NIK, atau tanggal lahir mentah.
 
-## 11. Integrasi dengan member, paket, dan finance
+## 11. Pemisahan dari member, paket, sesi, dan finance
 
-1. Pencarian member utama menggunakan NIK ternormalisasi; tanggal lahir menjadi verifikasi kedua.
-2. Jika member existing mempunyai nama/tanggal lahir berbeda, klaim diblokir dan diteruskan ke Super Admin untuk resolusi identitas.
-3. Klaim tidak boleh diam-diam menimpa profil member existing.
-4. Pembuatan BASIC dan BOOSTER harus berada dalam satu transaksi dengan perubahan status voucher.
-5. Gunakan `purchaseGroupId` untuk mengikat BASIC dan BOOSTER dari voucher yang sama.
-6. Simpan referensi voucher pada paket agar saldo dapat direkonsiliasi dua arah.
-7. Retry request dengan `idempotencyKey` yang sama harus mengembalikan hasil lama, bukan membuat paket kedua.
-8. Jika transaksi paket gagal, status voucher tetap `ISSUED` dan dapat dicoba ulang.
-9. Campaign berbayar harus memakai invoice/payment/deferred-revenue flow existing; jangan langsung membuat paket aktif sebelum syarat pembayaran terpenuhi.
-10. Campaign gratis memerlukan kebijakan nilai wajar, subsidi, dan pencatatan finance yang disetujui Finance sebelum implementasi.
+1. Nama, NIK, dan tanggal lahir disimpan sebagai identitas voucher, bukan sebagai profil member ERP.
+2. NIK disimpan sebagai keyed hash untuk pencocokan exact-match dan empat digit terakhir untuk masking.
+3. Klaim tidak membuat atau mengubah `User`, `Member`, `MemberPackage`, invoice, payment, maupun `TreatmentSession`.
+4. Nilai BASIC/BOOSTER pada campaign merupakan informasi hak voucher dan tidak menjadi saldo sesi ERP.
+5. Retry dengan `idempotencyKey` yang sama mengembalikan hasil klaim lama tanpa membuat klaim kedua.
+6. Pencatatan finance dan pelaksanaan terapi, bila diperlukan kemudian, merupakan integrasi fase lanjutan.
 
 ## 12. Validasi dan pesan kegagalan
 
@@ -341,10 +328,9 @@ Sumber: `List Cabang dan Partner Raho Non Format - NEW PARTNERSHIP.csv` dari pen
 | `VOUCHER_EXPIRED` | Periode klaim berakhir |
 | `VOUCHER_CANCELLED` | Voucher dibatalkan |
 | `VOUCHER_LOCATION_NOT_ALLOWED` | Lokasi aktual tidak sesuai kebijakan voucher/operator |
-| `VOUCHER_IDENTITY_MISMATCH` | NIK atau tanggal lahir tidak cocok |
+| `VOUCHER_IDENTITY_MISMATCH` | Nama penerima, NIK, atau tanggal lahir tidak cocok |
 | `VOUCHER_CAMPAIGN_QUOTA_EXCEEDED` | Kuota campaign habis |
-| `VOUCHER_MEMBER_CONFLICT` | Data member existing tidak konsisten |
-| `VOUCHER_BENEFIT_CREATION_FAILED` | Paket gagal dibuat; voucher tetap dapat dicoba ulang |
+| `VOUCHER_CLAIM_FAILED` | Transaksi pencatatan klaim gagal; voucher tetap dapat dicoba ulang |
 
 Setelah lima percobaan gagal dalam 15 menit oleh akun/IP yang sama, klaim diblokir sementara dan dicatat sebagai security event. Batas dapat dikonfigurasi oleh Super Admin tetapi tidak boleh dimatikan di production.
 
@@ -366,9 +352,9 @@ Super Admin melihat:
 
 - kuota, terbit, belum diklaim, diklaim, kedaluwarsa, dan dibatalkan per campaign;
 - klaim per lokasi dan periode;
-- saldo BASIC/BOOSTER hasil voucher;
-- anomali: percobaan gagal tinggi, identitas konflik, dan klaim yang gagal membuat paket;
-- rekonsiliasi `claimed voucher = purchaseGroupId = paket yang dibuat`.
+- ringkasan manfaat BASIC/BOOSTER dari campaign yang diklaim;
+- anomali percobaan gagal tinggi dan konflik identitas;
+- rekonsiliasi jumlah kode `AVAILABLE`, `ISSUED`, dan `CLAIMED`.
 
 Pengelola hanya melihat:
 
@@ -387,27 +373,29 @@ Pengelola hanya melihat:
 7. Akun pengelola dapat login menggunakan username/password yang ditetapkan Super Admin.
 8. Pengelola hanya melihat grup **Ekstra** dan fitur voucher yang diizinkan.
 9. Pengelola tidak dapat mengklaim pada lokasi di luar assignment.
-10. Claim dengan kode + NIK + DOB benar berhasil tepat satu kali.
-11. Dua request paralel terhadap kode yang sama menghasilkan satu claim dan satu set paket.
-12. Refresh/retry setelah sukses tidak membuat paket atau invoice ganda.
-13. Voucher pertama membuat 15 BASIC dan 10 BOOSTER sesuai konfigurasi yang disahkan.
-14. Voucher kedua membuat 10 BASIC dan 0 BOOSTER.
-15. Voucher ketiga membuat 15 BASIC dan 0 BOOSTER dengan total Rp7.500.000.
-16. Kegagalan pembuatan paket tidak mengubah voucher menjadi `CLAIMED`.
-17. Member existing ditemukan berdasarkan NIK dan tidak diduplikasi.
-18. Konflik nama/DOB memblokir klaim tanpa mengubah data member.
+10. Claim dengan kode + nama penerima + NIK + DOB benar berhasil tepat satu kali.
+11. Dua request paralel terhadap kode yang sama menghasilkan tepat satu klaim.
+12. Refresh/retry setelah sukses tidak membuat klaim ganda.
+13. Klaim menampilkan ringkasan 15 BASIC dan 10 BOOSTER tanpa membuat paket atau sesi.
+14. Klaim `GIFT-10B` menampilkan 10 BASIC dan 0 BOOSTER tanpa membuat paket atau sesi.
+15. Klaim `SOCIAL-15B` menampilkan 15 BASIC dan 0 BOOSTER tanpa membuat paket atau sesi.
+16. Kegagalan transaksi klaim tidak mengubah voucher menjadi `CLAIMED`.
+17. Penerima tidak harus menjadi member ERP.
+18. Klaim voucher tidak membuat atau mengubah data member.
 19. Daftar, audit, error, dan log tidak menampilkan NIK/kode lengkap.
 20. Lokasi atau operator yang telah memiliki histori tidak dapat dihapus; hanya dapat dinonaktifkan.
+21. Kode cetak `AVAILABLE` dapat langsung diklaim menggunakan nama, NIK, dan DOB penerima; transaksi menaikkan `issuedCount` dan `claimedCount` masing-masing tepat satu kali.
+22. Tanggal lahir masa depan ditolak sebelum percobaan klaim dicatat dan tidak ikut memicu rate limit.
 
 ## 16. Keputusan bisnis yang wajib ditutup sebelum development
 
 1. Apakah `GIFT-10B` benar-benar gratis (`Rp0`) atau mempunyai harga/nilai invoice tertentu?
-2. Untuk campaign Rp22.500.000 dan Rp7.500.000, apakah pembayaran dilakukan sebelum penerbitan, saat klaim, atau setelah paket dibuat?
+2. Untuk campaign Rp22.500.000 dan Rp7.500.000, apakah pembayaran dicatat di luar sistem sebelum penerbitan atau saat klaim?
 3. Sepuluh BOOSTER pada campaign pertama menggunakan jenis BOOSTER tetap, dipilih penerima, atau saldo generik?
 4. Berapa tanggal mulai, batas klaim, dan masa berlaku manfaat setiap campaign?
 5. Apakah satu NIK boleh menerima voucher dari lebih dari satu campaign secara bersamaan?
 6. Apakah voucher hanya berlaku pada satu lokasi yang dipilih saat penerbitan atau semua lokasi aktif?
-7. Jika penerima belum menjadi member, apakah pengelola boleh membuat member minimum atau klaim harus menunggu Admin Cabang/Admin Layanan?
+7. Diputuskan untuk fase ini: penerima tidak harus menjadi member dan klaim tidak membuat member minimum.
 8. Apakah kode harus dibuat sistem, diinput manual, atau diimport dari daftar kode eksternal?
 9. Apakah voucher dapat dialihkan ke penerima lain sebelum klaim? Default requirement: tidak dapat dialihkan tanpa koreksi Super Admin dan audit.
 10. Apakah foto tampak depan lokasi akan diunggah pada fase ini? CSV hanya berisi nama file foto.
@@ -419,7 +407,8 @@ Pengelola hanya melihat:
 - marketplace atau penjualan publik voucher;
 - transfer voucher mandiri antar penerima;
 - refund setelah voucher diklaim;
-- perubahan flow klinis, inventori, atau konsumsi paket existing di luar referensi voucher campaign.
+- pembuatan paket, saldo sesi, sesi terapi, invoice, dan integrasi finance dari klaim voucher;
+- perubahan flow klinis atau inventori existing.
 
 ## 18. Urutan implementasi yang disarankan
 
@@ -427,7 +416,7 @@ Pengelola hanya melihat:
 2. Tambahkan schema additive, permission, role, dan seed 20 lokasi.
 3. Implementasi campaign, kuota, kode, dan registrasi penerima.
 4. Implementasi akun pengelola dan scope lokasi.
-5. Implementasi claim atomik dan idempotent ke paket existing.
+5. Implementasi claim standalone yang atomik dan idempotent tanpa paket atau sesi existing.
 6. Tambahkan menu grup **Ekstra**, dashboard, halaman klaim, dan setup Super Admin.
 7. Tambahkan audit, masking, rate limit, rekonsiliasi, dan laporan.
 8. Jalankan unit, integration, concurrency, authorization, migration-safety, dan UAT 20 acceptance criteria.

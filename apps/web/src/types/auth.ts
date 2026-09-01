@@ -4,6 +4,7 @@
 
 export type Role =
   | 'SUPER_ADMIN'
+  | 'VOUCHER_OPERATOR'
   | 'ADMIN_MANAGER'
   | 'ADMIN_CABANG'
   | 'ADMIN_LAYANAN'
@@ -43,6 +44,7 @@ export interface LoginResponse {
 // Role hierarchy helpers
 export const STAFF_ROLES: Role[] = [
   'SUPER_ADMIN',
+  'VOUCHER_OPERATOR',
   'ADMIN_MANAGER',
   'ADMIN_CABANG',
   'ADMIN_LAYANAN',
@@ -100,6 +102,7 @@ export function hasRole(userRole: Role, allowedRoles: Role[]): boolean {
 /** First route to redirect to after login, based on role */
 export function getDefaultRoute(role: Role, adminManagerAccessScope?: AdminManagerAccessScope | null): string {
   if (role === 'MEMBER') return '/me/dashboard';
+  if (role === 'VOUCHER_OPERATOR') return '/extra/vouchers';
 
   if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
     return '/members';
