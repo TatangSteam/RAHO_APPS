@@ -121,6 +121,20 @@ services:
       ZOHO_ACCOUNTS_BASE_URL: https://accounts.zoho.com
       ZOHO_API_BASE_URL: https://www.zohoapis.com
       ZOHO_WEB_REDIRECT_URL: https://erp.rahopremier.id/admin/integrations/zoho
+      ZOHO_REQUIRED_SCOPE_VERSION: 12
+      ZOHO_INVENTORY_SYNC_ENABLED: false
+      ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID:
+      ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_API_NAME:
+      ZOHO_SYNC_DRY_RUN: true
+      ZOHO_SYNC_WORKER_ENABLED: true
+      ZOHO_SYNC_WORKER_INTERVAL_MS: 5000
+      ZOHO_SYNC_BATCH_SIZE: 10
+      ZOHO_SYNC_MAX_ATTEMPTS: 8
+      ZOHO_SYNC_LEASE_MS: 60000
+      WHATSAPP_ENABLED: true
+      WHATSAPP_PROVIDER: BAILEYS
+      WHATSAPP_WORKER_ENABLED: true
+      WHATSAPP_WORKER_INTERVAL_MS: 5000
     depends_on:
       - postgres
       - minio
@@ -141,6 +155,7 @@ services:
       - ZOHO_CLIENT_ID
       - ZOHO_CLIENT_SECRET
       - ZOHO_TOKEN_ENCRYPTION_KEY
+      - WHATSAPP_ENCRYPTION_KEY
     deploy:
       resources:
         limits:
@@ -271,3 +286,5 @@ secrets:
     file: ${RAHO_SECRETS_DIR:-./secrets}/ZOHO_CLIENT_SECRET
   ZOHO_TOKEN_ENCRYPTION_KEY:
     file: ${RAHO_SECRETS_DIR:-./secrets}/ZOHO_TOKEN_ENCRYPTION_KEY
+  WHATSAPP_ENCRYPTION_KEY:
+    file: ${RAHO_SECRETS_DIR:-./secrets}/WHATSAPP_ENCRYPTION_KEY
