@@ -41,6 +41,7 @@ export const envSchema = z.object({
   WHATSAPP_PROVIDER: z.enum(['DISABLED', 'BAILEYS']).default('DISABLED'),
   WHATSAPP_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined, z.string().min(32).optional()),
   WHATSAPP_WORKER_INTERVAL_MS: z.coerce.number().int().min(1_000).default(5_000),
+  WHATSAPP_QR_TIMEOUT_MS: z.coerce.number().int().min(20_000).max(300_000).default(60_000),
 
   ZOHO_CLIENT_ID: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
   ZOHO_CLIENT_SECRET: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),

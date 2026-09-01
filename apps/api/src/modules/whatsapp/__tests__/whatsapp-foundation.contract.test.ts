@@ -59,6 +59,7 @@ describe('WhatsApp session report foundation contract', () => {
     const runtime = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-runtime.ts'), 'utf8');
     const manager = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-connection.manager.ts'), 'utf8');
     const controller = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-connection.controller.ts'), 'utf8');
+    const env = readFileSync(resolve(apiRoot, 'src/config/env.ts'), 'utf8');
     expect(schema).toContain('model WhatsAppConnection');
     expect(schema).toContain('authStateEncrypted String?');
     expect(repository).toContain('encryptWhatsAppValue');
@@ -70,6 +71,8 @@ describe('WhatsApp session report foundation contract', () => {
     expect(manager).toContain("connection.update', async ({ connection, lastDisconnect, qr })");
     expect(manager).toContain('async requestQr(actorId: string)');
     expect(manager).toContain('staleSocket?.end(undefined)');
+    expect(manager).toContain('qrTimeout: env.WHATSAPP_QR_TIMEOUT_MS');
+    expect(env).toContain('WHATSAPP_QR_TIMEOUT_MS: z.coerce.number().int().min(20_000).max(300_000).default(60_000)');
     expect(controller).toContain("res.setHeader('Cache-Control', 'no-store')");
     expect(runtime).toContain('WHATSAPP_WORKER_ENABLED');
   });

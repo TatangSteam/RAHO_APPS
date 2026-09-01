@@ -135,6 +135,7 @@ services:
       WHATSAPP_PROVIDER: BAILEYS
       WHATSAPP_WORKER_ENABLED: true
       WHATSAPP_WORKER_INTERVAL_MS: 5000
+      WHATSAPP_QR_TIMEOUT_MS: 60000
     depends_on:
       - postgres
       - minio

@@ -186,6 +186,8 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       browser: Browsers.ubuntu('RAHO ERP'),
       logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
+      // Baileys otherwise shortens every QR after the first one to 20s.
+      qrTimeout: env.WHATSAPP_QR_TIMEOUT_MS,
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });
