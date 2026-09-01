@@ -1,9 +1,9 @@
 # Development Flow Integrasi WhatsApp Baileys untuk Penyelesaian Sesi Terapi
 
 Status: dalam pengembangan; koneksi, pairing, preview, consent, antrean, dan worker tersedia
-Tanggal: 10 Agustus 2026  
-Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan  
-Integrasi awal: Baileys (WhatsApp Web)  
+Tanggal: 10 Agustus 2026
+Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan
+Integrasi awal: Baileys (WhatsApp Web)
 
 ## Status implementasi
 
