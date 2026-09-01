@@ -62,13 +62,27 @@ members/
 **Responsibilities:**
 - Update member information
 - Validate phone and email uniqueness
-- Soft delete members
+- Deactivate members and their login accounts atomically
 - Audit logging
 
 **Key Methods:**
 - `updateMember()` - Update member data
-- `deleteMember()` - Soft delete member
+- `deleteMember()` - Deactivate member and login account
 - `formatMemberData()` - Format member data
+
+### MemberDestructionService
+**File:** `member-destruction.service.ts`
+
+**Responsibilities:**
+- Preview every member-owned record that will be removed
+- Block deletion of posted clinical, finance, and inventory history
+- Remove draft sessions with stock and voucher rollback
+- Permanently delete eligible member data and storage files
+- Record the destruction audit snapshot
+
+**Key Methods:**
+- `preview()` - Return deletion counts and immutable-data blockers
+- `destroy()` - Execute guarded permanent deletion
 
 ### 4. MemberBranchAccessService
 **File:** `member-branch-access.service.ts`

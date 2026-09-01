@@ -2,7 +2,6 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Gender, IncentiveType, Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { deleteFileByUrl } from '../../../config/minio';
 import {
   cleanMemberName,
   hasMatchingMemberName,
@@ -180,10 +179,13 @@ export class MemberUpdateService {
     // Update in transaction
     const updated = await prisma.$transaction(async (tx) => {
       // Keep using the existing User.email database column for the login identifier.
-      if (requestedLogin !== undefined) {
+      if (requestedLogin !== undefined || data.isActive !== undefined) {
         await tx.user.update({
           where: { id: member.userId },
-          data: { email: requestedLogin }
+          data: {
+            ...(requestedLogin !== undefined && { email: requestedLogin }),
+            ...(data.isActive !== undefined && { isActive: data.isActive }),
+          },
         });
       }
 
@@ -382,117 +384,60 @@ export class MemberUpdateService {
 
   /**
    * Delete member (soft delete by setting isActive to false)
-   * Note: Files in MinIO are NOT deleted during soft delete to preserve audit trail.
-   * Use hardDeleteMember() if you need to permanently delete member and their files.
+   * Files and operational history are preserved. Permanent deletion is handled
+   * exclusively by MemberDestructionService with immutable-data guards.
    */
   async deleteMember(memberId: string, userId: string) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
+      select: {
+        id: true,
+        userId: true,
+        memberNo: true,
+        registrationBranchId: true,
+        isActive: true,
+        user: { select: { isActive: true } },
+      },
     });
 
     if (!member) {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Soft delete by setting isActive to false
-    await prisma.member.update({
-      where: { id: memberId },
-      data: { isActive: false },
+    // Member status and login account must never diverge.
+    await prisma.$transaction(async (tx) => {
+      await tx.member.update({
+        where: { id: memberId },
+        data: { isActive: false },
+      });
+      await tx.user.update({
+        where: { id: member.userId },
+        data: { isActive: false },
+      });
     });
 
     // Audit log
     await logAudit({
       userId,
       branchId: member.registrationBranchId, // Use member's registration branch
-      action: AuditAction.DELETE,
+      action: AuditAction.UPDATE,
       resource: 'Member',
       resourceId: memberId,
-      meta: { memberNo: member.memberNo },
+      entityCode: member.memberNo,
+      description: `Nonaktifkan member ${member.memberNo}`,
+      beforeData: {
+        memberIsActive: member.isActive,
+        userIsActive: member.user.isActive,
+      },
+      afterData: {
+        memberIsActive: false,
+        userIsActive: false,
+      },
+      meta: { memberNo: member.memberNo, action: 'DEACTIVATE_MEMBER' },
     });
     await enqueueContactSafely('MEMBER', memberId);
 
     return { message: 'Member berhasil dinonaktifkan' };
-  }
-
-  /**
-   * Hard delete member and all associated files from MinIO
-   * WARNING: This permanently deletes the member and all their files!
-   * Use with caution - this action cannot be undone.
-   */
-  async hardDeleteMember(memberId: string, userId: string) {
-    const member = await prisma.member.findUnique({
-      where: { id: memberId },
-      include: {
-        documents: true,
-        memberPackages: true,
-        user: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
-
-    if (!member) {
-      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
-    }
-
-    // Delete all member documents from MinIO
-    console.log(`[Member] Hard deleting member ${member.memberNo} and their files...`);
-    
-    let filesDeleted = 0;
-
-    // Delete avatar if exists
-    if (member.user?.profile?.avatarUrl) {
-      console.log(`[Member] Deleting avatar: ${member.user.profile.avatarUrl}`);
-      await deleteFileByUrl(member.user.profile.avatarUrl);
-      filesDeleted++;
-    }
-    
-    for (const doc of member.documents) {
-      if (doc.fileUrl) {
-        console.log(`[Member] Deleting document: ${doc.fileUrl}`);
-        await deleteFileByUrl(doc.fileUrl);
-        filesDeleted++;
-      }
-    }
-
-    // Delete payment proofs from packages
-    for (const pkg of member.memberPackages) {
-      if (pkg.paymentProofUrl) {
-        console.log(`[Member] Deleting package payment proof: ${pkg.paymentProofUrl}`);
-        await deleteFileByUrl(pkg.paymentProofUrl);
-        filesDeleted++;
-      }
-      if (pkg.refundProofUrl) {
-        console.log(`[Member] Deleting package refund proof: ${pkg.refundProofUrl}`);
-        await deleteFileByUrl(pkg.refundProofUrl);
-        filesDeleted++;
-      }
-    }
-
-    // Note: We don't delete the database records here as that would require
-    // handling all foreign key constraints. This method focuses on file cleanup.
-    // For full deletion, use a database cascade delete or manual cleanup.
-
-    // Audit log
-    await logAudit({
-      userId,
-      branchId: member.registrationBranchId,
-      action: AuditAction.DELETE,
-      resource: 'Member',
-      resourceId: memberId,
-      meta: { 
-        memberNo: member.memberNo,
-        action: 'HARD_DELETE',
-        filesDeleted,
-      },
-    });
-
-    return {
-      message: 'Member dan file terkait berhasil dihapus permanen',
-      filesDeleted,
-    };
   }
 
   /**
