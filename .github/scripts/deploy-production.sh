@@ -58,15 +58,22 @@ require_docker_build_space() {
 }
 
 prepare_docker_build_space() {
-  # Prefer retaining the last 24 hours of cache for speed. If the runner is
-  # still below the safety threshold, remove all unused build cache and check
-  # again. Build cache is reproducible and contains no persistent app data.
-  docker builder prune -af --filter 'until=24h'
-  if ! require_docker_build_space; then
-    echo "Recent BuildKit cache is also being reclaimed to recover build space." >&2
-    docker builder prune -af
-    require_docker_build_space
+  # Keep BuildKit/npm cache while disk is healthy. Reclaiming it before every
+  # deployment forces a complete registry download and makes a flaky network
+  # much more likely to break npm ci.
+  if require_docker_build_space; then
+    return 0
   fi
+
+  echo "Docker storage is low; reclaiming build cache older than seven days." >&2
+  docker builder prune -af --filter 'until=168h'
+  if require_docker_build_space; then
+    return 0
+  fi
+
+  echo "Old cache cleanup was insufficient; reclaiming all unused BuildKit cache." >&2
+  docker builder prune -af
+  require_docker_build_space
 }
 
 container_running() {
@@ -176,12 +183,15 @@ build_service() {
   local service="$1"
   prepare_docker_build_space
   echo "Building $service image..."
-  if ! compose build --pull "$service"; then
-    echo "$service build failed. Reclaiming unused BuildKit cache before one clean retry..." >&2
-    docker builder prune -af
-    require_docker_build_space
-    echo "Retrying $service once with --no-cache..." >&2
-    compose build --pull --no-cache "$service"
+  if ! BUILDKIT_PROGRESS=plain compose build --pull "$service"; then
+    echo "$service build failed. Preserving npm/BuildKit cache for one retry..." >&2
+    show_docker_disk_usage >&2
+    if command -v free >/dev/null; then
+      free -h >&2 || true
+    fi
+    prepare_docker_build_space
+    echo "Retrying $service with the packages already downloaded by the first attempt..." >&2
+    BUILDKIT_PROGRESS=plain compose build --pull "$service"
   fi
 }
 
@@ -218,5 +228,5 @@ compose run --rm --no-deps migrate npx prisma migrate status
 deployment_started=0
 trap - ERR
 docker image prune -f || echo "Warning: post-deploy dangling image cleanup failed." >&2
-docker builder prune -af --filter 'until=24h' || echo "Warning: post-deploy BuildKit cleanup failed." >&2
+docker builder prune -af --filter 'until=168h' || echo "Warning: post-deploy BuildKit cleanup failed." >&2
 echo "Deployment completed successfully. Backup: $backup_path"

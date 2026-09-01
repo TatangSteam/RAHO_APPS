@@ -147,4 +147,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker system prune -a -f
+          # Keep recent BuildKit cache so the next deployment does not download
+          # the complete npm dependency graph again. Never prune volumes here.
+          docker image prune -f
+          docker builder prune -af --filter 'until=168h'

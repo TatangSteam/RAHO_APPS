@@ -6,6 +6,8 @@ describe('production deployment workflow safety', () => {
   const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/deploy-main.yml'), 'utf8');
   const deployScript = readFileSync(resolve(repositoryRoot, '.github/scripts/deploy-production.sh'), 'utf8');
   const compose = readFileSync(resolve(repositoryRoot, 'docker-compose.prod.yml'), 'utf8');
+  const apiDockerfile = readFileSync(resolve(repositoryRoot, 'apps/api/Dockerfile'), 'utf8');
+  const webDockerfile = readFileSync(resolve(repositoryRoot, 'apps/web/Dockerfile'), 'utf8');
 
   it('cannot push commits and never performs broad Docker pruning', () => {
     expect(workflow).toMatch(/permissions:\s*\n\s+contents: read/);
@@ -13,24 +15,42 @@ describe('production deployment workflow safety', () => {
     expect(workflow).not.toMatch(/git\s+push/);
     expect(workflow).toContain('RAHO_SECRETS_DIR=$secrets_dir');
     expect(workflow).not.toContain('cp -a');
+    expect(workflow).not.toMatch(/docker\s+system\s+prune/);
     expect(deployScript).not.toMatch(/docker\s+system\s+prune/);
     expect(deployScript).not.toMatch(/docker\s+(container|volume|network)\s+prune/);
-    expect(deployScript).toContain("docker builder prune -af --filter 'until=24h'");
+    expect(deployScript).toContain("docker builder prune -af --filter 'until=168h'");
+    expect(workflow).toContain("docker builder prune -af --filter 'until=168h'");
   });
 
-  it('checks Docker free space before every image build and before a clean retry', () => {
+  it('checks Docker space while preserving recent cache for build retries', () => {
     expect(deployScript).toContain('RAHO_MIN_DOCKER_FREE_KB:-6291456');
     expect(deployScript).toContain('prepare_docker_build_space');
+    const prepareFunction = deployScript.slice(
+      deployScript.indexOf('prepare_docker_build_space()'),
+      deployScript.indexOf('container_running()'),
+    );
+    expect(prepareFunction).toContain('if require_docker_build_space; then');
+    expect(prepareFunction).toContain('return 0');
+    expect(prepareFunction).toContain("docker builder prune -af --filter 'until=168h'");
+
     const buildFunction = deployScript.slice(
       deployScript.indexOf('build_service()'),
       deployScript.indexOf('# Build first:'),
     );
     expect(buildFunction).toContain('prepare_docker_build_space');
-    expect(buildFunction).toContain('require_docker_build_space');
-    expect(buildFunction).toContain('docker builder prune -af');
-    expect(buildFunction.indexOf('docker builder prune -af')).toBeLessThan(
-      buildFunction.lastIndexOf('compose build --pull --no-cache'),
-    );
+    expect(buildFunction).toContain('BUILDKIT_PROGRESS=plain compose build --pull');
+    expect(buildFunction).not.toContain('--no-cache');
+    expect(buildFunction).not.toContain('docker builder prune -af');
+  });
+
+  it('uses persistent npm cache mounts and network retry settings in both images', () => {
+    for (const dockerfile of [apiDockerfile, webDockerfile]) {
+      expect(dockerfile).toContain('--mount=type=cache');
+      expect(dockerfile).toContain('target=/root/.npm');
+      expect(dockerfile).toContain('npm ci --prefer-offline');
+      expect(dockerfile).toContain('npm ci --omit=dev --prefer-offline');
+      expect(dockerfile).toContain('NPM_CONFIG_FETCH_RETRIES=5');
+    }
   });
 
   it('backs up and verifies PostgreSQL before migration and replacement', () => {
