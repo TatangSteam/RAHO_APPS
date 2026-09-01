@@ -29,6 +29,28 @@ services:
     cpus: "0.2"
     networks:
       - raho_network
+  # ── Private OCI/Docker Registry ──────────────────────────
+  registry:
+    image: registry:3
+    container_name: raho-registry
+    restart: unless-stopped
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Registry Realm
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+    volumes:
+      - registry_data:/var/lib/registry
+      - /opt/registry/auth:/auth:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    mem_limit: 256m
+    cpus: "0.5"
+    networks:
+      - raho_network
 
   # ── PostgreSQL 15 ─────────────────────────────────────────
   postgres:
@@ -238,6 +260,8 @@ volumes:
     name: raho_npm_data
   npm_letsencrypt:
     name: raho_npm_letsencrypt
+  registry_data:
+    name: raho_registry_data
 
 networks:
   raho_network:
