@@ -92,6 +92,13 @@ function formatCurrency(value: number | null): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value);
 }
 
+function formatVoucherType(campaign: Voucher['campaign']): string {
+  const benefits: string[] = [];
+  if (campaign.basicSessions > 0) benefits.push(`${campaign.basicSessions}× BASIC`);
+  if (campaign.boosterSessions > 0) benefits.push(`${campaign.boosterSessions}× BOOSTER`);
+  return benefits.join(' + ') || 'Tanpa manfaat';
+}
+
 function cleanVoucherCodeInput(value: string): string {
   return value
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -260,10 +267,10 @@ export default function VoucherPartnershipPage() {
   function renderVoucherTable(vouchers: Voucher[], emptyMessage: string) {
     return (
       <div style={{ overflowX: 'auto', marginTop: 14 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
             <tr style={{ textAlign: 'left', color: 'var(--text-secondary)', fontSize: 12 }}>
-              {['Kode', 'Campaign', 'Penerima', 'NIK', 'Status', 'Lokasi', 'Waktu'].map((item) => (
+              {['Kode', 'Campaign', 'Tipe Voucher', 'Penerima', 'NIK', 'Status', 'Lokasi', 'Waktu'].map((item) => (
                 <th key={item} style={{ padding: '9px 8px', borderBottom: '1px solid var(--border-color)' }}>{item}</th>
               ))}
             </tr>
@@ -273,6 +280,7 @@ export default function VoucherPartnershipPage() {
               <tr key={voucher.id}>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}><strong>{voucher.maskedCode}</strong></td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.campaign.code}</td>
+                <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}><span style={{ display: 'inline-block', border: '1px solid rgba(245,158,11,.4)', background: 'rgba(245,158,11,.1)', color: '#f59e0b', borderRadius: 999, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>{formatVoucherType(voucher.campaign)}</span></td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.recipientName}</td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.maskedNik}</td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.status}</td>

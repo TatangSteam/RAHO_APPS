@@ -106,6 +106,8 @@ describe('Voucher Partnership foundation', () => {
     expect(middleware).not.toContain("pathname.startsWith('/extra/vouchers/')");
     expect(page).toContain('Klaim Voucher');
     expect(page).toContain('Riwayat Klaim');
+    expect(page).toContain('Tipe Voucher');
+    expect(page).toContain('formatVoucherType');
     expect(page).toContain("view === 'registry'");
     expect(page).toContain("view === 'campaigns'");
     expect(page).toContain("view === 'locations'");
