@@ -11,7 +11,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope, FileSpreadsheet, Search, X
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope, FileSpreadsheet, Search, X,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 // Import CRUD Modals
@@ -77,6 +78,15 @@ interface Member {
   hasInformedConsent?: boolean;
   photoUrl?: string;
 }
+
+interface MemberPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+const MEMBER_PAGE_SIZE = 100;
 
 interface InventoryItem {
   id: string;
@@ -257,6 +267,13 @@ export default function BranchDetailPage() {
   const [memberBranchFilter, setMemberBranchFilter] = useState<'all' | 'registered' | 'lintas'>('all');
   const [memberSearch, setMemberSearch] = useState('');
   const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('');
+  const [memberPage, setMemberPage] = useState(1);
+  const [memberPagination, setMemberPagination] = useState<MemberPagination>({
+    page: 1,
+    limit: MEMBER_PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
   const [showMemberImport, setShowMemberImport] = useState(false);
 
   const normalizeMemberSearchText = (value: unknown) =>
@@ -295,6 +312,14 @@ export default function BranchDetailPage() {
 
     return matchesBranch && matchesSearch;
   });
+
+  const memberPageStart = memberPagination.total === 0
+    ? 0
+    : ((memberPagination.page - 1) * memberPagination.limit) + 1;
+  const memberPageEnd = Math.min(
+    memberPagination.page * memberPagination.limit,
+    memberPagination.total,
+  );
 
   // CRUD Modal states
   const [crudModal, setCrudModal] = useState<CrudModalState>({ type: null, action: 'create' });
@@ -342,6 +367,7 @@ export default function BranchDetailPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
+      setMemberPage(1);
       setDebouncedMemberSearch(memberSearch.trim());
     }, 350);
 
@@ -370,25 +396,30 @@ export default function BranchDetailPage() {
       setTabLoading(true);
 
       if (activeTab === 'members') {
-        let response = await branchesApi.getBranchMembers(branchId, {
-          page: 1,
-          limit: 100,
+        const response = await branchesApi.getBranchMembers(branchId, {
+          page: memberPage,
+          limit: MEMBER_PAGE_SIZE,
           search: debouncedMemberSearch || undefined,
         });
 
-        let membersResult = response.data.data;
-        let membersData = membersResult?.members || [];
-
-        if (debouncedMemberSearch && Array.isArray(membersData) && membersData.length === 0) {
-          response = await branchesApi.getBranchMembers(branchId, {
-            page: 1,
-            limit: 1000,
-          });
-          membersResult = response.data.data;
-          membersData = membersResult?.members || [];
-        }
+        const membersResult = response.data.data;
+        const membersData = membersResult?.members || [];
+        const pagination = membersResult?.pagination;
+        const totalPages = Math.max(Number(pagination?.totalPages) || 1, 1);
 
         setMembers(Array.isArray(membersData) ? membersData : []);
+        setMemberPagination({
+          page: Number(pagination?.page) || memberPage,
+          limit: Number(pagination?.limit) || MEMBER_PAGE_SIZE,
+          total: Number(pagination?.total) || 0,
+          totalPages,
+        });
+
+        // A deletion can make the former last page disappear. Move to the
+        // new last page and let the effect reload it.
+        if (memberPage > totalPages) {
+          setMemberPage(totalPages);
+        }
       } else if (activeTab === 'inventory') {
         const response = await inventoryApi.getInventoryItems(branchId, {});
         const inventoryData = response.data.data;
@@ -411,7 +442,10 @@ export default function BranchDetailPage() {
       assertCaughtError(error);
       devError(`Error loading ${activeTab} data:`, error);
       showToast.error(`Gagal memuat data ${activeTab}`);
-      if (activeTab === 'members') setMembers([]);
+      if (activeTab === 'members') {
+        setMembers([]);
+        setMemberPagination({ page: memberPage, limit: MEMBER_PAGE_SIZE, total: 0, totalPages: 1 });
+      }
       else if (activeTab === 'inventory') setInventory([]);
       else if (activeTab === 'staff') setStaff([]);
       else if (activeTab === 'managers') setManagers([]);
@@ -419,7 +453,7 @@ export default function BranchDetailPage() {
     } finally {
       setTabLoading(false);
     }
-  }, [activeTab, branchId, debouncedMemberSearch]);
+  }, [activeTab, branchId, debouncedMemberSearch, memberPage]);
 
   useEffect(() => {
     if (canAccessBranch) {
@@ -788,6 +822,7 @@ export default function BranchDetailPage() {
                           onClick={() => {
                             setMemberSearch('');
                             setDebouncedMemberSearch('');
+                            setMemberPage(1);
                           }}
                           className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
                           aria-label="Hapus pencarian member"
@@ -802,6 +837,7 @@ export default function BranchDetailPage() {
                         const value = e.target.value;
                         if (value === 'all' || value === 'registered' || value === 'lintas') {
                           setMemberBranchFilter(value);
+                          setMemberPage(1);
                         }
                       }}
                       className="px-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
@@ -842,11 +878,48 @@ export default function BranchDetailPage() {
                   />
                 )}
 
-                {filteredMembers.length > 0 && (
-                  <div className="mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg text-sm text-neutral-600 dark:text-neutral-400">
-                    Menampilkan <strong className="text-blue-600 dark:text-blue-400">{filteredMembers.length}</strong> dari <strong className="text-blue-600 dark:text-blue-400">{members.length}</strong> member
-                    {memberBranchFilter === 'registered' && ' yang terdaftar di cabang ini'}
-                    {memberBranchFilter === 'lintas' && ' lintas cabang'}
+                {memberPagination.total > 0 && (
+                  <div className="mb-4 flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-neutral-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      {memberBranchFilter === 'all' ? (
+                        <>
+                          Menampilkan <strong className="text-blue-600 dark:text-blue-400">{memberPageStart}–{memberPageEnd}</strong> dari <strong className="text-blue-600 dark:text-blue-400">{memberPagination.total}</strong> member
+                        </>
+                      ) : (
+                        <>
+                          Menampilkan <strong className="text-blue-600 dark:text-blue-400">{filteredMembers.length}</strong> member pada halaman ini dari rentang <strong className="text-blue-600 dark:text-blue-400">{memberPageStart}–{memberPageEnd}</strong> / <strong className="text-blue-600 dark:text-blue-400">{memberPagination.total}</strong>
+                        </>
+                      )}
+                      {memberBranchFilter === 'registered' && ' yang terdaftar di cabang ini'}
+                      {memberBranchFilter === 'lintas' && ' lintas cabang'}
+                    </div>
+                    {memberPagination.totalPages > 1 && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          title="Halaman sebelumnya"
+                          aria-label="Halaman member sebelumnya"
+                          onClick={() => setMemberPage((current) => Math.max(1, current - 1))}
+                          disabled={tabLoading || memberPagination.page <= 1}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-blue-500/30 dark:bg-neutral-900 dark:text-blue-300 dark:hover:bg-blue-500/20"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="min-w-20 text-center font-medium text-blue-700 dark:text-blue-300">
+                          {memberPagination.page} / {memberPagination.totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          title="Halaman berikutnya"
+                          aria-label="Halaman member berikutnya"
+                          onClick={() => setMemberPage((current) => Math.min(memberPagination.totalPages, current + 1))}
+                          disabled={tabLoading || memberPagination.page >= memberPagination.totalPages}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-blue-500/30 dark:bg-neutral-900 dark:text-blue-300 dark:hover:bg-blue-500/20"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -867,6 +940,34 @@ export default function BranchDetailPage() {
                     memberName: member.fullName,
                   })}
                 />
+
+                {memberPagination.totalPages > 1 && (
+                  <div className="mt-4 flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm dark:border-neutral-800 dark:bg-neutral-900/50 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-neutral-600 dark:text-neutral-400">
+                      Halaman <strong className="text-neutral-900 dark:text-white">{memberPagination.page}</strong> dari <strong className="text-neutral-900 dark:text-white">{memberPagination.totalPages}</strong>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMemberPage((current) => Math.max(1, current - 1))}
+                        disabled={tabLoading || memberPagination.page <= 1}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                      >
+                        <ChevronLeft size={16} />
+                        Sebelumnya
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberPage((current) => Math.min(memberPagination.totalPages, current + 1))}
+                        disabled={tabLoading || memberPagination.page >= memberPagination.totalPages}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                      >
+                        Berikutnya
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
