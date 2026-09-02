@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Activity, Package, Boxes,
-  Bell, MessageSquare, MessageCircle, ChevronLeft, X,
+  Bell, MessageSquare, MessageCircle, ChevronLeft, ChevronDown, X,
   LogOut, ClipboardList, ClipboardCheck, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
@@ -41,6 +41,12 @@ interface MenuItem {
 interface MenuGroup {
   title?: string;
   items: MenuItem[];
+  dropdown?: {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    activePrefix: string;
+  };
 }
 
 // ── Menu Config ───────────────────────────────────────────────
@@ -346,6 +352,12 @@ const MENU_GROUPS: MenuGroup[] = [
   },
   {
     title: 'Ekstra',
+    dropdown: {
+      key: 'voucher-partnership',
+      label: 'Voucher Partnership',
+      icon: <TicketPercent size={20} />,
+      activePrefix: '/extra/vouchers',
+    },
     items: [
       {
         label: 'Klaim Voucher',
@@ -454,6 +466,12 @@ export function Sidebar({
   const { showGlobalLoading, hideGlobalLoading } = useLoading();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [openMenuGroups, setOpenMenuGroups] = useState<Set<string>>(() => {
+    const activeGroups = MENU_GROUPS
+      .filter((group) => group.dropdown && pathname.startsWith(group.dropdown.activePrefix))
+      .map((group) => group.dropdown!.key);
+    return new Set(activeGroups);
+  });
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayShownRef = useRef(false);
 
@@ -464,6 +482,20 @@ export function Sidebar({
       setPendingHref(null);
     }
   }, [pathname, pendingHref]);
+
+  useEffect(() => {
+    const activeGroupKeys = MENU_GROUPS
+      .filter((group) => group.dropdown && pathname.startsWith(group.dropdown.activePrefix))
+      .map((group) => group.dropdown!.key);
+
+    if (activeGroupKeys.length === 0) return;
+
+    setOpenMenuGroups((current) => {
+      const next = new Set(current);
+      activeGroupKeys.forEach((key) => next.add(key));
+      return next;
+    });
+  }, [pathname]);
 
   useEffect(() => {
     if (loadingTimerRef.current) {
@@ -588,6 +620,73 @@ export function Sidebar({
     }
 
     setPendingHref(href);
+  };
+
+  const renderMenuItem = (item: MenuItem, nested = false) => {
+    const badge = getItemBadge(item);
+    const pending = pendingHref === item.href;
+
+    return (
+      <div
+        key={item.href}
+        className="relative"
+        onMouseEnter={() => collapsed && setHoveredItem(item.href)}
+        onMouseLeave={() => collapsed && setHoveredItem(null)}
+      >
+        <Link
+          href={item.href}
+          onClick={(event) => handleNavClick(item.href, event)}
+          className={clsx(
+            'flex items-center gap-3 rounded-xl text-sm font-medium',
+            'transition-all duration-200 relative select-none active:scale-[0.98]',
+            collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
+            nested && !collapsed && 'min-h-9 py-2 pl-3 text-[13px]',
+            pending
+              ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 shadow-inner cursor-wait'
+              : isActive(item.href)
+              ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
+          )}
+          aria-busy={pending}
+        >
+          <span className={clsx('flex items-center justify-center flex-shrink-0', nested && !collapsed && 'scale-90')}>
+            {pending ? <Loader2 size={20} className="animate-spin" /> : item.icon}
+          </span>
+          <span className={clsx(collapsed ? 'lg:hidden' : '')}>
+            {item.label}
+          </span>
+          {pending && !collapsed && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300">
+              Memuat
+              <span className="inline-flex gap-0.5">
+                <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+                <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+              </span>
+            </span>
+          )}
+          {badge && !collapsed && !pending && (
+            <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
+              {badge}
+            </span>
+          )}
+          {badge && collapsed && !pending && (
+            <span className="hidden lg:flex absolute right-1.5 top-1.5 min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+              {badge}
+            </span>
+          )}
+          {(isActive(item.href) || pending) && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
+          )}
+        </Link>
+        {collapsed && hoveredItem === item.href && (
+          <Tooltip>
+            {item.label}
+            {badge && <span className="ml-1.5 text-[10px] opacity-80">({badge})</span>}
+          </Tooltip>
+        )}
+      </div>
+    );
   };
 
   const sidebarContent = (
@@ -775,71 +874,68 @@ export function Sidebar({
                 </p>
               )}
               {collapsed && gi > 0 && <div className="hidden lg:block h-px bg-neutral-200 dark:bg-neutral-800 my-2 mx-1" />}
-              {visibleItems.map((item) => {
-                const badge = getItemBadge(item);
-                const pending = pendingHref === item.href;
+              {group.dropdown ? (() => {
+                const dropdown = group.dropdown;
+                const dropdownOpen = openMenuGroups.has(dropdown.key);
+                const dropdownActive = pathname.startsWith(dropdown.activePrefix);
 
                 return (
-                  <div 
-                    key={item.href}
+                  <div
                     className="relative"
-                    onMouseEnter={() => collapsed && setHoveredItem(item.href)}
+                    onMouseEnter={() => collapsed && setHoveredItem(dropdown.key)}
                     onMouseLeave={() => collapsed && setHoveredItem(null)}
                   >
-                    <Link
-                      href={item.href}
-                      onClick={(event) => handleNavClick(item.href, event)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (collapsed) {
+                          onToggle();
+                          setOpenMenuGroups((current) => new Set(current).add(dropdown.key));
+                          return;
+                        }
+
+                        setOpenMenuGroups((current) => {
+                          const next = new Set(current);
+                          if (next.has(dropdown.key)) next.delete(dropdown.key);
+                          else next.add(dropdown.key);
+                          return next;
+                        });
+                      }}
                       className={clsx(
-                        'flex items-center gap-3 rounded-xl text-sm font-medium',
-                        'transition-all duration-200 relative select-none active:scale-[0.98]',
-                        collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
-                        pending
-                          ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 shadow-inner cursor-wait'
-                          : isActive(item.href)
-                          ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
-                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
+                        'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98]',
+                        collapsed && 'lg:justify-center lg:p-3',
+                        dropdownActive
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white'
                       )}
-                      aria-busy={pending}
+                      aria-expanded={dropdownOpen}
+                      aria-controls={`sidebar-group-${dropdown.key}`}
                     >
-                      <span className="flex items-center justify-center flex-shrink-0">
-                        {pending ? <Loader2 size={20} className="animate-spin" /> : item.icon}
-                      </span>
-                      <span className={clsx(collapsed ? 'lg:hidden' : '')}>
-                        {item.label}
-                      </span>
-                      {pending && !collapsed && (
-                        <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300">
-                          Memuat
-                          <span className="inline-flex gap-0.5">
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
-                          </span>
-                        </span>
+                      <span className="flex flex-shrink-0 items-center justify-center">{dropdown.icon}</span>
+                      <span className={clsx('truncate', collapsed && 'lg:hidden')}>{dropdown.label}</span>
+                      {!collapsed && (
+                        <ChevronDown
+                          size={16}
+                          className={clsx('ml-auto flex-shrink-0 transition-transform duration-200', dropdownOpen && 'rotate-180')}
+                        />
                       )}
-                      {badge && !collapsed && !pending && (
-                        <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
-                          {badge}
-                        </span>
-                      )}
-                      {badge && collapsed && !pending && (
-                        <span className="hidden lg:flex absolute right-1.5 top-1.5 min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
-                          {badge}
-                        </span>
-                      )}
-                      {(isActive(item.href) || pending) && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
-                      )}
-                    </Link>
-                    {collapsed && hoveredItem === item.href && (
-                      <Tooltip>
-                        {item.label}
-                        {badge && <span className="ml-1.5 text-[10px] opacity-80">({badge})</span>}
-                      </Tooltip>
+                    </button>
+
+                    {!collapsed && dropdownOpen && (
+                      <div
+                        id={`sidebar-group-${dropdown.key}`}
+                        className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-neutral-200 pl-2 dark:border-neutral-800"
+                      >
+                        {visibleItems.map((item) => renderMenuItem(item, true))}
+                      </div>
+                    )}
+
+                    {collapsed && hoveredItem === dropdown.key && (
+                      <Tooltip>{dropdown.label}</Tooltip>
                     )}
                   </div>
                 );
-              })}
+              })() : visibleItems.map((item) => renderMenuItem(item))}
             </div>
           );
         })}
