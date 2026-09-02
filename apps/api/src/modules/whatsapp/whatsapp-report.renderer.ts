@@ -18,6 +18,7 @@ export async function renderSessionReportImage(
   snapshot: SessionReportSnapshot,
   sourcePhoto?: Buffer,
   backgroundKey?: SessionReportBackgroundKey,
+  customBackground?: Buffer,
 ): Promise<Buffer> {
   const theme = getSessionReportBackground(backgroundKey);
   const photo = sourcePhoto
@@ -29,7 +30,7 @@ export async function renderSessionReportImage(
 
   const overlay = Buffer.from(`
     <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="1080" height="1080" fill="${theme.canvas}"/>
+      <rect width="1080" height="1080" fill="${theme.canvas}" fill-opacity="${customBackground ? '0.34' : '1'}"/>
       <g opacity="${theme.patternOpacity}" fill="none" stroke="${theme.accent}" stroke-width="4">
         <circle cx="90" cy="890" r="52"/><circle cx="205" cy="950" r="25"/>
         <path d="M35 835L145 945M145 835L35 945M270 835c55 0 55 95 110 95"/>
@@ -51,7 +52,11 @@ export async function renderSessionReportImage(
       <text x="540" y="1061" text-anchor="middle" font-family="Arial" font-size="22" fill="#ffffff">Laporan sesi terapi • Rahasia dan hanya untuk penerima</text>
     </svg>`);
 
-  return sharp({ create: { width: WIDTH, height: HEIGHT, channels: 4, background: '#ffffff' } })
+  const canvas = customBackground
+    ? sharp(customBackground).rotate().resize(WIDTH, HEIGHT, { fit: 'cover', position: 'centre' })
+    : sharp({ create: { width: WIDTH, height: HEIGHT, channels: 4, background: '#ffffff' } });
+
+  return canvas
     .composite([
       { input: overlay, left: 0, top: 0 },
       { input: photo, left: 465, top: 298 },

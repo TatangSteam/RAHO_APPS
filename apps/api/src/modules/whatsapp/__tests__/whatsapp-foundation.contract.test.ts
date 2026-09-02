@@ -83,8 +83,11 @@ describe('WhatsApp session report foundation contract', () => {
     const report = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-report.service.ts'), 'utf8');
     expect(routes).toContain('authorize([Role.SUPER_ADMIN])');
     expect(routes).toContain("router.put('/config'");
+    expect(routes).toContain("router.post('/config/background', upload.single('background')");
     expect(manager).toContain('updateDefaultBackground');
-    expect(report).toContain('configuredBackgroundKey');
+    expect(manager).toContain('uploadCustomBackground');
+    expect(manager).toContain('CUSTOM_BACKGROUND_SIZE = 1080');
+    expect(report).toContain('configuredBackground');
     expect(report).toContain("stale client's selection");
   });
 

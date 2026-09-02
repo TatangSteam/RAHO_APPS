@@ -26,11 +26,32 @@ export class PackagesController {
       const { memberId } = req.params;
       const data = assignPackageSchema.parse(req.body);
 
-      const branchId = req.user?.branchId;
+      let branchId = req.user?.branchId;
       const userId = req.user?.userId;
 
-      if (!branchId || !userId) {
+      if (!userId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      // A Super Admin can operate across every branch. Package pricing on the
+      // member page is loaded from the member's registration branch, so the
+      // resulting package, invoice, stock, and revenue records must use that
+      // same branch instead of the Super Admin account's optional home branch.
+      if (req.user.role === 'SUPER_ADMIN') {
+        const member = await prisma.member.findUnique({
+          where: { id: memberId },
+          select: { registrationBranchId: true },
+        });
+
+        if (!member) {
+          throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+        }
+
+        branchId = member.registrationBranchId;
+      }
+
+      if (!branchId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
       }
 
       const result = await packagesService.assignPackage(memberId, data, branchId, userId);

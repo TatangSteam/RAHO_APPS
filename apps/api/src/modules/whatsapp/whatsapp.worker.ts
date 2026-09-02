@@ -8,10 +8,12 @@ import type { SessionReportBackgroundKey } from './whatsapp-backgrounds';
 import type { WhatsAppProvider } from './whatsapp-provider';
 import axios from 'axios';
 import { env } from '@config/env';
+import { downloadFile } from '@config/minio';
 
 interface EncryptedDeliveryPayload {
   snapshot: SessionReportSnapshot;
   backgroundKey: SessionReportBackgroundKey;
+  backgroundObjectKey?: string;
   photoUrl?: string | null;
 }
 
@@ -97,7 +99,15 @@ export class WhatsAppDeliveryWorker {
       const payload = JSON.parse(decryptWhatsAppValue(delivery.payloadEncrypted)) as EncryptedDeliveryPayload;
       const recipient = decryptWhatsAppValue(delivery.recipientEncrypted);
       const photo = await loadPhoto(payload.photoUrl);
-      const image = await renderSessionReportImage(payload.snapshot, photo, payload.backgroundKey);
+      const customBackground = payload.backgroundObjectKey
+        ? await downloadFile(payload.backgroundObjectKey, 5 * 1024 * 1024)
+        : undefined;
+      const image = await renderSessionReportImage(
+        payload.snapshot,
+        photo,
+        payload.backgroundKey,
+        customBackground,
+      );
       const result = await this.provider.sendImage({
         recipient,
         image,

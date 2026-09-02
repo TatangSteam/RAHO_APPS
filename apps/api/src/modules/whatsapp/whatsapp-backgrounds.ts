@@ -3,6 +3,7 @@ export const SESSION_REPORT_BACKGROUND_KEYS = [
   'HEALTH_GREEN',
   'PREMIUM_GOLD',
   'CLEAN_LIGHT',
+  'CUSTOM',
 ] as const;
 
 export type SessionReportBackgroundKey = typeof SESSION_REPORT_BACKGROUND_KEYS[number];
@@ -36,6 +37,10 @@ export const SESSION_REPORT_BACKGROUNDS: Record<SessionReportBackgroundKey, Sess
   CLEAN_LIGHT: {
     key: 'CLEAN_LIGHT', name: 'Minimal Terang', canvas: '#f6f7f9', header: '#253142', accent: '#52667d',
     text: '#1f2937', mutedText: '#6b7280', card: '#ffffff', cardBorder: '#d9dee5', patternOpacity: 0.04,
+  },
+  CUSTOM: {
+    key: 'CUSTOM', name: 'Upload Sendiri', canvas: '#f5f5f4', header: '#253142', accent: '#52667d',
+    text: '#1f2937', mutedText: '#6b7280', card: '#ffffff', cardBorder: '#d9dee5', patternOpacity: 0,
   },
 };
 

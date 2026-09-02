@@ -22,6 +22,7 @@ import {
   type NormalizedAddOnAssignment,
 } from './package-assignment.helpers';
 import { reserveAddOnStockInTransaction } from './add-on-inventory.service';
+import { getAccessibleBranchIds } from '../../iam/authorization.service';
 
 type NormalizedPaymentPlan = {
   type: 'FULL_PAYMENT' | 'INSTALLMENT';
@@ -166,8 +167,15 @@ export class PackageAssignmentService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Check if staff has access to this member
+    // Global branch access (normally SUPER_ADMIN) bypasses the member/branch
+    // intersection check. The controller still resolves the transaction branch
+    // to the member's registration branch for direct Super Admin assignments.
+    const accessibleBranchIds = await getAccessibleBranchIds(userId);
+    const hasGlobalBranchAccess = accessibleBranchIds === null;
+
+    // Check if scoped staff has access to this member
     const hasAccess =
+      hasGlobalBranchAccess ||
       member.registrationBranchId === branchId ||
       member.branchAccesses.some((access) => access.branchId === branchId);
 

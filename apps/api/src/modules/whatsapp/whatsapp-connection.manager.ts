@@ -4,6 +4,7 @@ import makeWASocket, {
   type WASocket,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
+import sharp from 'sharp';
 import { WhatsAppConnectionStatus } from '@prisma/client';
 import { env } from '@config/env';
 import { logger } from '@lib/logger';
@@ -14,8 +15,14 @@ import { maskWhatsAppNumber } from './whatsapp-phone.util';
 import { GLOBAL_WHATSAPP_CONNECTION_ID, loadDatabaseAuthState } from './whatsapp-auth-state.repository';
 import type { SessionReportBackgroundKey } from './whatsapp-backgrounds';
 import { logAudit } from '@utils/auditLog';
+import { uploadFile } from '@config/minio';
 
 const SYSTEM_ACTOR = 'SYSTEM';
+const CUSTOM_BACKGROUND_KEY = 'CUSTOM' as const;
+const CUSTOM_BACKGROUND_SIZE = 1080;
+const CUSTOM_BACKGROUND_MIN_DIMENSION = 720;
+const CUSTOM_BACKGROUND_MAX_BYTES = 5 * 1024 * 1024;
+const CUSTOM_BACKGROUND_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : 'Koneksi WhatsApp terputus';
@@ -54,6 +61,13 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
         lastDisconnectedAt: true,
         lastErrorSanitized: true,
         defaultBackgroundKey: true,
+        customBackgroundUrl: true,
+        customBackgroundObjectKey: true,
+        customBackgroundFileName: true,
+        customBackgroundMimeType: true,
+        customBackgroundFileSize: true,
+        customBackgroundWidth: true,
+        customBackgroundHeight: true,
         updatedAt: true,
       },
     });
@@ -65,7 +79,18 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       // QR is intentionally ephemeral and is only exposed by the
       // SUPER_ADMIN-protected connection status endpoint.
       qrCode: this.connected ? null : this.qrCode,
-      connection: row ?? { status: WhatsAppConnectionStatus.DISCONNECTED },
+      connection: row ? {
+        ...row,
+        customBackgroundObjectKey: undefined,
+        customBackground: row.customBackgroundUrl ? {
+          url: row.customBackgroundUrl,
+          fileName: row.customBackgroundFileName,
+          mimeType: row.customBackgroundMimeType,
+          fileSize: row.customBackgroundFileSize,
+          width: row.customBackgroundWidth,
+          height: row.customBackgroundHeight,
+        } : null,
+      } : { status: WhatsAppConnectionStatus.DISCONNECTED },
     };
   }
 
@@ -80,6 +105,13 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       },
       update: {},
     });
+    if (backgroundKey === CUSTOM_BACKGROUND_KEY && !before.customBackgroundObjectKey) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_CUSTOM_BACKGROUND_REQUIRED',
+        message: 'Upload background custom terlebih dahulu sebelum memilihnya.',
+      };
+    }
     const updated = await prisma.whatsAppConnection.update({
       where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
       data: { defaultBackgroundKey: backgroundKey, updatedBy: actorId },
@@ -94,6 +126,113 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
       afterData: { defaultBackgroundKey: updated.defaultBackgroundKey },
       description: `Background laporan WhatsApp diubah menjadi ${backgroundKey}.`,
     });
+  }
+
+  async uploadCustomBackground(file: Express.Multer.File, actorId: string) {
+    if (!CUSTOM_BACKGROUND_MIME_TYPES.has(file.mimetype)) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_BACKGROUND_INVALID_TYPE',
+        message: 'Background hanya menerima JPG, PNG, atau WebP.',
+      };
+    }
+    if (file.size > CUSTOM_BACKGROUND_MAX_BYTES) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_BACKGROUND_TOO_LARGE',
+        message: 'Ukuran background maksimal 5 MB.',
+      };
+    }
+
+    const metadata = await sharp(file.buffer).rotate().metadata();
+    if (!metadata.width || !metadata.height) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_BACKGROUND_INVALID_IMAGE',
+        message: 'Dimensi gambar tidak dapat dibaca.',
+      };
+    }
+    if (metadata.width < CUSTOM_BACKGROUND_MIN_DIMENSION || metadata.height < CUSTOM_BACKGROUND_MIN_DIMENSION) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_BACKGROUND_TOO_SMALL',
+        message: `Resolusi minimal ${CUSTOM_BACKGROUND_MIN_DIMENSION}×${CUSTOM_BACKGROUND_MIN_DIMENSION} px.`,
+      };
+    }
+
+    const normalized = await sharp(file.buffer)
+      .rotate()
+      .resize(CUSTOM_BACKGROUND_SIZE, CUSTOM_BACKGROUND_SIZE, { fit: 'cover', position: 'centre' })
+      .webp({ quality: 90 })
+      .toBuffer();
+    const objectKey = `uploads/whatsapp/backgrounds/${Date.now()}-${actorId}.webp`;
+    const uploaded = await uploadFile(normalized, objectKey, 'image/webp');
+    const before = await prisma.whatsAppConnection.findUnique({
+      where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
+      select: { defaultBackgroundKey: true, customBackgroundUrl: true },
+    });
+    const updated = await prisma.whatsAppConnection.upsert({
+      where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
+      create: {
+        id: GLOBAL_WHATSAPP_CONNECTION_ID,
+        defaultBackgroundKey: CUSTOM_BACKGROUND_KEY,
+        customBackgroundUrl: uploaded.url,
+        customBackgroundObjectKey: objectKey,
+        customBackgroundFileName: file.originalname,
+        customBackgroundMimeType: 'image/webp',
+        customBackgroundFileSize: normalized.length,
+        customBackgroundWidth: CUSTOM_BACKGROUND_SIZE,
+        customBackgroundHeight: CUSTOM_BACKGROUND_SIZE,
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+      update: {
+        defaultBackgroundKey: CUSTOM_BACKGROUND_KEY,
+        customBackgroundUrl: uploaded.url,
+        customBackgroundObjectKey: objectKey,
+        customBackgroundFileName: file.originalname,
+        customBackgroundMimeType: 'image/webp',
+        customBackgroundFileSize: normalized.length,
+        customBackgroundWidth: CUSTOM_BACKGROUND_SIZE,
+        customBackgroundHeight: CUSTOM_BACKGROUND_SIZE,
+        updatedBy: actorId,
+      },
+      select: {
+        customBackgroundUrl: true,
+        customBackgroundFileName: true,
+        customBackgroundMimeType: true,
+        customBackgroundFileSize: true,
+        customBackgroundWidth: true,
+        customBackgroundHeight: true,
+      },
+    });
+    await logAudit({
+      userId: actorId,
+      action: 'UPDATE',
+      module: 'WHATSAPP',
+      resource: 'WhatsAppConnection',
+      resourceId: GLOBAL_WHATSAPP_CONNECTION_ID,
+      beforeData: {
+        defaultBackgroundKey: before?.defaultBackgroundKey,
+        hadCustomBackground: Boolean(before?.customBackgroundUrl),
+      },
+      afterData: {
+        defaultBackgroundKey: CUSTOM_BACKGROUND_KEY,
+        fileSize: updated.customBackgroundFileSize,
+        width: updated.customBackgroundWidth,
+        height: updated.customBackgroundHeight,
+      },
+      description: 'Background custom laporan WhatsApp diunggah.',
+    });
+    return {
+      key: CUSTOM_BACKGROUND_KEY,
+      url: updated.customBackgroundUrl,
+      fileName: updated.customBackgroundFileName,
+      mimeType: updated.customBackgroundMimeType,
+      fileSize: updated.customBackgroundFileSize,
+      width: updated.customBackgroundWidth,
+      height: updated.customBackgroundHeight,
+    };
   }
 
   async start(actorId = SYSTEM_ACTOR): Promise<void> {

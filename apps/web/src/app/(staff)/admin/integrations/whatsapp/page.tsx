@@ -1,14 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Image as ImageIcon, LogOut, MessageCircle, QrCode, RefreshCw, RotateCcw, Send, ServerCog, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Image as ImageIcon, LogOut, MessageCircle, QrCode, RefreshCw, RotateCcw, Send, ServerCog, ShieldCheck, Upload } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 
-type BackgroundKey = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GOLD' | 'CLEAN_LIGHT';
+type BackgroundKey = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GOLD' | 'CLEAN_LIGHT' | 'CUSTOM';
+type CustomBackground = {
+  url: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  width?: number | null;
+  height?: number | null;
+};
 type StatusData = {
   enabled: boolean;
   provider: string;
@@ -19,6 +27,7 @@ type StatusData = {
     status: string;
     phoneMasked?: string | null;
     defaultBackgroundKey?: BackgroundKey;
+    customBackground?: CustomBackground | null;
     lastConnectedAt?: string | null;
     lastErrorSanitized?: string | null;
   };
@@ -64,6 +73,9 @@ export default function WhatsAppSettingsPage() {
   const qrRequestStarted = useRef(false);
   const [deliveryData, setDeliveryData] = useState<DeliveryData>({ deliveries: [], summary: {}, pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
   const [deliveryFilter, setDeliveryFilter] = useState('');
+  const [customFile, setCustomFile] = useState<File | null>(null);
+  const [customPreview, setCustomPreview] = useState<string | null>(null);
+  const [customDimensions, setCustomDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const load = useCallback(async () => {
     const [connectionResponse, deliveryResponse] = await Promise.all([
@@ -87,6 +99,50 @@ export default function WhatsAppSettingsPage() {
       assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || error.message || 'Proses gagal');
     } finally { setBusy(false); }
+  };
+
+  const chooseCustomBackground = async (file?: File) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showToast.error('Format harus JPG, PNG, atau WebP.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast.error('Ukuran background maksimal 5 MB.');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      if (image.naturalWidth < 720 || image.naturalHeight < 720) {
+        URL.revokeObjectURL(previewUrl);
+        showToast.error('Resolusi minimal background adalah 720×720 px.');
+        return;
+      }
+      if (customPreview) URL.revokeObjectURL(customPreview);
+      setCustomFile(file);
+      setCustomPreview(previewUrl);
+      setCustomDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      showToast.error('File gambar tidak dapat dibaca.');
+    };
+    image.src = previewUrl;
+  };
+
+  const uploadCustomBackground = async () => {
+    if (!customFile) return;
+    const form = new FormData();
+    form.append('background', customFile);
+    await perform(async () => {
+      await api.post('/integrations/whatsapp/config/background', form);
+      if (customPreview) URL.revokeObjectURL(customPreview);
+      setCustomFile(null);
+      setCustomPreview(null);
+      setCustomDimensions(null);
+      setBackground('CUSTOM');
+    }, 'Background custom diunggah dan dipakai');
   };
 
   const connected = status?.ready === true;
@@ -259,8 +315,42 @@ export default function WhatsAppSettingsPage() {
                 <div style={{ padding: 9, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 650 }}>{item.name}{background === item.key && <CheckCircle2 size={15} color="#22c55e" />}</div>
               </button>
             ))}
+            {(status?.connection.customBackground || customPreview) && (
+              <button type="button" onClick={() => setBackground('CUSTOM')} style={{ padding: 0, overflow: 'hidden', borderRadius: 12, border: background === 'CUSTOM' ? '2px solid #22c55e' : '1px solid var(--surface-border)', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
+                <div style={{ height: 78, backgroundImage: `linear-gradient(rgba(255,255,255,.15),rgba(255,255,255,.15)),url(${customPreview || status?.connection.customBackground?.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                <div style={{ padding: 9, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 650 }}>Upload Sendiri{background === 'CUSTOM' && <CheckCircle2 size={15} color="#22c55e" />}</div>
+              </button>
+            )}
           </div>
           <button className="btn btn-primary" disabled={busy || background === status?.connection.defaultBackgroundKey} style={{ marginTop: 15 }} onClick={() => void perform(async () => { await api.put('/integrations/whatsapp/config', { backgroundKey: background }); }, 'Background WhatsApp disimpan')}><ShieldCheck size={16} /> Simpan background</button>
+
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--surface-border)' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 750 }}><Upload size={17} /> Upload background sendiri</h3>
+            <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,.45)', background: 'rgba(245,158,11,.08)', fontSize: 12, lineHeight: 1.65 }}>
+              <strong style={{ display: 'block', color: '#f59e0b', fontSize: 13 }}>Ukuran gambar yang digunakan: 1080×1080 px</strong>
+              <span>Rekomendasi rasio <strong>1:1</strong> • Minimal <strong>720×720 px</strong> • Maksimal <strong>5 MB</strong> • Format <strong>JPG, PNG, WebP</strong>.</span><br />
+              <span style={{ color: 'var(--text-secondary)' }}>Gambar tidak persegi akan dipotong otomatis dari bagian tengah.</span>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 11, minHeight: 44, padding: '10px 13px', borderRadius: 10, border: '1px dashed var(--surface-border)', background: 'var(--surface-input)', cursor: busy ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700 }}>
+              <ImageIcon size={17} /> {customFile ? 'Ganti gambar' : 'Pilih gambar background'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => void chooseCustomBackground(event.target.files?.[0])} style={{ display: 'none' }} />
+            </label>
+            {customFile && customDimensions && (
+              <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: 11, marginTop: 11, alignItems: 'center' }}>
+                <div style={{ width: 88, height: 88, borderRadius: 10, backgroundImage: `url(${customPreview})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid var(--surface-border)' }} />
+                <div style={{ minWidth: 0, fontSize: 12, lineHeight: 1.6 }}>
+                  <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customFile.name}</strong>
+                  <span style={{ color: 'var(--text-secondary)' }}>{customDimensions.width}×{customDimensions.height} px • {(customFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void uploadCustomBackground()} style={{ display: 'flex', marginTop: 8 }}><Upload size={15} /> Upload dan gunakan</button>
+                </div>
+              </div>
+            )}
+            {!customFile && status?.connection.customBackground && (
+              <p style={{ marginTop: 10, color: 'var(--text-secondary)', fontSize: 11 }}>
+                Tersimpan: <strong>{status.connection.customBackground.fileName || 'background.webp'}</strong> • {status.connection.customBackground.width || 1080}×{status.connection.customBackground.height || 1080} px • {((status.connection.customBackground.fileSize || 0) / 1024 / 1024).toFixed(2)} MB
+              </p>
+            )}
+          </div>
         </section>
       </div>
 

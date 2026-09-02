@@ -29,4 +29,15 @@ describe('WhatsApp session report image renderer', () => {
     expect(metadata.format).toBe('png');
     expect(image.length).toBeGreaterThan(10_000);
   });
+
+  it('normalizes and renders an uploaded custom background', async () => {
+    const custom = await sharp({
+      create: { width: 1400, height: 900, channels: 3, background: '#2563eb' },
+    }).jpeg().toBuffer();
+    const image = await renderSessionReportImage(snapshot, undefined, 'CUSTOM', custom);
+    const metadata = await sharp(image).metadata();
+    expect(metadata.width).toBe(1080);
+    expect(metadata.height).toBe(1080);
+    expect(metadata.format).toBe('png');
+  });
 });

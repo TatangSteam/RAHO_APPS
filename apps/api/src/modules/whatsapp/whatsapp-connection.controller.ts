@@ -50,6 +50,20 @@ export async function updateConfig(req: Request, res: Response, next: NextFuncti
   } catch (error) { next(error); }
 }
 
+export async function uploadBackground(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.file) {
+      throw {
+        status: 400,
+        code: 'WHATSAPP_BACKGROUND_REQUIRED',
+        message: 'Pilih file background yang akan diunggah.',
+      };
+    }
+    const background = await whatsappConnectionManager.uploadCustomBackground(req.file, req.user.userId);
+    sendSuccess(res, { background, status: await whatsappConnectionManager.status() });
+  } catch (error) { next(error); }
+}
+
 export async function deliveries(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const query = deliveryQuerySchema.parse(req.query);

@@ -15,13 +15,32 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { encryptWhatsAppValue } from './whatsapp.crypto';
 import { GLOBAL_WHATSAPP_CONNECTION_ID } from './whatsapp-auth-state.repository';
+import { downloadFile } from '@config/minio';
 
-async function configuredBackgroundKey(): Promise<SessionReportBackgroundKey> {
+type ConfiguredBackground = {
+  key: SessionReportBackgroundKey;
+  objectKey?: string;
+};
+
+async function configuredBackground(requestedKey?: SessionReportBackgroundKey): Promise<ConfiguredBackground> {
   const connection = await prisma.whatsAppConnection.findUnique({
     where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
-    select: { defaultBackgroundKey: true },
+    select: { defaultBackgroundKey: true, customBackgroundObjectKey: true },
   });
-  return getSessionReportBackground(connection?.defaultBackgroundKey).key;
+  const key = getSessionReportBackground(requestedKey ?? connection?.defaultBackgroundKey).key;
+  if (key === 'CUSTOM' && connection?.customBackgroundObjectKey) {
+    return { key, objectKey: connection.customBackgroundObjectKey };
+  }
+  return { key: key === 'CUSTOM' ? 'RAHO_RED' : key };
+}
+
+async function loadCustomBackground(objectKey?: string): Promise<Buffer | undefined> {
+  if (!objectKey) return undefined;
+  try {
+    return await downloadFile(objectKey, 5 * 1024 * 1024);
+  } catch {
+    return undefined;
+  }
 }
 
 const SAFE_DELIVERY_SELECT = {
@@ -72,8 +91,10 @@ export async function previewSessionReport(
   } catch {
     // Preview remains available with the explicit no-photo layout.
   }
-  const selectedBackground = getSessionReportBackground(backgroundKey ?? await configuredBackgroundKey());
-  const image = await renderSessionReportImage(report.snapshot, photo, selectedBackground.key);
+  const configured = await configuredBackground(backgroundKey);
+  const selectedBackground = getSessionReportBackground(configured.key);
+  const customBackground = await loadCustomBackground(configured.objectKey);
+  const image = await renderSessionReportImage(report.snapshot, photo, selectedBackground.key, customBackground);
 
   return {
     recipientMasked: normalized ? maskWhatsAppNumber(normalized) : null,
@@ -128,11 +149,13 @@ export async function queueManualSessionReport(input: {
   const { report, recipient } = await assertSessionReportCanQueue(input.sessionId, input.actorUserId);
   // The approved background is centrally governed by Super Admin. Ignore a
   // stale client's selection when creating the immutable delivery payload.
-  const background = getSessionReportBackground(await configuredBackgroundKey());
+  const configured = await configuredBackground();
+  const background = getSessionReportBackground(configured.key);
   const encryptedPayload = encryptWhatsAppValue(JSON.stringify({
     snapshot: report.snapshot,
     photoUrl: report.photoUrl,
     backgroundKey: background.key,
+    backgroundObjectKey: configured.objectKey,
   }));
   const existing = await prisma.whatsAppDelivery.findUnique({
     where: { idempotencyKey: input.idempotencyKey },

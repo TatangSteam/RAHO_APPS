@@ -3770,6 +3770,13 @@ model WhatsAppConnection {
   authStateEncrypted   String?                  @db.Text
   authKeyVersion       Int                      @default(1)
   defaultBackgroundKey String                   @default("RAHO_RED")
+  customBackgroundUrl      String?
+  customBackgroundObjectKey String?
+  customBackgroundFileName String?
+  customBackgroundMimeType String?
+  customBackgroundFileSize Int?
+  customBackgroundWidth    Int?
+  customBackgroundHeight   Int?
   lastConnectedAt      DateTime?
   lastDisconnectedAt   DateTime?
   lastErrorSanitized   String?                  @db.Text
