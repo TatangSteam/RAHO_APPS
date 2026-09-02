@@ -61,7 +61,7 @@ describe('WhatsApp session report foundation contract', () => {
     const controller = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-connection.controller.ts'), 'utf8');
     const env = readFileSync(resolve(apiRoot, 'src/config/env.ts'), 'utf8');
     expect(schema).toContain('model WhatsAppConnection');
-    expect(schema).toContain('authStateEncrypted String?');
+    expect(schema).toMatch(/authStateEncrypted\s+String\?/);
     expect(repository).toContain('encryptWhatsAppValue');
     expect(repository).not.toContain('useMultiFileAuthState');
     expect(routes).toContain('authorize([Role.SUPER_ADMIN])');
