@@ -202,6 +202,27 @@ export const updatePackagePricingSchema = z.object({
   isActive: z.boolean().optional()
 });
 
+export const createMasterServiceTypeSchema = z.object({
+  code: z.string()
+    .trim()
+    .min(2, 'Kode layanan minimal 2 karakter')
+    .max(20, 'Kode layanan maksimal 20 karakter')
+    .regex(/^[A-Za-z0-9_-]+$/, 'Kode layanan hanya boleh berisi huruf, angka, garis bawah, atau strip')
+    .transform(value => value.toUpperCase()),
+  name: z.string().trim().min(2, 'Nama layanan minimal 2 karakter').max(100),
+  description: z.string().trim().max(500).optional(),
+  price: z.number().min(0).max(100_000_000).optional(),
+  sortOrder: z.number().int().min(0).max(100_000).optional(),
+});
+
+export const updateMasterServiceTypeSchema = z.object({
+  name: z.string().trim().min(2, 'Nama layanan minimal 2 karakter').max(100).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  price: z.number().min(0).max(100_000_000).nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(100_000).optional(),
+}).refine(data => Object.keys(data).length > 0, 'Tidak ada perubahan yang dikirim');
+
 // ============================================================
 // NON-THERAPY PRODUCT (ADD-ON) SCHEMAS
 // ============================================================

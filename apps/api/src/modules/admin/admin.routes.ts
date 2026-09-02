@@ -64,6 +64,8 @@ import {
   getBranchAdminsQuerySchema,
   impersonateUserParamsSchema,
   convertAdminManagerRoleSchema,
+  createMasterServiceTypeSchema,
+  updateMasterServiceTypeSchema,
 } from './admin.schema';
 
 const router = Router();
@@ -293,12 +295,14 @@ router.get('/master/service-types',
 );
 
 router.post('/master/service-types',
-  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  authorize(['SUPER_ADMIN']),
+  validate(createMasterServiceTypeSchema),
   createServiceType
 );
 
 router.patch('/master/service-types/:typeId',
-  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  authorize(['SUPER_ADMIN']),
+  validate(updateMasterServiceTypeSchema),
   updateServiceType
 );
 

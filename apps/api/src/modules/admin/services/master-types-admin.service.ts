@@ -95,7 +95,7 @@ export class MasterTypesAdminService {
     data: {
       name?: string;
       icon?: string;
-      description?: string;
+      description?: string | null;
       isActive?: boolean;
       sortOrder?: number;
     }
@@ -201,7 +201,7 @@ export class MasterTypesAdminService {
       code: t.code,
       name: t.name,
       description: t.description,
-      price: t.price ? Number(t.price) : null,
+      price: t.price !== null ? Number(t.price) : null,
       isActive: t.isActive,
       sortOrder: t.sortOrder,
       createdAt: t.createdAt.toISOString(),
@@ -216,9 +216,10 @@ export class MasterTypesAdminService {
     price?: number;
     sortOrder?: number;
   }) {
+    const code = data.code.trim().toUpperCase();
     // Check if code already exists
     const existing = await prisma.masterServiceType.findUnique({
-      where: { code: data.code },
+      where: { code },
     });
 
     if (existing) {
@@ -230,7 +231,10 @@ export class MasterTypesAdminService {
     }
 
     // Check if sortOrder already exists
-    const sortOrder = data.sortOrder ?? 999;
+    const lastType = data.sortOrder === undefined
+      ? await prisma.masterServiceType.findFirst({ orderBy: { sortOrder: 'desc' } })
+      : null;
+    const sortOrder = data.sortOrder ?? ((lastType?.sortOrder || 0) + 10);
     const existingSortOrder = await prisma.masterServiceType.findFirst({
       where: { sortOrder },
     });
@@ -245,7 +249,7 @@ export class MasterTypesAdminService {
 
     const type = await prisma.masterServiceType.create({
       data: {
-        code: data.code.toUpperCase(),
+        code,
         name: data.name,
         description: data.description,
         price: data.price,
@@ -258,7 +262,7 @@ export class MasterTypesAdminService {
       code: type.code,
       name: type.name,
       description: type.description,
-      price: type.price ? Number(type.price) : null,
+      price: type.price !== null ? Number(type.price) : null,
       isActive: type.isActive,
       sortOrder: type.sortOrder,
       createdAt: type.createdAt.toISOString(),
@@ -271,7 +275,7 @@ export class MasterTypesAdminService {
     data: {
       name?: string;
       description?: string;
-      price?: number;
+      price?: number | null;
       isActive?: boolean;
       sortOrder?: number;
     }
@@ -316,7 +320,7 @@ export class MasterTypesAdminService {
       code: updated.code,
       name: updated.name,
       description: updated.description,
-      price: updated.price ? Number(updated.price) : null,
+      price: updated.price !== null ? Number(updated.price) : null,
       isActive: updated.isActive,
       sortOrder: updated.sortOrder,
       createdAt: updated.createdAt.toISOString(),

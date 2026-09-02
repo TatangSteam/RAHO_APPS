@@ -23,6 +23,7 @@ import {
 } from './package-assignment.helpers';
 import { reserveAddOnStockInTransaction } from './add-on-inventory.service';
 import { getAccessibleBranchIds } from '../../iam/authorization.service';
+import { calculateCatalogPackageTotal } from './package-pricing-calculation';
 
 type NormalizedPaymentPlan = {
   type: 'FULL_PAYMENT' | 'INSTALLMENT';
@@ -97,15 +98,6 @@ interface PackageAssignmentTransactionParams {
  */
 export class PackageAssignmentService {
   private readonly invoiceService = new InvoiceGenerationService();
-
-  // Service type pricing configuration
-  private readonly SERVICE_TYPE_PRICING: Record<string, number> = {
-    PM: 1_000_000,
-    PS: 650_000,
-    PTY: 600_000,
-    PDA: 65_000,
-    PHC: 750_000,
-  };
 
   /**
    * Generate package code
@@ -203,6 +195,33 @@ export class PackageAssignmentService {
       throw { status: 404, code: 'PRICING_NOT_FOUND', message: 'Beberapa harga paket tidak ditemukan' };
     }
 
+    const unavailablePricing = pricings.find((pricing) =>
+      !pricing.isActive || (pricing.branchId !== null && pricing.branchId !== branchId)
+    );
+    if (unavailablePricing) {
+      throw {
+        status: 409,
+        code: 'PACKAGE_PRICING_SCOPE_MISMATCH',
+        message: 'Harga paket tidak aktif atau tidak berlaku untuk cabang member ini. Muat ulang pilihan paket.',
+      };
+    }
+
+    const mismatchedSelection = data.packages.find((selection) => {
+      const pricing = pricings.find(item => item.id === selection.pricingId);
+      if (!pricing || pricing.packageType !== PackageType.BOOSTER) return false;
+      return (
+        (selection.serviceType !== undefined && selection.serviceType !== pricing.serviceType) ||
+        (selection.boosterType !== undefined && selection.boosterType !== pricing.boosterType)
+      );
+    });
+    if (mismatchedSelection) {
+      throw {
+        status: 409,
+        code: 'PACKAGE_PRICING_SELECTION_MISMATCH',
+        message: 'Tipe booster atau layanan tidak sesuai dengan harga paket yang dipilih. Muat ulang pilihan paket.',
+      };
+    }
+
     const socialPricing = pricings.find((pricing) => pricing.productCode === SOCIAL_PROGRAM_PRODUCT_CODE);
     if (socialPricing && !approvedSocial) {
       throw {
@@ -294,17 +313,8 @@ export class PackageAssignmentService {
     data.packages.forEach((pkg) => {
       const pricing = pricings.find(p => p.id === pkg.pricingId)!;
       const fixed = approvedSocial?.priceOverrides[pricing.id];
-      let pricePerSession = Number(pricing.price);
-      let totalPrice = 0;
-
-      if (pricing.packageType === PackageType.BASIC) {
-        totalPrice = pricePerSession * pkg.quantity;
-      } else if (pricing.packageType === PackageType.BOOSTER) {
-        if (pkg.serviceType) {
-          pricePerSession = this.SERVICE_TYPE_PRICING[pkg.serviceType] || pricePerSession;
-        }
-        totalPrice = pricePerSession * pricing.totalSessions * pkg.quantity;
-      }
+      const pricePerSession = Number(pricing.price);
+      let totalPrice = calculateCatalogPackageTotal(pricing, pkg.quantity);
 
       if (fixed) {
         if (fixed.listPrice < fixed.finalPrice || fixed.finalPrice < 0) {
@@ -488,12 +498,7 @@ export class PackageAssignmentService {
           createdPackageCodes.add(packageCode);
           
           // Calculate individual package price
-          let packageSubtotal = 0;
-          if (detail.pricing.packageType === PackageType.BASIC) {
-            packageSubtotal = detail.pricePerSession;
-          } else {
-            packageSubtotal = detail.pricePerSession * detail.pricing.totalSessions;
-          }
+          let packageSubtotal = calculateCatalogPackageTotal(detail.pricing);
           
           const hasFixedPrice = detail.fixedListPrice !== undefined && detail.fixedFinalPrice !== undefined;
           if (hasFixedPrice) packageSubtotal = detail.fixedListPrice!;

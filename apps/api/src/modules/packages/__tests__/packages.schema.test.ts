@@ -1,4 +1,4 @@
-import { editPackageSchema } from '../packages.schema';
+import { assignPackageSchema, editPackageSchema } from '../packages.schema';
 
 describe('editPackageSchema', () => {
   it('normalizes nullable legacy package selectors', () => {
@@ -39,5 +39,28 @@ describe('editPackageSchema', () => {
       boosterType: 'CUSTOM_BOOSTER',
       serviceType: 'HC',
     });
+  });
+});
+
+describe('assignPackageSchema service type master support', () => {
+  it('accepts a custom service-type code from the master', () => {
+    const result = assignPackageSchema.parse({
+      packages: [{
+        pricingId: 'pricing-custom',
+        quantity: 1,
+        boosterType: 'NO',
+        serviceType: 'CUSTOM-HC',
+      }],
+      addOns: [],
+    });
+
+    expect(result.packages[0].serviceType).toBe('CUSTOM-HC');
+  });
+
+  it('rejects an empty service-type code', () => {
+    expect(() => assignPackageSchema.parse({
+      packages: [{ pricingId: 'pricing-custom', quantity: 1, serviceType: ' ' }],
+      addOns: [],
+    })).toThrow();
   });
 });

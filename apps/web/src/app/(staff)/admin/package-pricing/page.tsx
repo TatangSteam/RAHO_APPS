@@ -17,6 +17,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   Trash2,
   X,
   Zap,
@@ -58,6 +59,7 @@ interface MasterType {
   code: string;
   name: string;
   price?: number | null;
+  description?: string | null;
   isActive: boolean;
   sortOrder: number;
 }
@@ -86,6 +88,7 @@ interface PricingFormState {
   name: string;
   totalSessions: number;
   price: number;
+  isComplimentary: boolean;
   isActive: boolean;
 }
 
@@ -116,6 +119,7 @@ const emptyForm: PricingFormState = {
   name: '',
   totalSessions: 7,
   price: 0,
+  isComplimentary: false,
   isActive: true,
 };
 
@@ -125,8 +129,10 @@ function sortMasterTypes(types: MasterType[]): MasterType[] {
     .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code));
 }
 
-function pricingKey(pricing: Pick<PackagePricing, 'packageType' | 'boosterType' | 'serviceType' | 'totalSessions'>): string {
+function pricingKey(pricing: Pick<PackagePricing, 'packageType' | 'boosterType' | 'serviceType' | 'totalSessions' | 'productCode'>): string {
+  if (pricing.productCode?.trim()) return `PRODUCT:${pricing.productCode.trim().toUpperCase()}`;
   return [
+    'ATTR',
     pricing.packageType,
     pricing.boosterType || '',
     pricing.serviceType || '',
@@ -144,18 +150,57 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-function getDefaultName(form: PricingFormState, branches: Branch[]): string {
+function getMasterType(types: MasterType[], code: string): MasterType | undefined {
+  return types.find((type) => type.code === code);
+}
+
+function getDefaultName(
+  form: PricingFormState,
+  branches: Branch[],
+  boosterTypes: MasterType[],
+  serviceTypes: MasterType[],
+): string {
   const branch = form.branchId ? branches.find((item) => item.id === form.branchId) : null;
   const scope = branch ? ` - ${branch.branchCode}` : '';
+  const service = getMasterType(serviceTypes, form.serviceType);
 
   if (form.packageType === 'BOOSTER') {
-    const service = form.serviceType ? ` ${form.serviceType}` : '';
-    const booster = form.boosterType || 'Booster';
-    return `${booster}${service} ${form.totalSessions} Sesi${scope}`;
+    const booster = getMasterType(boosterTypes, form.boosterType);
+    const boosterLabel = booster
+      ? `${booster.code}${booster.name !== booster.code ? ` (${booster.name})` : ''}`
+      : 'Booster';
+    const serviceLabel = service?.name || form.serviceType || 'Layanan';
+    return `Booster ${boosterLabel} ${form.totalSessions}X - ${serviceLabel}${scope}`;
   }
 
-  const service = form.serviceType ? ` - ${form.serviceType}` : '';
-  return `Basic ${form.totalSessions} Sesi${service}${scope}`;
+  const serviceLabel = service?.name ? ` ${service.name}` : '';
+  return `Terapi Nano Bubble ${form.totalSessions}X${serviceLabel}${scope}`;
+}
+
+function getDefaultProductCode(form: PricingFormState): string {
+  const service = form.serviceType || 'GEN';
+  if (form.packageType === 'BOOSTER') {
+    return form.boosterType
+      ? `BST-${form.boosterType}-P${form.totalSessions}-${service}`
+      : '';
+  }
+
+  return `TNB-P${form.totalSessions}-${service}`;
+}
+
+function getPackageTotal(form: PricingFormState): number {
+  return form.packageType === 'BOOSTER'
+    ? form.price * form.totalSessions
+    : form.price;
+}
+
+function formatPriceInput(value: number): string {
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function parsePriceInput(value: string): number {
+  const digits = value.replace(/\D/g, '');
+  return digits ? Math.min(Number(digits), 100_000_000) : 0;
 }
 
 function buildCreatePayload(form: PricingFormState, forceBranchId?: string | null) {
@@ -206,6 +251,7 @@ export default function PackagePricingPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [boosterTypes, setBoosterTypes] = useState<MasterType[]>(BOOSTER_FALLBACKS);
   const [serviceTypes, setServiceTypes] = useState<MasterType[]>(SERVICE_FALLBACKS);
+  const [allServiceTypes, setAllServiceTypes] = useState<MasterType[]>(SERVICE_FALLBACKS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -213,12 +259,14 @@ export default function PackagePricingPage() {
   const [branchFilter, setBranchFilter] = useState<BranchFilter>(initialBranchId);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [showModal, setShowModal] = useState(false);
+  const [showServiceTypeManager, setShowServiceTypeManager] = useState(false);
   const [editingPricing, setEditingPricing] = useState<PackagePricing | null>(null);
   const [form, setForm] = useState<PricingFormState>(emptyForm);
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER' || user?.role === 'ADMIN_CABANG';
+  const canManageServiceTypes = user?.role === 'SUPER_ADMIN';
 
   const ownBranchId = user?.branchId || null;
 
@@ -242,12 +290,16 @@ export default function PackagePricingPage() {
         setBoosterTypes(sortMasterTypes(boosterResponse.value.data.data.types));
       }
 
-      if (serviceResponse.status === 'fulfilled' && serviceResponse.value.data.data?.types?.length) {
-        setServiceTypes(sortMasterTypes(serviceResponse.value.data.data.types));
+      if (serviceResponse.status === 'fulfilled' && Array.isArray(serviceResponse.value.data.data?.types)) {
+        const allTypes = [...serviceResponse.value.data.data.types]
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code));
+        setAllServiceTypes(allTypes);
+        setServiceTypes(sortMasterTypes(allTypes));
       }
     } catch {
       setBoosterTypes(BOOSTER_FALLBACKS);
       setServiceTypes(SERVICE_FALLBACKS);
+      setAllServiceTypes(SERVICE_FALLBACKS);
     }
   }, []);
 
@@ -358,6 +410,7 @@ export default function PackagePricingPage() {
       name: pricing.name,
       totalSessions: pricing.totalSessions,
       price: pricing.price,
+      isComplimentary: pricing.price === 0,
       isActive: pricing.isActive,
     });
     setShowModal(true);
@@ -366,15 +419,21 @@ export default function PackagePricingPage() {
   const closeModal = () => {
     if (saving) return;
     setShowModal(false);
+    setShowServiceTypeManager(false);
     resetForm();
   };
 
   const handlePackageTypeChange = (packageType: PackageType) => {
-    setForm((current) => ({
+    setForm((current) => current.packageType === packageType ? current : ({
       ...current,
       packageType,
-      boosterType: packageType === 'BOOSTER' ? current.boosterType : '',
-      totalSessions: packageType === 'BOOSTER' ? 1 : current.totalSessions || 7,
+      boosterType: '',
+      serviceType: '',
+      productCode: '',
+      name: '',
+      totalSessions: packageType === 'BOOSTER' ? 1 : 7,
+      price: 0,
+      isComplimentary: false,
     }));
   };
 
@@ -393,6 +452,11 @@ export default function PackagePricingPage() {
 
     if (form.price < 0) {
       showToast.error('Harga tidak boleh negatif');
+      return;
+    }
+
+    if (form.price === 0 && !form.isComplimentary) {
+      showToast.error('Isi harga paket atau tandai sebagai paket gratis');
       return;
     }
 
@@ -451,8 +515,21 @@ export default function PackagePricingPage() {
     }
   };
 
-  const setGeneratedName = () => {
-    setForm((current) => ({ ...current, name: getDefaultName(current, branches) }));
+  const applySuggestedValues = () => {
+    setForm((current) => {
+      const service = getMasterType(serviceTypes, current.serviceType);
+      return {
+        ...current,
+        name: getDefaultName(current, branches, boosterTypes, serviceTypes),
+        productCode: getDefaultProductCode(current),
+        price: current.packageType === 'BOOSTER'
+          ? current.price || Number(service?.price || 0)
+          : current.price,
+        isComplimentary: current.packageType === 'BOOSTER' && Number(service?.price || 0) > 0
+          ? false
+          : current.isComplimentary,
+      };
+    });
   };
 
   if (!canManage) {
@@ -613,7 +690,7 @@ export default function PackagePricingPage() {
                     <th className="px-4 py-3 font-semibold">Scope</th>
                     <th className="px-4 py-3 font-semibold">Paket</th>
                     <th className="px-4 py-3 font-semibold">Kombinasi</th>
-                    <th className="px-4 py-3 text-right font-semibold">Harga</th>
+                    <th className="px-4 py-3 text-right font-semibold">Harga katalog</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 font-semibold">Update</th>
                     <th className="px-4 py-3 text-right font-semibold">Aksi</th>
@@ -654,7 +731,25 @@ export default function PackagePricingPage() {
           onSubmit={handleSubmit}
           onPackageTypeChange={handlePackageTypeChange}
           setForm={setForm}
-          setGeneratedName={setGeneratedName}
+          applySuggestedValues={applySuggestedValues}
+          canManageServiceTypes={canManageServiceTypes}
+          onManageServiceTypes={() => setShowServiceTypeManager(true)}
+        />
+      )}
+
+      {showServiceTypeManager && (
+        <ServiceTypeManager
+          types={allServiceTypes}
+          canDelete={user?.role === 'SUPER_ADMIN'}
+          onClose={() => setShowServiceTypeManager(false)}
+          onChanged={async (unavailableCode) => {
+            await loadMasterTypes();
+            if (unavailableCode) {
+              setForm((current) => current.serviceType === unavailableCode
+                ? { ...current, serviceType: '', price: 0, isComplimentary: false }
+                : current);
+            }
+          }}
         />
       )}
     </main>
@@ -748,6 +843,11 @@ function PricingRow({
 
       <td className="px-4 py-4 text-right align-top">
         <div className="font-semibold text-neutral-950 dark:text-white">{formatCurrency(pricing.price)}</div>
+        <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+          {pricing.packageType === 'BOOSTER'
+            ? `${formatCurrency(pricing.price * pricing.totalSessions)} total paket`
+            : 'total paket'}
+        </div>
         {globalPricing && (
           <div className={`mt-1 text-xs ${delta === 0 ? 'text-neutral-500 dark:text-neutral-400' : delta && delta > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'}`}>
             Global {formatCurrency(globalPricing.price)}
@@ -822,7 +922,9 @@ function PricingModal({
   onSubmit,
   onPackageTypeChange,
   setForm,
-  setGeneratedName,
+  applySuggestedValues,
+  canManageServiceTypes,
+  onManageServiceTypes,
 }: {
   branches: Branch[];
   boosterTypes: MasterType[];
@@ -836,10 +938,23 @@ function PricingModal({
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onPackageTypeChange: (packageType: PackageType) => void;
   setForm: React.Dispatch<React.SetStateAction<PricingFormState>>;
-  setGeneratedName: () => void;
+  applySuggestedValues: () => void;
+  canManageServiceTypes: boolean;
+  onManageServiceTypes: () => void;
 }) {
   const isEditing = Boolean(editingPricing);
   const [mounted, setMounted] = useState(false);
+  const selectedService = getMasterType(serviceTypes, form.serviceType);
+  const priceUnitLabel = form.packageType === 'BASIC'
+    ? 'Harga total paket'
+    : 'Harga per sesi';
+  const canApplySuggestion = form.packageType === 'BASIC'
+    || Boolean(form.boosterType && form.serviceType);
+  const canSubmit = form.name.trim().length >= 3
+    && form.totalSessions >= 1
+    && form.totalSessions <= 100
+    && (form.price > 0 || form.isComplimentary)
+    && (form.packageType === 'BASIC' || Boolean(form.boosterType && form.serviceType));
 
   useEffect(() => {
     setMounted(true);
@@ -915,8 +1030,14 @@ function PricingModal({
 
           <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+              <div className="mb-5 grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200 sm:grid-cols-3">
+                <div><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] text-black">1</span>Pilih paket & layanan</div>
+                <div><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] text-black">2</span>Isi sesi & harga</div>
+                <div><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] text-black">3</span>Periksa total</div>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Tipe paket">
+                <Field label="Tipe paket *">
                   <div className="grid grid-cols-2 gap-2">
                     <SegmentButton
                       active={form.packageType === 'BASIC'}
@@ -935,17 +1056,17 @@ function PricingModal({
                   </div>
                 </Field>
 
-                <Field label="Scope">
+                <Field label="Scope harga *">
                   {canSelectBranch && !isEditing ? (
                     <select
                       value={form.branchId}
                       onChange={(event) => setForm((current) => ({ ...current, branchId: event.target.value }))}
                       className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                     >
-                      <option value="">Global</option>
+                      <option value="">Global — fallback semua cabang</option>
                       {branches.map((branch) => (
                         <option key={branch.id} value={branch.id}>
-                          {branch.branchCode} - {branch.name}
+                          {branch.branchCode} - {branch.name} — override Global
                         </option>
                       ))}
                     </select>
@@ -960,10 +1081,15 @@ function PricingModal({
                             : 'Cabang saya'}
                     </div>
                   )}
+                  <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                    {form.branchId
+                      ? 'Harga cabang menggantikan produk Global dengan kode produk yang sama.'
+                      : 'Harga Global menjadi fallback untuk cabang yang tidak memiliki override.'}
+                  </p>
                 </Field>
 
                 {form.packageType === 'BOOSTER' && (
-                  <Field label="Tipe booster">
+                  <Field label="Tipe booster *">
                     <select
                       value={form.boosterType}
                       disabled={isEditing}
@@ -980,25 +1106,58 @@ function PricingModal({
                   </Field>
                 )}
 
-                <Field label="Tipe layanan">
+                <Field label={form.packageType === 'BOOSTER' ? 'Tipe layanan *' : 'Tipe layanan'}>
                   <select
                     value={form.serviceType}
-                    onChange={(event) => setForm((current) => ({ ...current, serviceType: event.target.value }))}
+                    onChange={(event) => {
+                      const serviceType = event.target.value;
+                      const service = getMasterType(serviceTypes, serviceType);
+                      setForm((current) => ({
+                        ...current,
+                        serviceType,
+                        price: !isEditing && current.packageType === 'BOOSTER'
+                          ? Number(service?.price || 0)
+                          : current.price,
+                        isComplimentary: !isEditing && current.packageType === 'BOOSTER' && Number(service?.price || 0) > 0
+                          ? false
+                          : current.isComplimentary,
+                      }));
+                    }}
                     className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                   >
                     <option value="">{form.packageType === 'BOOSTER' ? 'Pilih layanan' : 'Tanpa layanan'}</option>
+                    {form.serviceType && !selectedService && (
+                      <option value={form.serviceType}>{form.serviceType} — data lama</option>
+                    )}
                     {serviceTypes.map((service) => (
                       <option key={service.id} value={service.code}>
                         {service.code} - {service.name}
                       </option>
                     ))}
                   </select>
+                  {form.packageType === 'BOOSTER' && selectedService?.price != null && (
+                    <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                      Rekomendasi master layanan: {formatCurrency(Number(selectedService.price))}
+                      {' '}per sesi.
+                    </p>
+                  )}
+                  {canManageServiceTypes && !isEditing && (
+                    <button
+                      type="button"
+                      onClick={onManageServiceTypes}
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-600 dark:text-amber-300"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                      Tambah atau kelola tipe layanan
+                    </button>
+                  )}
                 </Field>
 
-                <Field label="Nama paket" className="md:col-span-2">
+                <Field label="Nama paket *" className="md:col-span-2">
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <input
                       value={form.name}
+                      maxLength={100}
                       onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                       className="h-10 min-w-0 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                       placeholder="Nama paket"
@@ -1006,10 +1165,11 @@ function PricingModal({
                     {!isEditing && (
                       <button
                         type="button"
-                        onClick={setGeneratedName}
-                        className="h-10 rounded-lg border border-neutral-300 px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                        onClick={applySuggestedValues}
+                        disabled={!canApplySuggestion}
+                        className="h-10 rounded-lg border border-neutral-300 px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
                       >
-                        Isi Nama
+                        Isi otomatis
                       </button>
                     )}
                   </div>
@@ -1018,13 +1178,17 @@ function PricingModal({
                 <Field label="Kode produk">
                   <input
                     value={form.productCode}
+                    maxLength={50}
                     onChange={(event) => setForm((current) => ({ ...current, productCode: event.target.value.toUpperCase() }))}
                     className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 font-mono text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                     placeholder="TNB-P7-PM"
                   />
+                  <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                    Opsional. Isi otomatis mengikuti tipe, jumlah sesi, dan layanan.
+                  </p>
                 </Field>
 
-                <Field label="Jumlah sesi">
+                <Field label="Jumlah sesi *">
                   <input
                     type="number"
                     min={1}
@@ -1035,21 +1199,63 @@ function PricingModal({
                   />
                 </Field>
 
-                <Field label="Harga" className="md:col-span-2">
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <Field label={`${priceUnitLabel} *`} className="md:col-span-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Rp</span>
                     <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={form.price}
-                      onChange={(event) => setForm((current) => ({ ...current, price: Number(event.target.value) || 0 }))}
-                      className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                      type="text"
+                      inputMode="numeric"
+                      value={formatPriceInput(form.price)}
+                      disabled={form.isComplimentary}
+                      onChange={(event) => setForm((current) => ({
+                        ...current,
+                        price: parsePriceInput(event.target.value),
+                        isComplimentary: false,
+                      }))}
+                      className="h-11 w-full rounded-lg border border-neutral-300 bg-white pl-10 pr-3 text-base font-semibold text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:disabled:bg-neutral-800"
+                      aria-label={priceUnitLabel}
                     />
-                    <div className="rounded-lg bg-neutral-100 px-3 py-2 text-sm font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
-                      {formatCurrency(form.price)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                    {form.packageType === 'BOOSTER'
+                      ? `Harga ini dikalikan dengan ${form.totalSessions || 0} sesi.`
+                      : 'Harga BASIC adalah harga untuk seluruh sesi dalam satu paket.'}
+                    {' '}Paket gratis harus dipilih secara eksplisit.
+                  </p>
+                  <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2.5 dark:border-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={form.isComplimentary}
+                      onChange={(event) => setForm((current) => ({
+                        ...current,
+                        isComplimentary: event.target.checked,
+                        price: event.target.checked ? 0 : current.price,
+                      }))}
+                      className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Paket gratis (harga Rp 0)</span>
+                  </label>
+                </Field>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 md:col-span-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Ringkasan harga yang dipakai</div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="text-sm text-emerald-900 dark:text-emerald-100">
+                      {form.packageType === 'BOOSTER'
+                        ? `${formatCurrency(form.price)} × ${form.totalSessions || 0} sesi`
+                        : `${form.totalSessions || 0} sesi dalam satu paket`}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-emerald-700 dark:text-emerald-300">Total per paket</div>
+                      <div className="text-xl font-bold text-emerald-950 dark:text-white">{formatCurrency(getPackageTotal(form))}</div>
                     </div>
                   </div>
-                </Field>
+                  {isEditing && (
+                    <p className="mt-3 border-t border-emerald-200 pt-3 text-xs text-emerald-800 dark:border-emerald-500/20 dark:text-emerald-200">
+                      Perubahan katalog hanya berlaku untuk assignment baru; paket member yang sudah ada tidak ikut berubah.
+                    </p>
+                  )}
+                </div>
 
                 <label className="flex items-center gap-3 rounded-lg border border-neutral-200 px-3 py-3 dark:border-neutral-800 md:col-span-2">
                   <input
@@ -1074,11 +1280,11 @@ function PricingModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || !canSubmit}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Simpan
+                Simpan Harga Paket
               </button>
             </div>
           </form>
@@ -1088,6 +1294,190 @@ function PricingModal({
   );
 
   return createPortal(modalContent, document.body);
+}
+
+function ServiceTypeManager({
+  types,
+  canDelete,
+  onClose,
+  onChanged,
+}: {
+  types: MasterType[];
+  canDelete: boolean;
+  onClose: () => void;
+  onChanged: (unavailableCode?: string) => Promise<void>;
+}) {
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState(0);
+  const [savingTypeId, setSavingTypeId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (code.trim().length < 2 || name.trim().length < 2) {
+      showToast.error('Kode dan nama layanan minimal 2 karakter');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      await api.post('/admin/master/service-types', {
+        code: code.trim().toUpperCase(),
+        name: name.trim(),
+        price,
+      });
+      await onChanged();
+      setCode('');
+      setName('');
+      setPrice(0);
+      showToast.success('Tipe layanan berhasil ditambahkan');
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(getApiErrorMessage(error));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleToggle = async (type: MasterType) => {
+    try {
+      setSavingTypeId(type.id);
+      await api.patch(`/admin/master/service-types/${type.id}`, { isActive: !type.isActive });
+      await onChanged(type.isActive ? type.code : undefined);
+      showToast.success(type.isActive ? 'Tipe layanan dinonaktifkan' : 'Tipe layanan diaktifkan');
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(getApiErrorMessage(error));
+    } finally {
+      setSavingTypeId(null);
+    }
+  };
+
+  const handleDeleteType = async (type: MasterType) => {
+    if (!window.confirm(`Hapus tipe layanan ${type.code} - ${type.name}?`)) return;
+
+    try {
+      setSavingTypeId(type.id);
+      await api.delete(`/admin/master/service-types/${type.id}`);
+      await onChanged(type.code);
+      showToast.success('Tipe layanan berhasil dihapus');
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(getApiErrorMessage(error));
+    } finally {
+      setSavingTypeId(null);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
+          <div>
+            <h3 className="text-lg font-bold text-neutral-950 dark:text-white">Kelola Tipe Layanan</h3>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Master ini berlaku global dan dapat digunakan oleh seluruh scope harga.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800" aria-label="Tutup">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <form onSubmit={handleCreate} className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950/60">
+            <div className="mb-3 text-sm font-bold text-neutral-900 dark:text-white">Tambah layanan baru</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Kode layanan *">
+                <input
+                  value={code}
+                  maxLength={20}
+                  onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                  placeholder="Contoh: HC"
+                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 font-mono text-sm text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                />
+              </Field>
+              <Field label="Nama layanan *">
+                <input
+                  value={name}
+                  maxLength={100}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Contoh: Homecare"
+                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                />
+              </Field>
+              <Field label="Rekomendasi harga per sesi" className="sm:col-span-2">
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-sm font-semibold text-neutral-500">Rp</span>
+                  <input
+                    value={formatPriceInput(price)}
+                    inputMode="numeric"
+                    onChange={(event) => setPrice(parsePriceInput(event.target.value))}
+                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white pl-10 pr-3 text-sm font-semibold text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                  />
+                </div>
+              </Field>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="submit"
+                disabled={creating || code.trim().length < 2 || name.trim().length < 2}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Tambahkan
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-5 space-y-2">
+            {types.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-neutral-300 p-5 text-center text-sm text-neutral-500 dark:border-neutral-700">Belum ada tipe layanan.</div>
+            ) : types.map((type) => (
+              <div key={type.id} className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs font-bold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">{type.code}</span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">{type.name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${type.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'}`}>
+                      {type.isActive ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Rekomendasi {formatCurrency(Number(type.price || 0))} per sesi</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={savingTypeId === type.id}
+                    onClick={() => void handleToggle(type)}
+                    className="h-9 rounded-lg border border-neutral-300 px-3 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  >
+                    {type.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      disabled={savingTypeId === type.id}
+                      onClick={() => void handleDeleteType(type)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10"
+                      aria-label={`Hapus ${type.name}`}
+                      title="Hapus permanen jika belum digunakan paket"
+                    >
+                      {savingTypeId === type.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-neutral-200 px-5 py-4 text-right dark:border-neutral-800">
+          <button type="button" onClick={onClose} className="h-10 rounded-lg border border-neutral-300 px-4 text-sm font-semibold text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">Selesai</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function Field({

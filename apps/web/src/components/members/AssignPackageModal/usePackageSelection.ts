@@ -191,7 +191,7 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
           p.serviceType === serviceType
         ) || pricing;
         pricePerSession = matched.price;
-        const serviceName = SERVICE_TYPE_NAMES[serviceType] || serviceType;
+        const serviceName = matched.serviceTypeName || SERVICE_TYPE_NAMES[serviceType] || serviceType;
         const boosterLabel = selection.boosterType || 'BOOSTER';
         itemName = `Booster ${boosterLabel} ${matched.totalSessions}X`;
         details = serviceName;

@@ -6,8 +6,8 @@ const PackageTypeEnum = z.enum(['BASIC', 'BOOSTER']);
 // Extended booster types (NO, GT, MB, KCL, H2S, HK, O3, HHO, NO2)
 const ExtendedBoosterTypeEnum = z.enum(['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3', 'HHO', 'NO2']);
 
-// Service types for pricing
-const ServiceTypeEnum = z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']);
+// Service types are managed from MasterServiceType and can be extended by admin.
+const ServiceTypeCode = z.string().trim().min(1).max(50);
 
 // Add-on types
 const AddOnTypeEnum = z.enum(['AIR_NANO', 'ROKOK_KENKOU', 'KONSULTASI_GIZI', 'KONSULTASI_PSIKOLOG', 'LAINNYA']);
@@ -39,7 +39,7 @@ export const assignPackageSchema = z.object({
     pricingId: z.string(),
     quantity: z.number().int().min(1),
     boosterType: ExtendedBoosterTypeEnum.optional(), // For booster packages
-    serviceType: ServiceTypeEnum.optional(), // For booster packages
+    serviceType: ServiceTypeCode.optional(), // For booster packages
   })).default([]),
   
   // Array of add-ons to assign (optional)

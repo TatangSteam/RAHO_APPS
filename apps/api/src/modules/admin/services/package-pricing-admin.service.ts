@@ -18,20 +18,37 @@ function buildPricingIdentityWhere(params: {
   productCode: string | null;
   excludeId?: string;
 }) {
-  const where: Prisma.PackagePricingWhereInput = {
-    packageType: params.packageType,
-    boosterType: params.boosterType,
-    serviceType: params.serviceType,
-    totalSessions: params.totalSessions,
-    branchId: params.branchId,
-    productCode: params.productCode,
-  };
+  const where: Prisma.PackagePricingWhereInput = params.productCode
+    ? {
+        branchId: params.branchId,
+        productCode: { equals: params.productCode, mode: 'insensitive' },
+      }
+    : {
+        packageType: params.packageType,
+        boosterType: params.boosterType,
+        serviceType: params.serviceType,
+        totalSessions: params.totalSessions,
+        branchId: params.branchId,
+        productCode: null,
+      };
 
   if (params.excludeId) {
     where.id = { not: params.excludeId };
   }
 
   return where;
+}
+
+async function ensureActiveServiceType(code: string | null | undefined) {
+  if (!code) return;
+  const serviceType = await prisma.masterServiceType.findUnique({ where: { code } });
+  if (!serviceType || !serviceType.isActive) {
+    throw {
+      status: 400,
+      code: 'SERVICE_TYPE_INVALID',
+      message: `Tipe layanan ${code} tidak ditemukan atau sudah nonaktif`,
+    };
+  }
 }
 
 function getPricingDuplicateMessage(branchId: string | null, productCode: string | null) {
@@ -197,7 +214,7 @@ export class PackagePricingAdminService {
   }) {
     const boosterType = normalizeNullableString(data.boosterType);
     const serviceType = normalizeNullableString(data.serviceType);
-    const productCode = normalizeNullableString(data.productCode);
+    const productCode = normalizeNullableString(data.productCode)?.toUpperCase() || null;
     const branchId = normalizeNullableString(data.branchId);
 
     // Validate boosterType for BOOSTER packages
@@ -218,6 +235,8 @@ export class PackagePricingAdminService {
       };
     }
 
+    await ensureActiveServiceType(serviceType);
+
     // Check if pricing already exists
     const existing = await prisma.packagePricing.findFirst({
       where: buildPricingIdentityWhere({
@@ -226,7 +245,7 @@ export class PackagePricingAdminService {
         serviceType: serviceType || null,
         totalSessions: data.totalSessions,
         branchId: branchId || null,
-        productCode: productCode || null,
+        productCode,
       }),
     });
 
@@ -234,7 +253,7 @@ export class PackagePricingAdminService {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: getPricingDuplicateMessage(branchId || null, productCode || null),
+        message: getPricingDuplicateMessage(branchId || null, productCode),
       };
     }
 
@@ -337,7 +356,9 @@ export class PackagePricingAdminService {
     const normalizedServiceType =
       data.serviceType !== undefined ? normalizeNullableString(data.serviceType) : pricing.serviceType;
     const normalizedProductCode =
-      data.productCode !== undefined ? normalizeNullableString(data.productCode) : undefined;
+      data.productCode !== undefined
+        ? normalizeNullableString(data.productCode)?.toUpperCase() || null
+        : undefined;
     const effectiveProductCode = data.productCode !== undefined
       ? normalizedProductCode || null
       : pricing.productCode;
@@ -359,6 +380,18 @@ export class PackagePricingAdminService {
           message: 'Tipe layanan wajib diisi untuk paket BOOSTER',
         };
       }
+    }
+
+
+    // Existing legacy/custom codes remain editable even when they predate the
+    // master table. Only a change to a different service code must reference
+    // an active master entry.
+    if (
+      data.isActive !== false &&
+      data.serviceType !== undefined &&
+      normalizedServiceType !== pricing.serviceType
+    ) {
+      await ensureActiveServiceType(normalizedServiceType);
     }
 
     const duplicate = await prisma.packagePricing.findFirst({

@@ -18,6 +18,7 @@ import {
   releaseAddOnStockInTransaction,
   reserveAddOnStockInTransaction,
 } from './add-on-inventory.service';
+import { calculateCatalogPackageTotal } from './package-pricing-calculation';
 
 type EditableMemberPackage = Prisma.MemberPackageGetPayload<{
   include: {
@@ -269,7 +270,11 @@ export class PackageEditService {
       ? await db.packagePricing.findMany({
           where: {
             id: { in: pricingIds },
-            branchId: memberPackage.branchId,
+            OR: [
+              { branchId: memberPackage.branchId },
+              { branchId: null },
+            ],
+            isActive: true,
           },
         })
       : [];
@@ -379,7 +384,7 @@ export class PackageEditService {
           packageType: pricing.packageType,
           productCode: pricing.productCode,
           totalSessions: newTotalSessions,
-          finalPrice: Number(pricing.price) * selection.quantity,
+          finalPrice: calculateCatalogPackageTotal(pricing, selection.quantity),
           discountPercent: null,
           discountAmount: null,
           discountNote: null,
@@ -419,7 +424,7 @@ export class PackageEditService {
           productCode: pricing.productCode,
           totalSessions: pricing.totalSessions * selection.quantity,
           usedSessions: 0,
-          finalPrice: Number(pricing.price) * selection.quantity,
+          finalPrice: calculateCatalogPackageTotal(pricing, selection.quantity),
           status: replacementStatus,
           paymentPlanType: memberPackage.paymentPlanType,
           installmentTotal: memberPackage.installmentTotal,

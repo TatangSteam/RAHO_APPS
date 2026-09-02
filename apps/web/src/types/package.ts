@@ -5,11 +5,11 @@ export type BoosterType = 'HHO' | 'NO2';
 // Extended booster types from official pricing
 export type ExtendedBoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
 
-// Service types for pricing
-export type ServiceType = 'PM' | 'PS' | 'PTY' | 'PDA' | 'PHC';
+// Service types are maintained from the service-type master.
+export type ServiceType = string;
 
 // Service type pricing configuration
-export const SERVICE_TYPE_PRICING: Record<ServiceType, { name: string; pricePerSession: number; unit?: string }> = {
+export const SERVICE_TYPE_PRICING: Record<string, { name: string; pricePerSession: number; unit?: string }> = {
   PM: { name: 'Premier', pricePerSession: 1_000_000 },
   PS: { name: 'Partnership', pricePerSession: 650_000 },
   PTY: { name: 'Partnership Attiya', pricePerSession: 600_000 },
@@ -32,7 +32,7 @@ export const BOOSTER_TYPE_LABELS: Record<ExtendedBoosterType, string> = {
 
 export interface PackagePricing {
   id: string;
-  branchId: string;
+  branchId: string | null;
   branchCode?: string;
   branchName?: string;
   packageType: PackageType;
@@ -42,6 +42,7 @@ export interface PackagePricing {
   isActive: boolean;
   boosterType?: ExtendedBoosterType | null;
   serviceType?: ServiceType | null;
+  serviceTypeName?: string | null;
   productCode?: string;
   createdAt: string;
   updatedAt: string;

@@ -6,6 +6,7 @@ jest.mock('@lib/prisma', () => ({
   prisma: {
     member: { findUnique: jest.fn() },
     branch: { findUnique: jest.fn() },
+    packagePricing: { findMany: jest.fn() },
   },
 }));
 
@@ -60,5 +61,24 @@ describe('PackageAssignmentService branch access', () => {
     )).rejects.toMatchObject({ code: 'MEMBER_ACCESS_DENIED' });
 
     expect(prisma.branch.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pricing row from another branch', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(null);
+    (prisma.branch.findUnique as jest.Mock).mockResolvedValue({ id: 'branch-member', branchCode: 'PUS' });
+    (prisma.packagePricing.findMany as jest.Mock).mockResolvedValue([{
+      id: 'pricing-1',
+      branchId: 'branch-other',
+      isActive: true,
+      productCode: 'TNB-P1-PM',
+    }]);
+    const service = new PackageAssignmentService();
+
+    await expect(service.assignPackage(
+      'member-1',
+      assignment,
+      'branch-member',
+      'super-admin-1',
+    )).rejects.toMatchObject({ code: 'PACKAGE_PRICING_SCOPE_MISMATCH' });
   });
 });

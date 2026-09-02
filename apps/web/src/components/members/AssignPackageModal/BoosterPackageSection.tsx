@@ -146,7 +146,7 @@ export default function BoosterPackageSection({
                       >
                         {typePricings.map(p => {
                           const stCode = p.serviceType || '';
-                          const stName = SERVICE_TYPE_NAMES[stCode] || stCode;
+                          const stName = p.serviceTypeName || SERVICE_TYPE_NAMES[stCode] || stCode;
                           return (
                             <option key={p.id} value={stCode}>
                               {stName} — {formatCurrency(p.price)}

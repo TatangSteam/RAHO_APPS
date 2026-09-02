@@ -3,6 +3,7 @@ import { logAudit } from '../../../utils/auditLog';
 import type { CreatePackagePricingInput, UpdatePackagePricingInput } from '../packages.schema';
 import { AuditAction, Prisma } from '@prisma/client';
 import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
+import { resolveEffectivePackagePricings } from './package-pricing-scope';
 
 function normalizeNullableString(value: string | null | undefined) {
   if (value === undefined) return undefined;
@@ -20,10 +21,14 @@ export class PackagePricingService {
    */
   async getPackagePricings(branchId: string) {
     try {
-      const pricings = await prisma.packagePricing.findMany({
-        where: { branchId },
+      const scopedPricings = await prisma.packagePricing.findMany({
+        where: {
+          OR: [{ branchId }, { branchId: null }],
+        },
         orderBy: [{ packageType: 'asc' }, { totalSessions: 'asc' }],
       });
+      const pricings = resolveEffectivePackagePricings(scopedPricings, branchId);
+      const serviceTypeNames = await this.getServiceTypeNames(pricings.map(p => p.serviceType));
 
       return pricings.map(p => ({
         id: p.id,
@@ -31,6 +36,7 @@ export class PackagePricingService {
         packageType: p.packageType,
         boosterType: p.boosterType,
         serviceType: p.serviceType,
+        serviceTypeName: p.serviceType ? serviceTypeNames.get(p.serviceType) || p.serviceType : null,
         productCode: p.productCode,
         name: p.name,
         totalSessions: p.totalSessions,
@@ -66,18 +72,17 @@ export class PackagePricingService {
           { totalSessions: 'asc' },
         ],
       });
+      const serviceTypeNames = await this.getServiceTypeNames(pricings.map(p => p.serviceType));
 
-      // Filter out pricings with null branches and map
-      return pricings
-        .filter(p => p.branch !== null)
-        .map(p => ({
+      return pricings.map(p => ({
           id: p.id,
           branchId: p.branchId,
-          branchCode: p.branch.branchCode,
-          branchName: p.branch.name,
+          branchCode: p.branch?.branchCode || null,
+          branchName: p.branch?.name || 'Global',
           packageType: p.packageType,
           boosterType: p.boosterType,
           serviceType: p.serviceType,
+          serviceTypeName: p.serviceType ? serviceTypeNames.get(p.serviceType) || p.serviceType : null,
           productCode: p.productCode,
           name: p.name,
           totalSessions: p.totalSessions,
@@ -90,6 +95,17 @@ export class PackagePricingService {
       console.error('getAllPackagePricings service error:', error);
       throw error;
     }
+  }
+
+  private async getServiceTypeNames(codes: Array<string | null>): Promise<Map<string, string>> {
+    const uniqueCodes = Array.from(new Set(codes.filter((code): code is string => Boolean(code))));
+    if (uniqueCodes.length === 0) return new Map();
+
+    const types = await prisma.masterServiceType.findMany({
+      where: { code: { in: uniqueCodes } },
+      select: { code: true, name: true },
+    });
+    return new Map(types.map(type => [type.code, type.name]));
   }
 
   /**
