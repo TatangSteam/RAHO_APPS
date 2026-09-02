@@ -63,7 +63,7 @@ export default function BasicPackageSection({
   updateBasicQty,
 }: BasicPackageSectionProps) {
   const basicPricings = pricingsList.filter(p =>
-    p.packageType === 'BASIC' && p.productCode !== 'SRV-TNB-TRP-PS-001'
+    p.packageType === 'BASIC' && p.isActive && p.productCode !== 'SRV-TNB-TRP-PS-001'
   );
 
   return (
@@ -78,6 +78,9 @@ export default function BasicPackageSection({
         </span>
       </div>
       <div className="assign-package-section-box p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+        {basicPricings.length === 0 && (
+          <p className="text-sm text-neutral-600 dark:text-neutral-500">Tidak ada paket BASIC aktif pada scope ini.</p>
+        )}
         <div className="space-y-3">
           {basicPricings.map((pricing) => {
             const selection = getBasicSelection(pricing.id);

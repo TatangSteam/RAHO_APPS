@@ -42,6 +42,7 @@ import {
   Package,
   Pill,
   Plus,
+  RefreshCw,
   Stethoscope,
   UserRound,
 } from 'lucide-react';
@@ -170,6 +171,7 @@ export default function MemberDetailPage() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedPackageId, setSelectedPackageId] = useState('');
   const [pricings, setPricings] = useState<PackagePricing[]>([]);
+  const [loadingPricings, setLoadingPricings] = useState(false);
   const [assignData, setAssignData] = useState({
     selectedPackages: [] as Array<{ 
       pricingId: string; 
@@ -370,6 +372,7 @@ export default function MemberDetailPage() {
 
   const loadPricings = useCallback(async () => {
     try {
+      setLoadingPricings(true);
       // Fetch actual pricing from backend
       // Pass member's registration branch to get correct pricing
       const memberBranchId = member?.registrationBranch?.id;
@@ -385,8 +388,27 @@ export default function MemberDetailPage() {
       // Set empty array as fallback
       setPricings([]);
       return false;
+    } finally {
+      setLoadingPricings(false);
     }
   }, [member?.registrationBranch?.id]);
+
+  const handleOpenAssignPackage = async () => {
+    const pricingBranchKey = member?.registrationBranch?.id;
+    if (!pricingBranchKey) {
+      showToast.error('Cabang registrasi member tidak ditemukan');
+      return;
+    }
+
+    // Always refresh before opening. The catalog may have changed after this
+    // member page was mounted, especially when pricing is configured in
+    // another tab or by another administrator.
+    const loaded = await loadPricings();
+    if (!loaded) return;
+
+    loadedPricingBranchIdRef.current = pricingBranchKey;
+    setShowAssignModal(true);
+  };
 
   const handleDeleteMember = async () => {
     if (!member || !canDeleteMember || deletingMember) return;
@@ -890,11 +912,12 @@ export default function MemberDetailPage() {
                 {canAssignPackage && <div className="flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowAssignModal(true)}
+                    onClick={() => void handleOpenAssignPackage()}
+                    disabled={loadingPricings}
                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-black transition hover:bg-amber-400"
                   >
-                    <Plus size={16} />
-                    Assign Paket
+                    {loadingPricings ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
+                    {loadingPricings ? 'Memuat harga...' : 'Assign Paket'}
                   </button>
                 </div>}
               </div>
@@ -1070,6 +1093,7 @@ export default function MemberDetailPage() {
       <AssignPackageModal
         show={showAssignModal}
         pricings={pricings}
+        pricingScopeName={member.registrationBranch?.name}
         assignData={assignData}
         submitting={submitting}
         onClose={() => setShowAssignModal(false)}

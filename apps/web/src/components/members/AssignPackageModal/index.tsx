@@ -42,6 +42,7 @@ interface AssignData {
 interface AssignPackageModalProps {
   show: boolean;
   pricings: PackagePricing[];
+  pricingScopeName?: string;
   assignData: AssignData;
   submitting: boolean;
   onClose: () => void;
@@ -95,6 +96,7 @@ function InstallmentCountInput({
 export default function AssignPackageModal({
   show,
   pricings,
+  pricingScopeName,
   assignData,
   submitting,
   onClose,
@@ -117,7 +119,11 @@ export default function AssignPackageModal({
     return () => { document.body.style.overflow = ''; };
   }, [show]);
 
-  const pricingsList = Array.isArray(pricings) ? pricings : [];
+  // Assignment must only offer rows that the backend will accept. Keeping
+  // this filter here also makes BASIC and BOOSTER behavior consistent.
+  const pricingsList = Array.isArray(pricings)
+    ? pricings.filter((pricing) => pricing.isActive)
+    : [];
 
   const {
     isBasicSelected,
@@ -194,7 +200,9 @@ export default function AssignPackageModal({
                   Assign Paket & Add-On
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Pilih paket atau produk tambahan untuk member
+                  {pricingScopeName
+                    ? `Katalog harga aktif: ${pricingScopeName}`
+                    : 'Pilih paket atau produk tambahan untuk member'}
                 </p>
               </div>
             </div>
@@ -210,6 +218,12 @@ export default function AssignPackageModal({
 
           {/* Body */}
           <div className="assign-package-modal-body flex-1 overflow-y-auto p-6 space-y-5 max-h-[calc(100vh-220px)]">
+            {pricingsList.length === 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                Belum ada harga paket aktif untuk scope {pricingScopeName || 'cabang member ini'}. Buat harga Global atau pilih scope cabang yang sesuai pada menu Harga Paket.
+              </div>
+            )}
+
             {/* PAKET BASIC */}
             <BasicPackageSection
               pricingsList={pricingsList}
