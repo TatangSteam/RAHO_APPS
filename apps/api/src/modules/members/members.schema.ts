@@ -261,6 +261,7 @@ export const sendNotificationSchema = z.object({
 export const destroyMemberSchema = z.object({
   confirmation: z.literal('DESTRUCTION MEMBER'),
   memberNo: z.string().trim().min(1, 'Nomor member wajib diisi'),
+  deleteFinancialAndInventory: z.literal(true),
 });
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;

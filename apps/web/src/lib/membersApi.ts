@@ -142,7 +142,11 @@ export async function getMemberDestructionPreviewApi(memberId: string): Promise<
 
 export async function destroyMemberApi(
   memberId: string,
-  input: { confirmation: 'DESTRUCTION MEMBER'; memberNo: string },
+  input: {
+    confirmation: 'DESTRUCTION MEMBER';
+    memberNo: string;
+    deleteFinancialAndInventory: true;
+  },
 ): Promise<{ message: string }> {
   const { data } = await api.delete<{ data: { message: string } }>(
     `/members/${memberId}/destruction`,

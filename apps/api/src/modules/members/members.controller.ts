@@ -285,6 +285,7 @@ export class MembersController {
         {
           confirmation: validated.confirmation!,
           memberNo: validated.memberNo!,
+          deleteFinancialAndInventory: validated.deleteFinancialAndInventory,
         },
         req.user!.userId,
       );

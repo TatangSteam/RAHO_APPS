@@ -12,6 +12,8 @@ describe('Destruction Member UI contract', () => {
     expect(source).toContain('memberNoInput === exactMemberNo');
     expect(source).toContain('understood &&');
     expect(source).toContain('Destruction diblokir');
+    expect(source).toContain('deleteFinancialAndInventory: true');
+    expect(source).toContain('jurnal, dan inventory akan dihapus permanen');
 
     const headerSource = fs.readFileSync(
       path.join(process.cwd(), 'src/components/members/MemberHeader.tsx'),

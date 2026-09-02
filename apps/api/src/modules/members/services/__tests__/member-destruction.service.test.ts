@@ -1,11 +1,11 @@
-import { Role, TreatmentCompletionStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { prisma } from '../../../../lib/prisma';
 import { MemberDestructionService } from '../member-destruction.service';
 
 jest.mock('../../../../lib/prisma', () => ({
   prisma: {
     member: { findUnique: jest.fn() },
-    treatmentSession: { findMany: jest.fn() },
+    treatmentSession: { count: jest.fn(), findMany: jest.fn() },
     memberPackage: { count: jest.fn() },
     invoice: { count: jest.fn() },
     invoicePayment: { count: jest.fn() },
@@ -35,6 +35,7 @@ const prismaMock = prisma as any;
 
 function mockZeroCounts() {
   prismaMock.memberPackage.count.mockResolvedValue(0);
+  prismaMock.treatmentSession.count.mockResolvedValue(0);
   prismaMock.invoice.count.mockResolvedValue(0);
   prismaMock.invoicePayment.count.mockResolvedValue(0);
   prismaMock.diagnosis.count.mockResolvedValue(0);
@@ -59,17 +60,11 @@ describe('MemberDestructionService preview', () => {
       isEmployee: false,
       user: { role: Role.MEMBER, profile: { fullName: 'Member Dummy' } },
     });
-    prismaMock.treatmentSession.findMany.mockResolvedValue([]);
+    prismaMock.treatmentSession.count.mockResolvedValue(0);
   });
 
   it('allows destruction for a regular member with only unposted data', async () => {
-    prismaMock.treatmentSession.findMany.mockResolvedValue([
-      {
-        id: 'session-draft',
-        isCompleted: false,
-        completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
-      },
-    ]);
+    prismaMock.treatmentSession.count.mockResolvedValue(1);
 
     const preview = await new MemberDestructionService().preview('member-1');
 
@@ -78,27 +73,15 @@ describe('MemberDestructionService preview', () => {
     expect(preview.counts.sessions).toBe(1);
   });
 
-  it('blocks finalized clinical and financial data', async () => {
-    prismaMock.treatmentSession.findMany.mockResolvedValue([
-      {
-        id: 'session-final',
-        isCompleted: true,
-        completionStatus: TreatmentCompletionStatus.COMPLETED,
-      },
-    ]);
+  it('allows finalized clinical and financial data for hard destruction', async () => {
+    prismaMock.treatmentSession.count.mockResolvedValue(1);
     prismaMock.invoicePayment.count.mockResolvedValue(1);
     prismaMock.revenueRecognition.count.mockResolvedValue(1);
 
     const preview = await new MemberDestructionService().preview('member-1');
 
-    expect(preview.allowed).toBe(false);
-    expect(preview.blockers.map((item) => item.code)).toEqual(
-      expect.arrayContaining([
-        'FINALIZED_SESSION_EXISTS',
-        'VERIFIED_PAYMENT_EXISTS',
-        'REVENUE_LEDGER_EXISTS',
-      ]),
-    );
+    expect(preview.allowed).toBe(true);
+    expect(preview.blockers).toEqual([]);
   });
 
   it('blocks staff accounts enrolled as members', async () => {

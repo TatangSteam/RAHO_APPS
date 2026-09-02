@@ -80,6 +80,7 @@ export default function MemberDestructionModal({ open, memberId, member, onClose
       const result = await destroyMemberApi(memberId, {
         confirmation: 'DESTRUCTION MEMBER',
         memberNo: memberNoInput,
+        deleteFinancialAndInventory: true,
       });
       showToast.success(result.message);
       onDestroyed();
@@ -113,7 +114,7 @@ export default function MemberDestructionModal({ open, memberId, member, onClose
         <div className="max-h-[70vh] space-y-5 overflow-y-auto p-5">
           <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
             <p className="font-black">Data {member.profile?.fullName || member.memberNo} akan dihapus permanen.</p>
-            <p className="mt-1">Sesi draft dikembalikan stok dan vouchernya. Data final keuangan/inventory tidak dapat dihancurkan.</p>
+            <p className="mt-1">Sesi dan stok akan dikembalikan terlebih dahulu. Setelah itu seluruh data klinis, paket, invoice, pembayaran, jurnal, dan riwayat inventory terkait akan dihapus permanen.</p>
           </div>
 
           {loading && (
@@ -154,7 +155,7 @@ export default function MemberDestructionModal({ open, memberId, member, onClose
                   </label>
                   <label className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
                     <input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} disabled={destroying} className="mt-0.5 h-4 w-4" />
-                    Saya memahami data ini tidak dapat dipulihkan setelah Destruction Member dijalankan.
+                    Saya memahami data member, keuangan, jurnal, dan inventory akan dihapus permanen dan tidak dapat dipulihkan.
                   </label>
                 </div>
               )}
