@@ -25,4 +25,12 @@ describe('createSessionSchema diagnosisDeferred', () => {
 
     expect(result.diagnosisDeferred).toBe(true);
   });
+
+  it('keeps inventory enabled unless a legacy-session choice is explicit', () => {
+    expect(createSessionSchema.parse(validSession).skipInventoryConsumption).toBe(false);
+    expect(createSessionSchema.parse({
+      ...validSession,
+      skipInventoryConsumption: true,
+    }).skipInventoryConsumption).toBe(true);
+  });
 });

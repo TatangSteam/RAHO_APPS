@@ -577,7 +577,7 @@ export default function SessionDetailPage() {
   const handleCompleteSession = async () => {
     if (!session || completionInFlightRef.current) return;
 
-    if (!inventorySource) {
+    if (!session.session.skipInventoryConsumption && !inventorySource) {
       metricsRef.current.validationErrors += 1;
       showToast.error('Pilih Stok Cabang atau Stok Tim terlebih dahulu');
       return;
@@ -631,7 +631,7 @@ export default function SessionDetailPage() {
         throw new Error('Draft belum dapat disimpan. Muat ulang atau coba kembali sebelum completion.');
       }
       const result = await sessionApi.completeSession(sessionId, {
-        inventorySource,
+        inventorySource: session.session.skipInventoryConsumption ? 'BRANCH' : (inventorySource || 'BRANCH'),
         expectedWorkflowRevision: workflowRevisionRef.current,
       });
       showToast.success(result.message);
@@ -746,6 +746,7 @@ export default function SessionDetailPage() {
     steps.step8_evaluation;
   const completionSummary = buildCompletionSummary(session);
   const missingRequiredSteps = getMissingRequiredSteps(steps);
+  const skipsInventory = Boolean(session.session.skipInventoryConsumption);
   const sessionPhases = [
     { label: 'Persiapan', range: 'Langkah 1–3', active: activeStep <= 3 },
     { label: 'Pelaksanaan', range: 'Langkah 4–6', active: activeStep >= 4 && activeStep <= 6 },
@@ -1229,7 +1230,16 @@ export default function SessionDetailPage() {
           />
         )}
         
-        {activeStep === 5 && (
+        {activeStep === 5 && skipsInventory && (
+          <div className="card" style={{ padding: '24px' }}>
+            <h3 style={{ marginBottom: '8px' }}>Material tidak digunakan</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+              Sesi terapi lama ini dibuat dengan pilihan tanpa stok. Material tidak dicatat dan inventory tidak akan berkurang.
+            </p>
+          </div>
+        )}
+
+        {activeStep === 5 && !skipsInventory && (
           <Step6Materials 
             sessionId={sessionId}
             branchId={sessionInfo.branchId || ''}
@@ -1377,7 +1387,9 @@ export default function SessionDetailPage() {
               <div>
                 <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '4px' }}>Review sebelum menyelesaikan sesi</h3>
                 <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px' }}>
-                  Pastikan tindakan, tanda vital, material, dan evaluasi sudah sesuai kondisi aktual.
+                  {skipsInventory
+                    ? 'Pastikan tindakan, tanda vital, dan evaluasi sudah sesuai. Sesi lama ini tidak memproses inventory.'
+                    : 'Pastikan tindakan, tanda vital, material, dan evaluasi sudah sesuai kondisi aktual.'}
                 </p>
               </div>
               <button type="button" onClick={() => !completing && setShowCompletionReview(false)} disabled={completing} aria-label="Tutup review" style={{ border: 0, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
@@ -1393,7 +1405,7 @@ export default function SessionDetailPage() {
                 ['Vital sebelum/sesudah', `${completionSummary.vitalBefore}/${completionSummary.vitalAfter} catatan`],
                 ['Material', `${completionSummary.materialLines} baris · ${completionSummary.materialQuantity} unit`],
                 ['Deviasi material', `${completionSummary.deviations} baris`],
-                ['Sumber stok', inventorySource === 'TEAM' ? 'Stok Tim' : inventorySource === 'BRANCH' ? 'Stok Cabang' : 'Belum dipilih'],
+                ['Sumber stok', skipsInventory ? 'Tidak ada (sesi lama)' : inventorySource === 'TEAM' ? 'Stok Tim' : inventorySource === 'BRANCH' ? 'Stok Cabang' : 'Belum dipilih'],
               ].map(([label, value]) => (
                 <div key={label} style={{ padding: '12px', border: '1px solid var(--surface-border)', borderRadius: '10px', background: 'var(--surface-input)' }}>
                   <small style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</small>
@@ -1427,9 +1439,11 @@ export default function SessionDetailPage() {
                   if (completionError) metricsRef.current.retryCount += 1;
                   void handleCompleteSession();
                 }}
-                disabled={completing || missingRequiredSteps.length > 0 || !inventorySource || workflowSaveState === 'CONFLICT'}
+                disabled={completing || missingRequiredSteps.length > 0 || (!skipsInventory && !inventorySource) || workflowSaveState === 'CONFLICT'}
               >
-                {completing ? 'Memproses stok & finance...' : completionError ? 'Coba completion lagi' : 'Konfirmasi & selesaikan'}
+                {completing
+                  ? skipsInventory ? 'Memproses sesi & finance...' : 'Memproses stok & finance...'
+                  : completionError ? 'Coba completion lagi' : 'Konfirmasi & selesaikan'}
               </button>
             </div>
           </div>
@@ -2052,10 +2066,16 @@ export default function SessionDetailPage() {
           border: '1px solid var(--surface-border)',
           boxShadow: '0 10px 32px rgba(0, 0, 0, 0.24)',
         }}>
-          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-            Ambil bahan dari
-          </label>
-          <select
+          {skipsInventory ? (
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#f59e0b' }}>
+              Sesi lama · tanpa penggunaan stok
+            </div>
+          ) : (
+            <>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                Ambil bahan dari
+              </label>
+              <select
             value={inventorySource}
             onChange={(event) => setInventorySource(event.target.value as '' | 'BRANCH' | 'TEAM')}
             disabled={completing}
@@ -2073,25 +2093,27 @@ export default function SessionDetailPage() {
             <option value="">Pilih sumber stok</option>
             <option value="TEAM">Stok Tim</option>
             <option value="BRANCH">Stok Cabang</option>
-          </select>
+              </select>
+            </>
+          )}
           <button
             onClick={() => {
               setCompletionError(null);
               setShowCompletionReview(true);
             }}
-            disabled={completing || !inventorySource}
+            disabled={completing || (!skipsInventory && !inventorySource)}
             style={{
               padding: '18px 32px',
               fontSize: '16px',
               fontWeight: '700',
               color: 'white',
-              background: completing || !inventorySource
+              background: completing || (!skipsInventory && !inventorySource)
                 ? 'rgba(34, 197, 94, 0.5)'
                 : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
               border: 'none',
               borderRadius: '16px',
-              cursor: completing || !inventorySource ? 'not-allowed' : 'pointer',
-              boxShadow: completing || !inventorySource
+              cursor: completing || (!skipsInventory && !inventorySource) ? 'not-allowed' : 'pointer',
+              boxShadow: completing || (!skipsInventory && !inventorySource)
                 ? 'none'
                 : '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)',
               transition: 'all 0.3s ease',
@@ -2101,13 +2123,13 @@ export default function SessionDetailPage() {
               animation: 'floatingButtonPulse 2s infinite',
             }}
             onMouseEnter={(e) => {
-              if (!completing && inventorySource) {
+              if (!completing && (skipsInventory || inventorySource)) {
                 e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
                 e.currentTarget.style.boxShadow = '0 12px 40px rgba(34, 197, 94, 0.6), 0 6px 16px rgba(0, 0, 0, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
-              if (!completing && inventorySource) {
+              if (!completing && (skipsInventory || inventorySource)) {
                 e.currentTarget.style.transform = 'translateY(0) scale(1)';
                 e.currentTarget.style.boxShadow = '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)';
               }

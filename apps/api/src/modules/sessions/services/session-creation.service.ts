@@ -19,6 +19,25 @@ import {
 } from './session-creation.helpers';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
+const LEGACY_INVENTORY_BYPASS_ROLES = new Set<Role>([
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+]);
+
+function jakartaDateKey(value: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
 /**
  * Service for session creation
  */
@@ -30,6 +49,24 @@ export class SessionCreationService {
   async createSession(data: CreateSessionInput, branchId: string, userId: string, userRole?: string) {
     // 0. Auto-fill doctorId or nurseId based on user role
     const sessionData = await this.autoFillStaffIds(data, userId, userRole);
+
+    if (sessionData.skipInventoryConsumption) {
+      if (!userRole || !LEGACY_INVENTORY_BYPASS_ROLES.has(userRole as Role)) {
+        throw {
+          status: 403,
+          code: 'LEGACY_SESSION_INVENTORY_BYPASS_FORBIDDEN',
+          message: 'Hanya akun admin yang dapat membuat sesi lama tanpa penggunaan stok.',
+        };
+      }
+      const treatmentDate = new Date(sessionData.treatmentDate);
+      if (jakartaDateKey(treatmentDate) >= jakartaDateKey(new Date())) {
+        throw {
+          status: 422,
+          code: 'LEGACY_SESSION_DATE_REQUIRED',
+          message: 'Pilihan tanpa stok hanya dapat digunakan untuk sesi terapi sebelum hari ini.',
+        };
+      }
+    }
 
     // 1. Validate member access
     const member = await this.validateMemberAccess(sessionData.memberId, branchId);
@@ -70,7 +107,9 @@ export class SessionCreationService {
     }
 
     // 8. Validate every component of the current infusion kit.
-    const infusionKit = await this.validateInfusKitStock(branchId);
+    const infusionKit = sessionData.skipInventoryConsumption
+      ? { draftMaterials: [] }
+      : await this.validateInfusKitStock(branchId);
 
     // 9. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
@@ -143,6 +182,10 @@ export class SessionCreationService {
         isEmployeeFreeSession: member.isEmployee,
         packageStatusAtCreation: memberPackage?.status ?? null,
         isDebtSession: memberPackage ? memberPackage.status !== PackageStatus.ACTIVE : false,
+        skipInventoryConsumption: sessionData.skipInventoryConsumption,
+        inventoryPolicy: sessionData.skipInventoryConsumption
+          ? 'LEGACY_SESSION_NO_STOCK'
+          : 'CURRENT_STOCK',
       },
     });
 
@@ -159,7 +202,9 @@ export class SessionCreationService {
           ? `Infus ke-${globalInfusKe} (Infus pertama di ${branch.name})`
           : `Infus ke-${globalInfusKe} (Infus ke-${branchInfusKe} di ${branch.name})`,
       message:
-        member.isEmployee
+        sessionData.skipInventoryConsumption
+          ? 'Sesi terapi lama berhasil dibuat tanpa penggunaan stok. Pilihan ini tercatat dalam audit sesi.'
+          : member.isEmployee
           ? 'Sesi Basic karyawan berhasil dibuat gratis. Voucher dan paket tidak berkurang; stok tetap diproses saat sesi diselesaikan.'
           : !memberPackage
           ? 'Sesi terapi tanpa paket berhasil dibuat. Voucher tidak berkurang; stok tetap diproses saat sesi diselesaikan.'
@@ -775,6 +820,7 @@ export class SessionCreationService {
           nurseId: data.nurseId,   // Primary nurse
           boosterPackageId: data.boosterPackageId,
           diagnosisDeferred: data.diagnosisDeferred,
+          skipInventoryConsumption: data.skipInventoryConsumption,
           materialPolicyVersion: 2,
           isCompleted: false,
         },
@@ -783,13 +829,15 @@ export class SessionCreationService {
       // The infusion kit is a mandatory prerequisite for every current-policy
       // session. Record its physical components immediately as DRAFT material
       // usage; inventory is posted only when the session is completed.
-      await tx.materialUsage.createMany({
-        data: buildAutomaticKitMaterialUsageRows(
-          session.id,
-          userId,
-          infusionKitMaterials,
-        ),
-      });
+      if (!data.skipInventoryConsumption) {
+        await tx.materialUsage.createMany({
+          data: buildAutomaticKitMaterialUsageRows(
+            session.id,
+            userId,
+            infusionKitMaterials,
+          ),
+        });
+      }
 
       // Add primary doctor to session_doctors
       await tx.sessionDoctor.create({

@@ -52,6 +52,7 @@ export interface CreateSessionInput {
   additionalNurseIds?: string[];
   treatmentDate: string;
   pelaksanaan: SessionType;
+  skipInventoryConsumption?: boolean;
   // Manual session numbering (optional)
   useManualNumbering?: boolean;
   manualInfusKe?: number; // Global session number
@@ -133,6 +134,7 @@ export interface Session {
   treatmentDate: string;
   isCompleted: boolean;
   diagnosisDeferred?: boolean;
+  skipInventoryConsumption?: boolean;
   completionStatus?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   completedAt?: string | null;
   recognizedRevenue?: string;

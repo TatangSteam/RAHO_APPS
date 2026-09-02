@@ -41,6 +41,7 @@ export const createSessionSchema = z.object({
   additionalNurseIds: z.array(z.string().cuid()).optional().default([]), // Additional nurses
   treatmentDate: z.string().datetime(),
   pelaksanaan: z.nativeEnum(SessionType),
+  skipInventoryConsumption: z.boolean().optional().default(false),
   // Manual session numbering (optional - if not provided, auto-calculate)
   manualInfusKe: z.number().int().positive().optional(), // Global session number
   manualBranchInfusKe: z.number().int().positive().optional(), // Branch-specific session number

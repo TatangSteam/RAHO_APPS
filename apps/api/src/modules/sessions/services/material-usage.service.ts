@@ -24,11 +24,24 @@ export class MaterialUsageService {
   ) {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, sessionCode: true, branchId: true, isCompleted: true, materialPolicyVersion: true },
+      select: {
+        id: true,
+        sessionCode: true,
+        branchId: true,
+        isCompleted: true,
+        materialPolicyVersion: true,
+        skipInventoryConsumption: true,
+      },
     });
     if (!session) throw errors.notFound('Sesi tidak ditemukan.');
     if (session.branchId !== authorizedBranchId) throw errors.forbidden('Sesi berada di luar cabang yang diizinkan.');
     if (session.isCompleted) throw errors.conflict('SESSION_ALREADY_COMPLETED', 'Material sesi yang sudah selesai tidak dapat diubah.');
+    if (session.skipInventoryConsumption) {
+      throw errors.conflict(
+        'LEGACY_SESSION_INVENTORY_DISABLED',
+        'Sesi terapi lama ini dibuat tanpa penggunaan stok sehingga material inventory tidak dapat ditambahkan.',
+      );
+    }
     await assertBranchAccess(userId, session.branchId);
     await assertPermission(userId, PERMISSIONS.TREATMENT_MATERIAL_RECORD, session.branchId);
 

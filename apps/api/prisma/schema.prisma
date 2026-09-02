@@ -3024,6 +3024,9 @@ model TreatmentSession {
   treatmentDate              DateTime
   isCompleted                Boolean                     @default(false)
   diagnosisDeferred          Boolean                     @default(false)
+  // Backdated session entered after the treatment happened. Inventory validation,
+  // material drafting, and stock posting are intentionally skipped and audited.
+  skipInventoryConsumption   Boolean                     @default(false)
   completionStatus           TreatmentCompletionStatus   @default(IN_PROGRESS)
   // 1 = sesi yang sudah ada sebelum cutover; 2 = completion inventory/finance/event terbaru
   completionFlowVersion      Int                         @default(2)

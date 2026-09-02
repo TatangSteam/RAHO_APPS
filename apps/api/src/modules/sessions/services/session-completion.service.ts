@@ -155,6 +155,7 @@ export class SessionCompletionService {
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
       const isLegacySession = session.completionFlowVersion === LEGACY_COMPLETION_FLOW_VERSION;
+      const skipsInventory = session.skipInventoryConsumption;
       const revisionKey = completionRevisionKey(session.cancellationIdempotencyKey);
       const completionAggregateId = revisionKey
         ? `${session.id}:REVISION:${revisionKey}`
@@ -203,7 +204,9 @@ export class SessionCompletionService {
           message: isLegacyCompletion
             ? 'Sesi terapi lama sudah diselesaikan dan tetap menggunakan alur legacy.'
             : 'Sesi terapi sudah diselesaikan.',
-          inventorySource: existingTeamInventory ? 'TEAM' as const : 'BRANCH' as const,
+          inventorySource: skipsInventory
+            ? 'NONE' as const
+            : existingTeamInventory ? 'TEAM' as const : 'BRANCH' as const,
           inventoryTeamId: existingTeamInventory?.teamId ?? null,
           teamInventoryCompletionId: existingTeamInventory?.id ?? null,
         };
@@ -219,7 +222,7 @@ export class SessionCompletionService {
         );
       }
 
-      if (!isLegacySession) {
+      if (!isLegacySession && !skipsInventory) {
         await ensureAutomaticInfusionKitMaterialDrafts(tx, {
           sessionId: session.id,
           branchId: session.branchId,
@@ -241,7 +244,7 @@ export class SessionCompletionService {
           })
         : session.materials;
 
-      const teamInventory = isLegacySession || input.inventorySource === 'BRANCH'
+      const teamInventory = isLegacySession || skipsInventory || input.inventorySource === 'BRANCH'
         ? null
         : await resolveSessionTeamInventory(tx, {
             sessionId: session.id,
@@ -262,7 +265,7 @@ export class SessionCompletionService {
             })),
           });
 
-      if (!isLegacySession && input.inventorySource === 'TEAM' && !teamInventory) {
+      if (!isLegacySession && !skipsInventory && input.inventorySource === 'TEAM' && !teamInventory) {
         throw errors.unprocessable(
           'SESSION_INVENTORY_TEAM_NOT_FOUND',
           'Sesi ini belum terhubung ke tim dan tas stok aktif. Pilih Stok Cabang atau lengkapi penugasan tim terlebih dahulu.',
@@ -274,7 +277,7 @@ export class SessionCompletionService {
       // limited to an actual shortage and never overrides reservations or
       // quarantined quantities already represented in the ledger.
       let reconciledCompatibilityStock = false;
-      if (!teamInventory) {
+      if (!teamInventory && !skipsInventory) {
         for (const material of [...sessionMaterials]
           .filter((row) => row.status === MaterialUsageStatus.DRAFT && row.baseQuantity.greaterThan(0))
           .sort((a, b) => a.inventoryItemId.localeCompare(b.inventoryItemId))) {
@@ -317,11 +320,11 @@ export class SessionCompletionService {
       if (!session.therapyPlan) errorsList.push('Therapy plan belum dibuat');
       if (!hasVitalBefore) errorsList.push('Tanda vital SEBELUM belum diisi');
       if (!session.infusion) errorsList.push('Infus aktual belum dibuat');
-      if (sessionMaterials.length === 0) errorsList.push('Pemakaian bahan belum diisi (WAJIB)');
+      if (!skipsInventory && sessionMaterials.length === 0) errorsList.push('Pemakaian bahan belum diisi (WAJIB)');
       if (!hasVitalAfter) errorsList.push('Tanda vital SESUDAH belum diisi');
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
 
-      if (!teamInventory) {
+      if (!teamInventory && !skipsInventory) {
         for (const material of sessionMaterials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
           const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
           if (physicalAvailable.lessThan(material.baseQuantity)) {
@@ -335,8 +338,10 @@ export class SessionCompletionService {
         }
       }
 
-      const recommendations = await resolveSessionMaterialRecommendations(session.id, tx);
-      if (!isLegacySession && recommendations.hasActiveBom) {
+      const recommendations = skipsInventory
+        ? { hasActiveBom: false, items: [] }
+        : await resolveSessionMaterialRecommendations(session.id, tx);
+      if (!isLegacySession && !skipsInventory && recommendations.hasActiveBom) {
         for (const recommendation of recommendations.items.filter((item) => item.isRequired)) {
           const usage = sessionMaterials.find(
             (material) => material.inventoryItem.masterProductId === recommendation.masterProductId,
@@ -368,10 +373,10 @@ export class SessionCompletionService {
       const completedAt = new Date();
       const draftMaterials = sessionMaterials.filter((material) => material.status === MaterialUsageStatus.DRAFT);
       const legacyConsumedMaterials = draftMaterials.filter(
-        (material) => material.baseQuantity.lessThanOrEqualTo(0),
+        (material) => skipsInventory || material.baseQuantity.lessThanOrEqualTo(0),
       );
       const postableDraftMaterials = draftMaterials.filter(
-        (material) => material.baseQuantity.greaterThan(0),
+        (material) => !skipsInventory && material.baseQuantity.greaterThan(0),
       );
       let materialPostingId: string | null = null;
       let teamInventoryCompletionId: string | null = null;
@@ -636,33 +641,35 @@ export class SessionCompletionService {
           occurredAt: completedAt,
         },
       });
-      await createInventorySyncEventInTransaction(tx, {
-        eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
-        aggregateType: 'TreatmentSessionInventory',
-        aggregateId: completionAggregateId,
-        occurredAt: completedAt,
-        snapshot: {
-          sourceType: 'TREATMENT_COMPLETION',
-          localEntityId: completionAggregateId,
-          externalKey: revisionKey
-            ? `RAHO-TREATMENT-${session.sessionCode}-REV-${revisionKey}`
-            : `RAHO-TREATMENT-${session.sessionCode}`,
-          branchId: session.branchId,
-          occurredAt: completedAt.toISOString(),
-          postingReference: materialPosting?.postingNumber ?? null,
-          reason: 'Treatment material consumption',
-          lines: materialRows
-            .filter((material) => material.baseQuantity.greaterThan(0))
-            .map((material) => ({
-              inventoryItemId: material.inventoryItemId,
-              sku: material.inventoryItem.masterProduct.sku,
-              stockLocationId: material.inventoryItem.stockLocationId,
-              quantityAdjusted: material.baseQuantity.negated().toFixed(4),
-              unitRate: material.actualUnitCost?.toFixed(4) ?? null,
-              value: material.totalActualCost?.negated().toFixed(4) ?? null,
-            })),
-        },
-      });
+      if (!skipsInventory) {
+        await createInventorySyncEventInTransaction(tx, {
+          eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
+          aggregateType: 'TreatmentSessionInventory',
+          aggregateId: completionAggregateId,
+          occurredAt: completedAt,
+          snapshot: {
+            sourceType: 'TREATMENT_COMPLETION',
+            localEntityId: completionAggregateId,
+            externalKey: revisionKey
+              ? `RAHO-TREATMENT-${session.sessionCode}-REV-${revisionKey}`
+              : `RAHO-TREATMENT-${session.sessionCode}`,
+            branchId: session.branchId,
+            occurredAt: completedAt.toISOString(),
+            postingReference: materialPosting?.postingNumber ?? null,
+            reason: 'Treatment material consumption',
+            lines: materialRows
+              .filter((material) => material.baseQuantity.greaterThan(0))
+              .map((material) => ({
+                inventoryItemId: material.inventoryItemId,
+                sku: material.inventoryItem.masterProduct.sku,
+                stockLocationId: material.inventoryItem.stockLocationId,
+                quantityAdjusted: material.baseQuantity.negated().toFixed(4),
+                unitRate: material.actualUnitCost?.toFixed(4) ?? null,
+                value: material.totalActualCost?.negated().toFixed(4) ?? null,
+              })),
+          },
+        });
+      }
       return {
         sessionId: session.id,
         sessionCode: session.sessionCode,
@@ -679,8 +686,12 @@ export class SessionCompletionService {
         grossProfit: finance.grossProfit,
         revenueCompatibilityMode: finance.revenueCompatibilityMode,
         idempotentReplay: false,
-        message: 'Sesi terapi berhasil diselesaikan',
-        inventorySource: teamInventory ? 'TEAM' as const : 'BRANCH' as const,
+        message: skipsInventory
+          ? 'Sesi terapi lama berhasil diselesaikan tanpa mengurangi stok.'
+          : 'Sesi terapi berhasil diselesaikan',
+        inventorySource: skipsInventory
+          ? 'NONE' as const
+          : teamInventory ? 'TEAM' as const : 'BRANCH' as const,
         inventoryTeamId: teamInventory?.team.id ?? null,
         teamInventoryCompletionId,
       };
@@ -709,6 +720,7 @@ export class SessionCompletionService {
         inventorySource: result.inventorySource,
         inventoryTeamId: result.inventoryTeamId,
         teamInventoryCompletionId: result.teamInventoryCompletionId,
+        skipInventoryConsumption: result.inventorySource === 'NONE',
       },
     });
     return result;
@@ -1184,7 +1196,7 @@ export class SessionCompletionService {
       step2_therapyPlan: Boolean(session.therapyPlan),
       step3_vitalBefore: hasVitalBefore,
       step4_infusion: Boolean(session.infusion),
-      step5_materials: session.materials.length > 0,
+      step5_materials: session.skipInventoryConsumption || session.materials.length > 0,
       step6_photo: Boolean(session.photo),
       step7_vitalAfter: hasVitalAfter,
       step8_evaluation: this.hasDoctorEvaluation(session.evaluation),

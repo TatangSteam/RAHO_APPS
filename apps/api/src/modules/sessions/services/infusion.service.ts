@@ -163,6 +163,13 @@ export class InfusionService {
         },
       });
 
+      // Backfilled sessions represent treatment that already happened before it
+      // was entered into ERP. Preserve the clinical infusion record, but never
+      // mutate current inventory or fabricate material-usage rows for it.
+      if (session.skipInventoryConsumption) {
+        return infusion;
+      }
+
       // ✨ AUTO-USE PRODUCTS with isAutoUsedPerSession flag (e.g., Infus Set + Pelengkap)
       // Legacy sessions still consume the historical bundle SKU here. New
       // sessions post the configured kit components once by physical quantity at
@@ -448,7 +455,13 @@ export class InfusionService {
       action: AuditAction.CREATE,
       resource: 'InfusionExecution',
       resourceId: result.id,
-      meta: { sessionId },
+      meta: {
+        sessionId,
+        skipInventoryConsumption: session.skipInventoryConsumption,
+        inventoryPolicy: session.skipInventoryConsumption
+          ? 'LEGACY_SESSION_NO_STOCK'
+          : 'CURRENT_STOCK',
+      },
     });
 
     return result;

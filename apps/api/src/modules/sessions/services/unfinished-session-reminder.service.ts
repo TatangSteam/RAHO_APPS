@@ -176,6 +176,7 @@ export class UnfinishedSessionReminderService {
         id: true,
         sessionCode: true,
         treatmentDate: true,
+        skipInventoryConsumption: true,
         branch: { select: { id: true, name: true, branchCode: true } },
         encounter: {
           select: {
@@ -211,7 +212,7 @@ export class UnfinishedSessionReminderService {
         therapyPlan: Boolean(session.therapyPlan),
         vitalBefore: session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM'),
         infusion: Boolean(session.infusion),
-        materials: session.materials.length > 0,
+        materials: session.skipInventoryConsumption || session.materials.length > 0,
         vitalAfter: session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH'),
         doctorEvaluation: hasFilledDoctorEvaluation(session.evaluation),
       });

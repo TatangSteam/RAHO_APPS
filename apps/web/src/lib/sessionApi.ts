@@ -295,7 +295,7 @@ export const sessionApi = {
     sessionCode: string;
     isCompleted: boolean;
     message: string;
-    inventorySource: 'BRANCH' | 'TEAM';
+    inventorySource: 'BRANCH' | 'TEAM' | 'NONE';
     inventoryTeamId: string | null;
   }> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/complete`, input);

@@ -75,6 +75,7 @@ export default function CreateSessionModal({
   
   const [treatmentDate, setTreatmentDate] = useState('');
   const [pelaksanaan, setPelaksanaan] = useState<SessionType>('ON_SITE');
+  const [skipInventoryConsumption, setSkipInventoryConsumption] = useState(false);
   const [activeTab, setActiveTab] = useState<'form' | 'therapyPlan'>('form');
 
   // Manual session numbering
@@ -652,6 +653,17 @@ export default function CreateSessionModal({
     }
 
     if (!treatmentDate) { setError('Tanggal & waktu terapi harus diisi'); return; }
+    if (skipInventoryConsumption) {
+      const selectedDateKey = treatmentDate.slice(0, 10);
+      const now = new Date();
+      const todayKey = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10);
+      if (selectedDateKey >= todayKey) {
+        setError('Pilihan tanpa stok hanya dapat digunakan untuk sesi terapi sebelum hari ini.');
+        return;
+      }
+    }
 
     // Validate manual numbering if enabled
     if (useManualNumbering) {
@@ -692,6 +704,7 @@ export default function CreateSessionModal({
         diagnosisDeferred: !hasDiagnosis && diagnosisDeferred,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
+        skipInventoryConsumption,
         useManualNumbering,
         manualInfusKe: useManualNumbering && manualInfusKe ? Number(manualInfusKe) : undefined,
         manualBranchInfusKe: useManualNumbering && manualBranchInfusKe ? Number(manualBranchInfusKe) : undefined,
@@ -743,6 +756,7 @@ export default function CreateSessionModal({
       setDiagnoses([]);
       setHasDiagnosis(false);
       setDiagnosisDeferred(false);
+      setSkipInventoryConsumption(false);
       setSelectedDoctorId('');
       setSelectedNurseId('');
       setSelectedAdminLayananId('');
@@ -782,6 +796,12 @@ export default function CreateSessionModal({
   const selectedPlan = therapyPlans.find(p => p.id === selectedTherapyPlanId);
   const selectedPackage = basicPackages.find(p => p.packageId === selectedPackageId);
   const canSelectAllStaffForRole = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
+  const canCreateLegacySessionWithoutStock = [
+    'SUPER_ADMIN',
+    'ADMIN_MANAGER',
+    'ADMIN_CABANG',
+    'ADMIN_LAYANAN',
+  ].includes(user?.role || '');
 
   // Toggle accordion
   const toggleSet = (setKey: string) => {
@@ -919,13 +939,13 @@ export default function CreateSessionModal({
                 )}
 
                 {/* Infus Set Stock Warning */}
-                {loadingInfusSetStock && (
+                {loadingInfusSetStock && !skipInventoryConsumption && (
                   <div className="flex items-center gap-2 p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
                     <RefreshCw className="h-4 w-4 animate-spin text-neutral-500" />
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">Memeriksa stok Infus Set...</p>
                   </div>
                 )}
-                {!loadingInfusSetStock && infusSetStock !== null && infusSetStock < 1 && (
+                {!loadingInfusSetStock && !skipInventoryConsumption && infusSetStock !== null && infusSetStock < 1 && (
                   <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
                     <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                     <div>
@@ -937,13 +957,37 @@ export default function CreateSessionModal({
                     </div>
                   </div>
                 )}
-                {!loadingInfusSetStock && infusSetStock !== null && infusSetStock >= 1 && (
+                {!loadingInfusSetStock && !skipInventoryConsumption && infusSetStock !== null && infusSetStock >= 1 && (
                   <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                     <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                       Stok {infusSetProductName}: <span className="font-bold">{infusSetStock}</span> tersedia
                     </p>
                   </div>
+                )}
+
+                {canCreateLegacySessionWithoutStock && (
+                  <label className={`flex items-start gap-3 rounded-xl border p-4 transition-colors ${
+                    skipInventoryConsumption
+                      ? 'border-amber-400 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10'
+                      : 'border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={skipInventoryConsumption}
+                      onChange={(event) => setSkipInventoryConsumption(event.target.checked)}
+                      disabled={loading}
+                      className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                        Sesi terapi lama — tidak menggunakan stok
+                      </span>
+                      <span className="mt-1 block text-xs text-neutral-600 dark:text-neutral-400">
+                        Hanya untuk terapi sebelum hari ini yang sudah dilakukan tetapi belum dicatat. Sistem tidak memvalidasi, mencatat, atau mengurangi stok material.
+                      </span>
+                    </span>
+                  </label>
                 )}
 
                 {/* Package Selection */}
@@ -966,7 +1010,9 @@ export default function CreateSessionModal({
                     </select>
                     {selectedPackageId === '__WITHOUT_PACKAGE__' && (
                       <p className="text-sm text-amber-700 dark:text-amber-400">
-                        Voucher tidak akan berkurang. Untuk karyawan, sesi Basic ini gratis. Material terapi tetap dicatat dan stok akan berkurang saat sesi diselesaikan.
+                        Voucher tidak akan berkurang. Untuk karyawan, sesi Basic ini gratis. {skipInventoryConsumption
+                          ? 'Karena ini sesi lama, material dan stok tidak diproses.'
+                          : 'Material terapi tetap dicatat dan stok akan berkurang saat sesi diselesaikan.'}
                       </p>
                     )}
                     {isEmployeeMember && (
