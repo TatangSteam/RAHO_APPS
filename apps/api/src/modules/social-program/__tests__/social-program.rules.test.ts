@@ -25,14 +25,14 @@ describe('Program Sosial pricing and rollout safety', () => {
     });
   });
 
-  it('uses two-stage approval and exact social product code', () => {
+  it('keeps the legacy two-stage approval flow without requiring it for direct assignment', () => {
     const root = path.resolve(__dirname, '..');
     const migration = fs.readFileSync(path.resolve(root, '..', '..', '..', 'prisma', 'migrations', '20260824120000_add_social_treatment_program', 'migration.sql'), 'utf8');
     const assignment = fs.readFileSync(path.resolve(root, '..', 'packages', 'services', 'package-assignment.service.ts'), 'utf8');
     expect(migration).toContain("'SOCIAL_PROGRAM.MANAGER_APPROVE'");
     expect(migration).toContain("'SOCIAL_PROGRAM.FINANCE_APPROVE'");
     expect(migration).toContain("'SRV-TNB-TRP-PS-001'");
-    expect(assignment).toContain('SOCIAL_PROGRAM_APPROVAL_REQUIRED');
+    expect(assignment).not.toContain('SOCIAL_PROGRAM_APPROVAL_REQUIRED');
   });
 
   it('does not update historical commercial tables during migration', () => {

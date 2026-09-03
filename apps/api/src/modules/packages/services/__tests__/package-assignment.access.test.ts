@@ -81,4 +81,57 @@ describe('PackageAssignmentService branch access', () => {
       'super-admin-1',
     )).rejects.toMatchObject({ code: 'PACKAGE_PRICING_SCOPE_MISMATCH' });
   });
+
+  it('allows Program Sosial pricing to be assigned directly', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(null);
+    (prisma.branch.findUnique as jest.Mock).mockResolvedValue({
+      id: 'branch-member',
+      branchCode: 'PUS',
+    });
+    (prisma.packagePricing.findMany as jest.Mock).mockResolvedValue([{
+      id: 'pricing-1',
+      branchId: 'branch-member',
+      packageType: 'BASIC',
+      boosterType: null,
+      serviceType: 'PS',
+      productCode: 'SRV-TNB-TRP-PS-001',
+      name: 'Terapi Nano Bubble 1X (Program Sosial)',
+      totalSessions: 1,
+      price: 500_000,
+      isActive: true,
+    }]);
+
+    const service = new PackageAssignmentService();
+    const internals = service as unknown as {
+      getNextSequences: (branchCode: string, branchId: string) => Promise<{
+        basicSequence: number;
+        boosterSequence: number;
+      }>;
+      createPackagesTransaction: (...args: unknown[]) => Promise<{
+        createdPackages: [];
+        createdAddOns: [];
+        totalBasicSessions: number;
+      }>;
+    };
+    jest.spyOn(internals, 'getNextSequences').mockResolvedValue({
+      basicSequence: 1,
+      boosterSequence: 1,
+    });
+    const createPackagesTransaction = jest
+      .spyOn(internals, 'createPackagesTransaction')
+      .mockResolvedValue({
+        createdPackages: [],
+        createdAddOns: [],
+        totalBasicSessions: 0,
+      });
+
+    await expect(service.assignPackage(
+      'member-1',
+      assignment,
+      'branch-member',
+      'super-admin-1',
+    )).resolves.toMatchObject({ message: '0 item berhasil diassign' });
+
+    expect(createPackagesTransaction).toHaveBeenCalled();
+  });
 });

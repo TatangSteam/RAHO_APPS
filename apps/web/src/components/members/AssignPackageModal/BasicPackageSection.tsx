@@ -4,8 +4,6 @@ import { PackagePricing } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
 import type { PackageSelection } from './usePackageSelection';
 
-const SOCIAL_PROGRAM_PRODUCT_CODE = 'SRV-TNB-TRP-PS-001';
-
 interface BasicPackageSectionProps {
   pricingsList: PackagePricing[];
   isBasicSelected: (pricingId: string) => boolean;
@@ -85,31 +83,22 @@ export default function BasicPackageSection({
         )}
         <div className="space-y-3">
           {basicPricings.map((pricing) => {
-            const requiresSocialApproval = pricing.productCode === SOCIAL_PROGRAM_PRODUCT_CODE;
             const selection = getBasicSelection(pricing.id);
             const quantity = selection?.quantity || 1;
-            const isSelected = !requiresSocialApproval && isBasicSelected(pricing.id);
+            const isSelected = isBasicSelected(pricing.id);
             
             return (
               <div key={pricing.id} className="space-y-2">
                 <label
-                  title={requiresSocialApproval ? 'Paket Program Sosial diassign melalui Approval Inbox' : undefined}
-                  className={`assign-package-option flex items-center p-3 rounded-lg transition-all ${
-                    requiresSocialApproval
-                      ? 'cursor-not-allowed opacity-70 border border-dashed border-blue-300 dark:border-blue-500/30'
-                      : 'cursor-pointer'
-                  } ${
+                  className={`assign-package-option flex items-center p-3 rounded-lg cursor-pointer transition-all ${
                     isSelected 
                       ? 'bg-blue-100 dark:bg-blue-500/25 border border-blue-300 dark:border-blue-500/50' 
-                      : requiresSocialApproval
-                        ? ''
-                        : 'hover:bg-blue-100/50 dark:hover:bg-blue-500/10 border border-transparent'
+                      : 'hover:bg-blue-100/50 dark:hover:bg-blue-500/10 border border-transparent'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={isSelected}
-                    disabled={requiresSocialApproval}
                     onChange={() => toggleBasic(pricing.id)}
                     className="assign-package-option-checkbox w-4 h-4 rounded border-blue-400 dark:border-blue-500/50 text-blue-600 focus:ring-blue-500 bg-white dark:bg-neutral-800"
                   />
@@ -119,7 +108,6 @@ export default function BasicPackageSection({
                     </span>
                     <span className="assign-package-option-meta text-xs text-neutral-500 dark:text-neutral-400">
                       {pricing.totalSessions} sesi terapi
-                      {requiresSocialApproval && ' • melalui Approval Inbox'}
                     </span>
                   </span>
                   <span className="assign-package-option-price font-bold text-sm text-blue-600 dark:text-blue-400">

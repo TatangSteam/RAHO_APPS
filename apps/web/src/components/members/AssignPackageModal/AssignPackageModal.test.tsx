@@ -110,7 +110,7 @@ describe('AssignPackageModal package assignment', () => {
     expect(screen.queryByText('Paket Nonaktif')).not.toBeInTheDocument();
   });
 
-  it('shows the branch price for Program Sosial but requires assignment through approval', () => {
+  it('allows Program Sosial to be assigned directly using its branch price', () => {
     render(
       <AssignPackageHarness
         onSubmit={jest.fn()}
@@ -132,9 +132,13 @@ describe('AssignPackageModal package assignment', () => {
     );
 
     expect(screen.getByText('Rp 500.000')).toBeInTheDocument();
-    expect(screen.getByText(/melalui Approval Inbox/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('checkbox', { name: /Terapi Nano Bubble 1X \(Program Sosial\)/i }),
-    ).toBeDisabled();
+    const socialProgramCheckbox = screen.getByRole('checkbox', {
+      name: /Terapi Nano Bubble 1X \(Program Sosial\)/i,
+    });
+    expect(socialProgramCheckbox).toBeEnabled();
+
+    fireEvent.click(socialProgramCheckbox);
+
+    expect(screen.getByRole('button', { name: 'Assign 1 Paket' })).toBeEnabled();
   });
 });

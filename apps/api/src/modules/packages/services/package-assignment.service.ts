@@ -222,14 +222,6 @@ export class PackageAssignmentService {
       };
     }
 
-    const socialPricing = pricings.find((pricing) => pricing.productCode === SOCIAL_PROGRAM_PRODUCT_CODE);
-    if (socialPricing && !approvedSocial) {
-      throw {
-        status: 403,
-        code: 'SOCIAL_PROGRAM_APPROVAL_REQUIRED',
-        message: 'Paket Program Sosial hanya dapat dibuat melalui pengajuan dan Approval Inbox.',
-      };
-    }
     if (approvedSocial && (normalizedAddOns.length > 0 || data.discountAmount || data.discountPercent)) {
       throw {
         status: 400,
