@@ -217,6 +217,19 @@ export const sessionApi = {
     }
   },
 
+  activateSessionMaterials: async (sessionId: string): Promise<{
+    sessionId: string;
+    sessionCode: string;
+    materialPolicyVersion: number;
+    createdMaterialCount: number;
+    availableSessionCount: number | null;
+    alreadyActive: boolean;
+    message: string;
+  }> => {
+    const response = await api.patch(`/treatment-sessions/${sessionId}/materials/activate`);
+    return response.data.data;
+  },
+
   // ============================================================
   // SESSION LIST
   // ============================================================

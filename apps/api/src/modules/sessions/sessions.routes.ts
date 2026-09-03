@@ -279,6 +279,13 @@ router.get(
   controller.getMaterialUsages.bind(controller)
 );
 
+router.patch(
+  '/:sessionId/materials/activate',
+  authenticate,
+  authorize(CLINICAL_WRITERS),
+  controller.activateSessionMaterials.bind(controller)
+);
+
 router.delete(
   '/:sessionId/materials/:usageId',
   authenticate,

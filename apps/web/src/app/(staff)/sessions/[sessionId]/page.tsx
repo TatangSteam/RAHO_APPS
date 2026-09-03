@@ -117,6 +117,7 @@ export default function SessionDetailPage() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationKey, setCancellationKey] = useState('');
   const [cancellingCompletion, setCancellingCompletion] = useState(false);
+  const [activatingMaterials, setActivatingMaterials] = useState(false);
   const [showStaffInfo, setShowStaffInfo] = useState(false);
   const [showTherapyPlanEditModal, setShowTherapyPlanEditModal] = useState(false);
   const [therapyPlanSetForEdit, setTherapyPlanSetForEdit] = useState<TherapyPlan[]>([]);
@@ -681,6 +682,29 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleActivateMaterials = async () => {
+    if (!session || activatingMaterials) return;
+
+    const confirmed = window.confirm(
+      'Aktifkan pencatatan material dan stok untuk sesi ini? Komponen wajib akan dibuat sebagai draft. Stok baru berkurang saat sesi diselesaikan.',
+    );
+    if (!confirmed) return;
+
+    try {
+      setActivatingMaterials(true);
+      const result = await sessionApi.activateSessionMaterials(sessionId);
+      showToast.success(result.message);
+      await loadSessionDetail();
+      setActiveStep(5);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error activating session materials:', error);
+      showToast.error(getApiErrorMessage(error) || 'Gagal mengaktifkan material sesi');
+    } finally {
+      setActivatingMaterials(false);
+    }
+  };
+
   // Workflow autosave re-renders this page for every draft change. Keep the
   // filtered prop stable so the vital form does not reset while users type.
   const vitalSignsBefore = useMemo(
@@ -1233,9 +1257,24 @@ export default function SessionDetailPage() {
         {activeStep === 5 && skipsInventory && (
           <div className="card" style={{ padding: '24px' }}>
             <h3 style={{ marginBottom: '8px' }}>Material tidak digunakan</h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
               Sesi terapi lama ini dibuat dengan pilihan tanpa stok. Material tidak dicatat dan inventory tidak akan berkurang.
             </p>
+            {!sessionInfo.isCompleted && canEditStepNow(5) && (
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleActivateMaterials}
+                  disabled={activatingMaterials}
+                >
+                  {activatingMaterials ? 'Mengaktifkan Material...' : 'Aktifkan Material & Stok'}
+                </button>
+                <p style={{ margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  Sistem akan memvalidasi stok Infus Set + Pelengkap dan membuat komponen wajib sebagai draft. Stok dipotong saat sesi diselesaikan.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

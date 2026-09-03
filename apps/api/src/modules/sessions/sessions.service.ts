@@ -28,6 +28,7 @@ import { BoosterService } from './services/booster.service';
 import { PhotoService } from './services/photo.service';
 import { SessionDeletionService } from './services/session-deletion.service';
 import { SessionDetailsService } from './services/session-details.service';
+import { SessionMaterialActivationService } from './services/session-material-activation.service';
 import { UnfinishedSessionReminderService } from './services/unfinished-session-reminder.service';
 import type { BulkEditSetInput } from '../members/services/member-therapy-plan-set-edit.service';
 import {
@@ -69,6 +70,7 @@ export class SessionsService {
   private photoService: PhotoService;
   private deletionService: SessionDeletionService;
   private detailsService: SessionDetailsService;
+  private materialActivationService: SessionMaterialActivationService;
   private unfinishedReminderService: UnfinishedSessionReminderService;
 
   constructor() {
@@ -85,6 +87,7 @@ export class SessionsService {
     this.photoService = new PhotoService();
     this.deletionService = new SessionDeletionService();
     this.detailsService = new SessionDetailsService();
+    this.materialActivationService = new SessionMaterialActivationService();
     this.unfinishedReminderService = new UnfinishedSessionReminderService();
   }
 
@@ -294,6 +297,10 @@ export class SessionsService {
 
   async getMaterialUsages(sessionId: string) {
     return this.materialUsageService.getMaterialUsages(sessionId);
+  }
+
+  async activateSessionMaterials(sessionId: string, userId: string, branchId: string) {
+    return this.materialActivationService.activate(sessionId, userId, branchId);
   }
 
   async deleteMaterialUsage(sessionId: string, usageId: string, userId: string, branchId: string) {

@@ -901,6 +901,22 @@ export class SessionsController {
     }
   }
 
+  async activateSessionMaterials(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      const result = await sessionsService.activateSessionMaterials(
+        sessionId,
+        req.user!.userId,
+        branchId,
+      );
+      return sendSuccess(res, result);
+    } catch (err) {
+      if (err.status) return sendError(res, err.status, err.code, err.message);
+      next(err);
+    }
+  }
+
   async deleteMaterialUsage(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId, usageId } = req.params;
