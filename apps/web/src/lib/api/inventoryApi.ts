@@ -389,6 +389,26 @@ export interface Shipment {
   updatedAt: string;
 }
 
+export interface InfusionKitAvailability {
+  configured: boolean;
+  available: boolean;
+  availableSessionCount: number;
+  kit: { id: string; sku: string; name: string } | null;
+  components: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    inventoryItemId: string | null;
+    requiredUsageQuantity: string;
+    usageUnit: string;
+    availableBaseQuantity: string;
+    availableUsageQuantity: string;
+    availableSessionCount: number;
+    isAvailable: boolean;
+    reason: 'NOT_IN_BRANCH_INVENTORY' | 'INSUFFICIENT_STOCK' | null;
+  }>;
+}
+
 export interface InventoryMasterProduct {
   id: string;
   name: string;
@@ -1237,6 +1257,13 @@ export const inventoryApi = {
     notes?: string;
   }) => {
     return api.post('/inventory/logistics/homecare-bags', data);
+  },
+
+  getInfusionKitAvailability: (branchId: string) => {
+    return api.get<{ success: boolean; data: InfusionKitAvailability }>(
+      `/inventory/infusion-kit-availability/${branchId}`,
+      { params: { _t: Date.now() } },
+    );
   },
 
   confirmPartnershipDelivery: (shipmentId: string, data: ReceiveShipmentInput) => {

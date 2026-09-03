@@ -15,6 +15,10 @@ const materialUsageService = new MaterialUsageService();
 
 // Import MaterialUsageHistoryService for usage history endpoint
 import { MaterialUsageHistoryService } from './services/material-usage-history.service';
+import {
+  resolveInfusionKitAvailability,
+  serializeInfusionKitAvailability,
+} from './services/infusion-kit-availability.service';
 const materialUsageHistoryService = new MaterialUsageHistoryService();
 
 export class InventoryController {
@@ -245,6 +249,25 @@ export class InventoryController {
 
       const items = await materialUsageService.getAvailableInventoryItems(branchId);
       return sendSuccess(res, items);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Return complete-session capacity based on the physical components of the
+   * virtual "Infus Set + Pelengkap" kit.
+   */
+  async getInfusionKitAvailability(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { branchId } = req.params;
+      if (!branchId) {
+        return sendError(res, 400, 'BRANCH_ID_REQUIRED', 'Branch ID is required');
+      }
+      if (!(await this.canReadInventoryBranch(req, res, branchId))) return;
+
+      const availability = await resolveInfusionKitAvailability(branchId);
+      return sendSuccess(res, serializeInfusionKitAvailability(availability));
     } catch (err) {
       next(err);
     }

@@ -1,5 +1,41 @@
-import { PrismaClient, ProductCategory } from '@prisma/client';
+import { Prisma, PrismaClient, ProductCategory } from '@prisma/client';
 import { backfillProductUoms } from './inventory-uoms.seed';
+
+async function resolveSeedInventoryScope(tx: Prisma.TransactionClient, branchId: string) {
+  let warehouse = await tx.warehouse.findFirst({
+    where: { branchId },
+    orderBy: [{ isDefault: 'desc' }, { isActive: 'desc' }, { createdAt: 'asc' }],
+  });
+  if (!warehouse) {
+    warehouse = await tx.warehouse.create({
+      data: {
+        branchId,
+        code: 'DEFAULT',
+        name: 'Scope Stok Cabang',
+        isDefault: true,
+        createdBy: 'system',
+      },
+    });
+  }
+
+  let location = await tx.stockLocation.findFirst({
+    where: { warehouseId: warehouse.id },
+    orderBy: [{ isDefault: 'desc' }, { isActive: 'desc' }, { createdAt: 'asc' }],
+  });
+  if (!location) {
+    location = await tx.stockLocation.create({
+      data: {
+        warehouseId: warehouse.id,
+        code: 'DEFAULT',
+        name: 'Scope Stok Cabang',
+        isDefault: true,
+        createdBy: 'system',
+      },
+    });
+  }
+
+  return { warehouse, location };
+}
 
 /**
  * CONSOLIDATED Inventory Items Seeder
@@ -179,13 +215,42 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
           stockAmount = Math.floor(product.stock * 0.5);
         }
 
-        await prisma.inventoryItem.create({
-          data: {
-            masterProductId: masterProduct.id,
-            branchId: branch.id,
-            stock: stockAmount,
-            minThreshold: product.minStock,
-          },
+        await prisma.$transaction(async (tx) => {
+          const scope = await resolveSeedInventoryScope(tx, branch.id);
+          const inventoryItem = await tx.inventoryItem.create({
+            data: {
+              masterProductId: masterProduct.id,
+              branchId: branch.id,
+              stock: stockAmount,
+              minThreshold: product.minStock,
+              warehouseId: scope.warehouse.id,
+              stockLocationId: scope.location.id,
+            },
+          });
+          const balance = await tx.inventoryBalance.create({
+            data: {
+              inventoryItemId: inventoryItem.id,
+              stockLocationId: scope.location.id,
+              masterProductId: masterProduct.id,
+              branchId: branch.id,
+              batchKey: 'NO_BATCH',
+              onHandQty: stockAmount,
+            },
+          });
+          if (stockAmount > 0) {
+            await tx.inventoryCostLayer.create({
+              data: {
+                inventoryBalanceId: balance.id,
+                sourceType: 'TEST_SEED_OPENING',
+                sourceId: inventoryItem.id,
+                originalQty: stockAmount,
+                remainingQty: stockAmount,
+                unitCost: null,
+                valuationStatus: 'PENDING_VALUATION',
+                receivedAt: new Date(),
+              },
+            });
+          }
         });
         created++;
       } else {
@@ -237,13 +302,12 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
 
 // Standalone execution
 if (require.main === module) {
-  const { PrismaClient } = require('@prisma/client');
   const prisma = new PrismaClient();
 
-  async function main() {
+  const main = async () => {
     console.log('🌱 Running CONSOLIDATED inventory seeder...\n');
     await seedConsolidatedInventoryItems(prisma);
-  }
+  };
 
   main()
     .catch((e) => {

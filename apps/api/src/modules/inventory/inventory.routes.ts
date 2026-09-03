@@ -226,6 +226,14 @@ router.post(
 // INVENTORY ITEMS
 // ============================================================
 
+// Get complete infusion-kit capacity from its physical component balances
+router.get(
+  '/infusion-kit-availability/:branchId',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getInfusionKitAvailability.bind(inventoryController),
+);
+
 // Get available inventory items with stock info (for material usage form)
 router.get(
   '/available/:branchId',

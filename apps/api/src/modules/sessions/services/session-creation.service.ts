@@ -17,6 +17,7 @@ import {
   getDebtSessionAllowance,
   getSessionPackageAvailability,
 } from './session-creation.helpers';
+import { resolveInfusionKitAvailability } from '@modules/inventory/services/infusion-kit-availability.service';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 const LEGACY_INVENTORY_BYPASS_ROLES = new Set<Role>([
@@ -598,22 +599,9 @@ export class SessionCreationService {
    * Session cannot be created if stock is not available
    */
   private async validateInfusKitStock(branchId: string) {
-    // Find the "Infus Set + Pelengkap" product (SKU: PRD-INF-SET-002)
-    const infusSetProduct = await prisma.masterProduct.findFirst({
-      where: {
-        sku: 'PRD-INF-SET-002',
-        isActive: true,
-      },
-      include: {
-        kitComponents: {
-          where: { componentProduct: { isActive: true } },
-          include: { componentProduct: true },
-          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-        },
-      },
-    });
+    const availability = await resolveInfusionKitAvailability(branchId);
 
-    if (!infusSetProduct || infusSetProduct.kitComponents.length === 0) {
+    if (!availability.configured || !availability.kitProduct) {
       throw {
         status: 422,
         code: 'INFUS_SET_NOT_CONFIGURED',
@@ -621,32 +609,14 @@ export class SessionCreationService {
       };
     }
 
-    const inventoryItems = await prisma.inventoryItem.findMany({
-      where: {
-        branchId,
-        masterProductId: { in: infusSetProduct.kitComponents.map((item) => item.componentProductId) },
-      },
-      include: { balances: true },
-    });
-    const inventoryByProduct = new Map(inventoryItems.map((item) => [item.masterProductId, item]));
-    const issues = infusSetProduct.kitComponents.flatMap((component) => {
-      const inventoryItem = inventoryByProduct.get(component.componentProductId);
-      if (!inventoryItem) {
-        return [{ type: 'STOCK', message: `${component.componentProduct.name} belum ada di inventory cabang` }];
+    const issues = availability.components.flatMap((item) => {
+      if (!item.inventoryItem) {
+        return [{ type: 'STOCK', message: `${item.component.componentProduct.name} belum ada di inventory cabang` }];
       }
-      const available = inventoryItem.balances.reduce(
-        (sum, balance) => sum
-          + Number(balance.onHandQty)
-          - Number(balance.reservedQty)
-          - Number(balance.quarantineQty),
-        0,
-      );
-      const requiredBaseQuantity = Number(component.quantity)
-        / Number(component.componentProduct.conversionFactor);
-      if (available < requiredBaseQuantity) {
+      if (!item.isAvailable) {
         return [{
           type: 'STOCK',
-          message: `${component.componentProduct.name} kurang ${(requiredBaseQuantity - available).toFixed(4)} ${component.componentProduct.baseUnit}`,
+          message: `${item.component.componentProduct.name} kurang ${item.requiredBaseQuantity.sub(item.availableBaseQuantity).toFixed(4)} ${item.component.componentProduct.baseUnit}`,
         }];
       }
       return [];
@@ -656,21 +626,20 @@ export class SessionCreationService {
       throw {
         status: 422,
         code: 'INFUS_KIT_STOCK_UNAVAILABLE',
-        message: `Komponen "${infusSetProduct.name}" belum cukup: ${issues.map((issue) => issue.message).join('; ')}. Lakukan penerimaan stok terlebih dahulu.`,
+        message: `Komponen "${availability.kitProduct.name}" belum cukup: ${issues.map((issue) => issue.message).join('; ')}. Lakukan penerimaan stok terlebih dahulu.`,
       };
     }
 
-    const draftMaterials = infusSetProduct.kitComponents.map((component) => {
-      const inventoryItem = inventoryByProduct.get(component.componentProductId)!;
+    const draftMaterials = availability.components.map((item) => {
       return {
-        inventoryItemId: inventoryItem.id,
-        quantity: component.quantity,
-        unit: component.componentProduct.usageUnit,
-        conversionFactor: component.componentProduct.conversionFactor,
+        inventoryItemId: item.inventoryItem!.id,
+        quantity: item.component.quantity,
+        unit: item.component.componentProduct.usageUnit,
+        conversionFactor: item.component.componentProduct.conversionFactor,
       };
     });
 
-    return { infusSetProduct, draftMaterials };
+    return { infusSetProduct: availability.kitProduct, draftMaterials };
   }
 
   /**

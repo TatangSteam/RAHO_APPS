@@ -89,6 +89,7 @@ export default function CreateSessionModal({
   const [infusSetStock, setInfusSetStock] = useState<number | null>(null);
   const [loadingInfusSetStock, setLoadingInfusSetStock] = useState(false);
   const [infusSetProductName, setInfusSetProductName] = useState('Infus Set + Pelengkap');
+  const [infusSetStockIssue, setInfusSetStockIssue] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -232,78 +233,34 @@ export default function CreateSessionModal({
     
     if (!branchId) {
       devLog('No branchId available for infus set stock check');
-      // For Admin Manager without direct branchId, we'll check when member is selected
       setInfusSetStock(null);
+      setInfusSetStockIssue(null);
       return;
     }
     
     try {
       setLoadingInfusSetStock(true);
       devLog('Loading infus set stock for branch:', branchId);
-      const response = await inventoryApi.getAvailableItems(branchId);
-      
-      // Debug: log the full response structure
-      devLog('Full API response:', response);
-      devLog('response.data:', response.data);
-      
-      // API returns axios response: { data: { success: true, data: items } }
-      // So we need response.data.data to get the items array
-      const items = response.data.data;
-      
-      devLog('Inventory items received:', items?.length || 0);
-      devLog('All items SKUs:', items.map((item) => item.masterProduct?.sku || item.sku));
-      
-      // Find Infus Set + Pelengkap (PRD-INF-SET-002) - this is the required product for therapy sessions
-      // The API returns items with masterProduct nested object
-      let infusSetItem = items.find((item) => {
-        const sku = item.masterProduct?.sku || item.sku;
-        devLog('Checking item:', item.masterProduct?.name, 'SKU:', sku);
-        return sku === 'PRD-INF-SET-002'; // Only check for "Infus Set + Pelengkap"
-      });
-      
-      // Fallback: search by name if SKU not found
-      if (!infusSetItem) {
-        devLog('SKU not found, searching by name...');
-        infusSetItem = items.find((item) => {
-          const name = (item.masterProduct?.name || item.name || '').toLowerCase();
-          return name.includes('infus set') && name.includes('pelengkap');
-        });
+      const response = await inventoryApi.getInfusionKitAvailability(branchId);
+      const availability = response.data.data;
+      const kitName = availability.kit?.name || 'Infus Set + Pelengkap';
+      setInfusSetProductName(kitName);
+      setInfusSetStock(availability.availableSessionCount);
+
+      if (!availability.configured) {
+        setInfusSetStockIssue(`Komponen ${kitName} belum dikonfigurasi.`);
+        return;
       }
-      
-      devLog('Infus Set + Pelengkap item found:', infusSetItem ? 'yes' : 'no');
-      if (infusSetItem) {
-        devLog('Found item details:', {
-          name: infusSetItem.masterProduct?.name,
-          sku: infusSetItem.masterProduct?.sku,
-          stock: infusSetItem.stock,
-          stockInfo: infusSetItem.stockInfo
-        });
-      }
-      
-      if (infusSetItem) {
-        // Stock can be in stockInfo.baseStock, stock, or quantity field
-        const stock = infusSetItem.stockInfo?.baseStock ?? 
-                      Number(infusSetItem.stock) ?? 
-                      infusSetItem.quantity ?? 0;
-        const name = infusSetItem.masterProduct?.name || infusSetItem.name || 'Infus Set + Pelengkap';
-        devLog('Infus set stock:', stock, 'name:', name);
-        setInfusSetStock(Math.floor(stock));
-        setInfusSetProductName(name);
-      } else {
-        devLog('No infus set item found in inventory - setting stock to 0');
-        // Item not found in inventory - this could mean:
-        // 1. The product doesn't exist in this branch's inventory
-        // 2. The SKU doesn't match
-        // Let's not block session creation if we can't find the item
-        // Backend will do the final validation
-        setInfusSetStock(null); // null means "unknown" - don't show warning
-      }
+
+      const unavailableComponents = availability.components.filter((item) => !item.isAvailable);
+      setInfusSetStockIssue(unavailableComponents.length > 0
+        ? `Komponen belum cukup: ${unavailableComponents.map((item) => item.name).join(', ')}.`
+        : null);
     } catch (err) {
       assertCaughtError(err);
       devError('Failed to load infus set stock:', err);
-      // On error, set to null (unknown) instead of 0 (out of stock)
-      // This prevents false "out of stock" warnings
       setInfusSetStock(null);
+      setInfusSetStockIssue(null);
     } finally {
       setLoadingInfusSetStock(false);
     }
@@ -949,10 +906,10 @@ export default function CreateSessionModal({
                   <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
                     <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Stok {infusSetProductName} habis!</p>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Stok {infusSetProductName} belum cukup</p>
                       <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">
-                        Tidak dapat membuat sesi terapi karena stok {infusSetProductName} tidak tersedia. 
-                        Silakan request stok terlebih dahulu di menu Inventory.
+                        {infusSetStockIssue || `Tidak ada satu set komponen lengkap yang tersedia untuk sesi terapi.`}
+                        {' '}Silakan lengkapi stok komponen di menu Inventory.
                       </p>
                     </div>
                   </div>
@@ -961,7 +918,7 @@ export default function CreateSessionModal({
                   <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                     <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                      Stok {infusSetProductName}: <span className="font-bold">{infusSetStock}</span> tersedia
+                      Stok {infusSetProductName}: <span className="font-bold">{infusSetStock}</span> sesi tersedia
                     </p>
                   </div>
                 )}

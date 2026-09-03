@@ -1,6 +1,14 @@
 import { PrismaClient, ProductCategory } from '@prisma/client';
 import { backfillProductUoms } from './inventory-uoms.seed';
 
+const INFUSION_KIT_COMPONENTS = [
+  { sku: 'PRD-MED-IVC-001', quantity: 1, sortOrder: 1 },
+  { sku: 'PRD-INF-SET-001', quantity: 1, sortOrder: 2 },
+  { sku: 'PRD-MED-PTR-001', quantity: 1, sortOrder: 3 },
+  { sku: 'PRD-MED-SWB-001', quantity: 2, sortOrder: 4 },
+  { sku: 'PRD-MED-URF-001', quantity: 3, sortOrder: 5 },
+] as const;
+
 /**
  * Master Products Seed - Sesuai dengan List Barang RAHO Official
  * 
@@ -153,6 +161,38 @@ export async function seedProducts(prisma: PrismaClient) {
       },
     });
     createdProducts.push({ ...product, sku: p.sku });
+  }
+
+  // Migrations run before seeds on a fresh database, so the original data
+  // migration cannot populate this relation when master products do not exist
+  // yet. Keep the virtual kit definition idempotently enforced by the seed.
+  const productsBySku = new Map(createdProducts.map((product) => [product.sku, product]));
+  const infusionKit = productsBySku.get('PRD-INF-SET-002');
+  if (!infusionKit) throw new Error('Master produk Infus Set + Pelengkap tidak ditemukan.');
+
+  for (const definition of INFUSION_KIT_COMPONENTS) {
+    const component = productsBySku.get(definition.sku);
+    if (!component) throw new Error(`Komponen Infus Set + Pelengkap ${definition.sku} tidak ditemukan.`);
+    await prisma.productKitComponent.upsert({
+      where: {
+        kitProductId_componentProductId: {
+          kitProductId: infusionKit.id,
+          componentProductId: component.id,
+        },
+      },
+      create: {
+        kitProductId: infusionKit.id,
+        componentProductId: component.id,
+        quantity: definition.quantity,
+        isRequired: true,
+        sortOrder: definition.sortOrder,
+      },
+      update: {
+        quantity: definition.quantity,
+        isRequired: true,
+        sortOrder: definition.sortOrder,
+      },
+    });
   }
 
   console.log(`✅ Master products: ${products.length} entries`);
