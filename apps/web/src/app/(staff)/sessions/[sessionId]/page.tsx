@@ -28,6 +28,7 @@ import { SessionWorkflowDraftProvider, type SessionDraftKey } from '@/components
 import {
   SESSION_STEP_OWNER,
   buildCompletionSummary,
+  canActivateSessionMaterials,
   canEditSessionStep,
   canFinalizeSession,
   getDeviceClass,
@@ -728,6 +729,7 @@ export default function SessionDetailPage() {
   const sessionEditFieldDisabled = savingBoosterPackage || loadingBoosterPackages;
   const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
   const userCanFinalize = canFinalizeSession(user?.role);
+  const userCanActivateMaterials = canActivateSessionMaterials(user?.role, user?.userId, sessionInfo);
   const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
   const correctionDeadline = sessionInfo.completedAt
     ? new Date(sessionInfo.completedAt).getTime() + (4 * 60 * 60 * 1000)
@@ -1260,7 +1262,10 @@ export default function SessionDetailPage() {
             <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
               Sesi terapi lama ini dibuat dengan pilihan tanpa stok. Material tidak dicatat dan inventory tidak akan berkurang.
             </p>
-            {!sessionInfo.isCompleted && canEditStepNow(5) && (
+            {!sessionInfo.isCompleted
+              && sessionInfo.completionStatus === 'IN_PROGRESS'
+              && correctionWindowOpen
+              && userCanActivateMaterials && (
               <div>
                 <button
                   type="button"

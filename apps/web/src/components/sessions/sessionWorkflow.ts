@@ -1,5 +1,5 @@
 import type { Role } from '@/types/auth';
-import type { SessionDetail, StepCompletion } from '@/types/session';
+import type { Session, SessionDetail, StepCompletion } from '@/types/session';
 
 export const SESSION_STEP_OWNER: Record<number, string> = {
   1: 'Dokter',
@@ -30,6 +30,22 @@ export function canFinalizeSession(role: Role | undefined): boolean {
     || role === 'NURSE'
     || role === 'ADMIN_LAYANAN'
   );
+}
+
+export function canActivateSessionMaterials(
+  role: Role | undefined,
+  userId: string | undefined,
+  session: Pick<Session, 'adminLayanan' | 'doctor' | 'nurse' | 'sessionDoctors' | 'sessionNurses'>,
+): boolean {
+  if (!role) return false;
+  if (MANAGER_ROLES.includes(role)) return true;
+  if (!userId) return false;
+
+  return session.adminLayanan?.userId === userId
+    || session.doctor?.userId === userId
+    || session.nurse?.userId === userId
+    || Boolean(session.sessionDoctors?.some((assignment) => assignment.doctor.userId === userId))
+    || Boolean(session.sessionNurses?.some((assignment) => assignment.nurse.userId === userId));
 }
 
 export const REQUIRED_SESSION_STEPS: Array<{

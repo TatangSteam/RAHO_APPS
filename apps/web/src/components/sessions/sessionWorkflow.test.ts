@@ -1,5 +1,6 @@
 import {
   buildCompletionSummary,
+  canActivateSessionMaterials,
   canEditSessionStep,
   canFinalizeSession,
   getDeviceClass,
@@ -31,6 +32,24 @@ describe('sessionWorkflow', () => {
     expect(canEditSessionStep('ADMIN_LAYANAN', 1)).toBe(true);
     expect(canEditSessionStep('ADMIN_LAYANAN', 9)).toBe(true);
     expect(canFinalizeSession('ADMIN_LAYANAN')).toBe(true);
+  });
+
+  it('menampilkan aktivasi material untuk seluruh petugas yang ditugaskan pada sesi', () => {
+    const session = {
+      adminLayanan: { userId: 'mso-1' },
+      doctor: { userId: 'doctor-primary' },
+      nurse: { userId: 'nurse-primary' },
+      sessionDoctors: [{ id: 'sd-1', isPrimary: false, doctor: { userId: 'doctor-additional' } }],
+      sessionNurses: [{ id: 'sn-1', isPrimary: false, nurse: { userId: 'nurse-additional' } }],
+    } as Parameters<typeof canActivateSessionMaterials>[2];
+
+    expect(canActivateSessionMaterials('ADMIN_LAYANAN', 'mso-1', session)).toBe(true);
+    expect(canActivateSessionMaterials('DOCTOR', 'doctor-primary', session)).toBe(true);
+    expect(canActivateSessionMaterials('DOCTOR', 'doctor-additional', session)).toBe(true);
+    expect(canActivateSessionMaterials('NURSE', 'nurse-primary', session)).toBe(true);
+    expect(canActivateSessionMaterials('NURSE', 'nurse-additional', session)).toBe(true);
+    expect(canActivateSessionMaterials('DOCTOR', 'doctor-other', session)).toBe(false);
+    expect(canActivateSessionMaterials('SUPER_ADMIN', 'super-admin', session)).toBe(true);
   });
 
   it('menganggap foto opsional dan menunjukkan step wajib yang hilang', () => {

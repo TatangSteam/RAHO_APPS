@@ -1,4 +1,4 @@
-import { Prisma, TreatmentCompletionStatus } from '@prisma/client';
+import { Prisma, Role, TreatmentCompletionStatus } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { resolveInfusionKitAvailability } from '@modules/inventory/services/infusion-kit-availability.service';
@@ -37,7 +37,14 @@ describe('SessionMaterialActivationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({ branchId: 'branch-1' });
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
+      branchId: 'branch-1',
+      adminLayananId: 'mso-1',
+      doctorId: 'doctor-1',
+      nurseId: 'user-1',
+      sessionDoctors: [],
+      sessionNurses: [{ id: 'assignment-1' }],
+    });
     (prisma.$transaction as jest.Mock).mockImplementation(
       (callback: (client: typeof tx) => unknown) => callback(tx),
     );
@@ -75,10 +82,10 @@ describe('SessionMaterialActivationService', () => {
   });
 
   it('mengaktifkan inventory dan membuat komponen kit sebagai draft', async () => {
-    const result = await service.activate('session-1', 'user-1', 'branch-1');
+    const result = await service.activate('session-1', 'user-1', 'branch-1', Role.NURSE);
 
-    expect(assertBranchAccess).toHaveBeenCalledWith('user-1', 'branch-1');
-    expect(assertPermission).toHaveBeenCalledWith('user-1', expect.any(String), 'branch-1');
+    expect(assertBranchAccess).not.toHaveBeenCalled();
+    expect(assertPermission).not.toHaveBeenCalled();
     expect(tx.materialUsage.createMany).toHaveBeenCalledWith(expect.objectContaining({
       skipDuplicates: true,
       data: [expect.objectContaining({
@@ -113,7 +120,7 @@ describe('SessionMaterialActivationService', () => {
       materialPolicyVersion: 2,
     });
 
-    await expect(service.activate('session-1', 'user-1', 'branch-1')).rejects.toMatchObject({
+    await expect(service.activate('session-1', 'user-1', 'branch-1', Role.NURSE)).rejects.toMatchObject({
       status: 409,
       code: 'SESSION_MATERIAL_ACTIVATION_LOCKED',
     });
@@ -132,11 +139,58 @@ describe('SessionMaterialActivationService', () => {
       materialPolicyVersion: 2,
     });
 
-    const result = await service.activate('session-1', 'user-1', 'branch-1');
+    const result = await service.activate('session-1', 'user-1', 'branch-1', Role.NURSE);
 
     expect(result.alreadyActive).toBe(true);
     expect(resolveInfusionKitAvailability).not.toHaveBeenCalled();
     expect(tx.materialUsage.createMany).not.toHaveBeenCalled();
     expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [Role.ADMIN_LAYANAN, { adminLayananId: 'user-1', doctorId: 'doctor-1', nurseId: 'nurse-1', sessionDoctors: [], sessionNurses: [] }],
+    [Role.DOCTOR, { adminLayananId: 'mso-1', doctorId: 'doctor-1', nurseId: 'nurse-1', sessionDoctors: [{ id: 'doctor-assignment' }], sessionNurses: [] }],
+    [Role.NURSE, { adminLayananId: 'mso-1', doctorId: 'doctor-1', nurseId: 'nurse-1', sessionDoctors: [], sessionNurses: [{ id: 'nurse-assignment' }] }],
+  ])('mengizinkan petugas %s yang ditugaskan pada sesi', async (role, assignment) => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({ branchId: 'branch-1', ...assignment });
+
+    await expect(service.activate('session-1', 'user-1', 'branch-1', role)).resolves.toMatchObject({
+      alreadyActive: false,
+    });
+    expect(assertBranchAccess).not.toHaveBeenCalled();
+    expect(assertPermission).not.toHaveBeenCalled();
+  });
+
+  it('menolak petugas klinis yang tidak ditugaskan pada sesi', async () => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
+      branchId: 'branch-1',
+      adminLayananId: 'mso-1',
+      doctorId: 'doctor-1',
+      nurseId: 'nurse-1',
+      sessionDoctors: [],
+      sessionNurses: [],
+    });
+
+    await expect(service.activate('session-1', 'user-1', 'branch-1', Role.DOCTOR)).rejects.toMatchObject({
+      status: 403,
+      code: 'SESSION_STAFF_ASSIGNMENT_REQUIRED',
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('mempertahankan akses manager sesuai branch dan permission', async () => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
+      branchId: 'branch-1',
+      adminLayananId: 'mso-1',
+      doctorId: 'doctor-1',
+      nurseId: 'nurse-1',
+      sessionDoctors: [],
+      sessionNurses: [],
+    });
+
+    await service.activate('session-1', 'manager-1', 'branch-1', Role.ADMIN_MANAGER);
+
+    expect(assertBranchAccess).toHaveBeenCalledWith('manager-1', 'branch-1');
+    expect(assertPermission).toHaveBeenCalledWith('manager-1', expect.any(String), 'branch-1');
   });
 });

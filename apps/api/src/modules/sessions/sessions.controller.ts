@@ -909,6 +909,7 @@ export class SessionsController {
         sessionId,
         req.user!.userId,
         branchId,
+        req.user!.role as Role,
       );
       return sendSuccess(res, result);
     } catch (err) {

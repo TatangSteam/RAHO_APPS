@@ -13,6 +13,7 @@ import type {
   CancelSessionCompletionInput,
   SaveSessionProgressInput,
 } from './sessions.schema';
+import type { Role } from '@prisma/client';
 
 // Import modular services
 import { SessionCreationService } from './services/session-creation.service';
@@ -299,8 +300,8 @@ export class SessionsService {
     return this.materialUsageService.getMaterialUsages(sessionId);
   }
 
-  async activateSessionMaterials(sessionId: string, userId: string, branchId: string) {
-    return this.materialActivationService.activate(sessionId, userId, branchId);
+  async activateSessionMaterials(sessionId: string, userId: string, branchId: string, userRole: Role) {
+    return this.materialActivationService.activate(sessionId, userId, branchId, userRole);
   }
 
   async deleteMaterialUsage(sessionId: string, usageId: string, userId: string, branchId: string) {
