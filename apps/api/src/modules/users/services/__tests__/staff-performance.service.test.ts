@@ -373,7 +373,39 @@ describe('staff performance service', () => {
     }));
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        role: { in: [Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
+        role: { in: [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.DOCTOR, Role.NURSE] },
+      }),
+    }));
+  });
+
+  it('includes Admin Cabang because the session workflow can assign it to every clinical position', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      { ...staff('branch-admin-1', 'Branch Admin One'), role: Role.ADMIN_CABANG },
+    ] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      ...sessionForDoctor('branch-admin-1'),
+      nurseId: 'branch-admin-1',
+      adminLayananId: 'branch-admin-1',
+      sessionDoctors: [{ doctorId: 'branch-admin-1' }],
+      sessionNurses: [{ nurseId: 'branch-admin-1' }],
+    }] as any);
+
+    const result = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    expect(result.staff).toHaveLength(1);
+    expect(result.staff[0]).toEqual(expect.objectContaining({
+      id: 'branch-admin-1',
+      role: Role.ADMIN_CABANG,
+      performance: expect.objectContaining({
+        asDoctor: 1,
+        asNurse: 1,
+        asAdminLayanan: 1,
+        asOperational: 1,
+        total: 1,
       }),
     }));
   });

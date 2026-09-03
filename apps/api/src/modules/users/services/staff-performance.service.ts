@@ -30,6 +30,10 @@ interface StaffSessionHistoryQuery {
 
 const STAFF_PERFORMANCE_ROLES: Role[] = [
   Role.ADMIN_LAYANAN,
+  // ADMIN_CABANG is allowed by the session workflow to act as admin layanan,
+  // doctor, or nurse. Keep the performance directory aligned with those
+  // assignment rules so participating branch admins are not omitted.
+  Role.ADMIN_CABANG,
   Role.DOCTOR,
   Role.NURSE,
 ];
