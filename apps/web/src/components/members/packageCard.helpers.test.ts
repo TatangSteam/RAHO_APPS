@@ -1,5 +1,9 @@
 import type { MemberPackage } from '@/types/package';
-import { groupMemberPackagesForDisplay } from './packageCard.helpers';
+import {
+  findActiveInstallmentTarget,
+  findPendingPaymentTarget,
+  groupMemberPackagesForDisplay,
+} from './packageCard.helpers';
 
 function memberPackage(overrides: Partial<MemberPackage>): MemberPackage {
   return {
@@ -63,5 +67,55 @@ describe('groupMemberPackagesForDisplay', () => {
       remainingSessions: 2,
       packageCodes: ['FREE-1', 'FREE-2'],
     });
+  });
+});
+
+describe('payment verification target', () => {
+  it('selects the pending row instead of the first row in a mixed bundle', () => {
+    const firstActive = memberPackage({ packageId: 'already-active' });
+    const waiting = memberPackage({
+      packageId: 'waiting-proof',
+      status: 'WAITING_VERIFICATION',
+    });
+
+    expect(findPendingPaymentTarget([firstActive, waiting])).toBe(waiting);
+  });
+
+  it('selects the row that actually owns the active installment', () => {
+    const staleFirstRow = memberPackage({
+      packageId: 'stale-first-row',
+      paymentPlanType: 'FULL_PAYMENT',
+    });
+    const activeInstallment = memberPackage({
+      packageId: 'installment-owner',
+      paymentPlanType: 'INSTALLMENT',
+      paymentPlanStatus: 'ACTIVE_INSTALLMENT',
+    });
+
+    expect(findActiveInstallmentTarget([staleFirstRow, activeInstallment])).toBe(activeInstallment);
+  });
+
+  it('prefers a package target so bundle verification updates the whole purchase group', () => {
+    const pendingAddOn = {
+      isGroup: false as const,
+      isAddOn: true as const,
+      id: 'addon-1',
+      addOnId: 'addon-1',
+      addOnCode: 'ADDON-1',
+      addOnType: 'AIR_NANO',
+      quantity: 1,
+      pricePerUnit: 15_000,
+      totalPrice: 15_000,
+      status: 'WAITING_VERIFICATION' as const,
+      branchName: 'Cabang',
+      assignedBy: 'Admin',
+      createdAt: '2026-09-03T00:00:00.000Z',
+    };
+    const pendingPackage = memberPackage({
+      packageId: 'group-package',
+      status: 'PENDING_PAYMENT',
+    });
+
+    expect(findPendingPaymentTarget([pendingAddOn, pendingPackage])).toBe(pendingPackage);
   });
 });

@@ -6,6 +6,7 @@ import { InvoiceGenerationService } from './invoice-generation.service';
 import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';
 import { PERMISSIONS } from '../../iam/permission-catalog';
 import { consumeAddOnStockInTransaction } from './add-on-inventory.service';
+import { canVerifyPurchasePayment } from './payment-verification.helpers';
 
 // This endpoint predates finance posting and creates a verified payment without
 // a cash/bank transaction or deferred-revenue contract. Keep packages verified
@@ -79,6 +80,10 @@ export class PaymentVerificationService {
         items: { some: { itemId: packageId } },
       },
       select: { totalAmount: true, paymentPlanType: true },
+      orderBy: [
+        { installmentNumber: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
     const isComplimentary = Boolean(
       pendingInvoice &&
@@ -94,17 +99,7 @@ export class PaymentVerificationService {
       };
     }
 
-    // Allow verification from PENDING_PAYMENT if staff provides payment proof
-    if (pkg.status === PackageStatus.PENDING_PAYMENT && (data.proofFileUrl || isComplimentary)) {
-      // Staff is uploading proof and verifying in one step
-      // This is valid - proceed with verification
-    } else if (
-      pkg.status === PackageStatus.ACTIVE &&
-      pkg.paymentPlanType === 'INSTALLMENT' &&
-      pkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
-    ) {
-      // Active installment package can still verify the next unpaid invoice.
-    } else if (pkg.status !== PackageStatus.WAITING_VERIFICATION) {
+    if (!canVerifyPurchasePayment(pkg, pendingInvoice, Boolean(data.proofFileUrl), isComplimentary)) {
       throw {
         status: 422,
         code: 'PACKAGE_NOT_WAITING_VERIFICATION',
@@ -188,15 +183,19 @@ export class PaymentVerificationService {
     await assertBranchAccess(userId, addon.branchId);
     await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, addon.branchId);
 
-    if (addon.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
-      // Staff is uploading proof and verifying in one step.
-    } else if (
-      addon.status === PackageStatus.ACTIVE &&
-      addon.paymentPlanType === 'INSTALLMENT' &&
-      addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
-    ) {
-      // Active installment add-on can still verify the next unpaid invoice.
-    } else if (addon.status !== PackageStatus.WAITING_VERIFICATION) {
+    const pendingInvoice = await prisma.invoice.findFirst({
+      where: {
+        status: 'PENDING_PAYMENT',
+        items: { some: { itemId: addOnId } },
+      },
+      select: { paymentPlanType: true },
+      orderBy: [
+        { installmentNumber: 'asc' },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    if (!canVerifyPurchasePayment(addon, pendingInvoice, Boolean(data.proofFileUrl), false)) {
       throw {
         status: 422,
         code: 'ITEM_NOT_WAITING_VERIFICATION',

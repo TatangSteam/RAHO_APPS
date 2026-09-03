@@ -1,4 +1,6 @@
-import type { MemberPackage } from '@/types/package';
+import type { MemberPackage, StandaloneAddOn } from '@/types/package';
+
+export type PaymentVerificationTarget = MemberPackage | StandaloneAddOn;
 
 export interface MemberPackageDisplayGroup {
   key: string;
@@ -52,4 +54,30 @@ export function groupMemberPackagesForDisplay(
     finalPrice: items.reduce((total, item) => total + item.finalPrice, 0),
     packageCodes: items.map((item) => item.packageCode),
   }));
+}
+
+/**
+ * A bundle can contain rows whose payment state is temporarily different.
+ * Always submit the row that actually owns the action instead of assuming the
+ * first BASIC row represents the whole bundle.
+ */
+export function findPendingPaymentTarget(
+  items: readonly PaymentVerificationTarget[],
+): PaymentVerificationTarget | undefined {
+  const packages = items.filter((item): item is MemberPackage => 'packageId' in item);
+  return packages.find((item) => item.status === 'WAITING_VERIFICATION')
+    ?? packages.find((item) => item.status === 'PENDING_PAYMENT')
+    ?? items.find((item) => item.status === 'WAITING_VERIFICATION')
+    ?? items.find((item) => item.status === 'PENDING_PAYMENT');
+}
+
+export function findActiveInstallmentTarget(
+  items: readonly PaymentVerificationTarget[],
+): PaymentVerificationTarget | undefined {
+  const candidates = items.filter((item) => (
+    item.status === 'ACTIVE'
+    && item.paymentPlanType === 'INSTALLMENT'
+    && item.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
+  ));
+  return candidates.find((item) => 'packageId' in item) ?? candidates[0];
 }

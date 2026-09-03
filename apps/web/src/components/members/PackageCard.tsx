@@ -6,7 +6,11 @@ import ViewInvoiceButton from '../invoices/ViewInvoiceButton';
 import ViewPaymentProofButton from './ViewPaymentProofButton';
 import { formatCurrency } from '@/lib/formatNumber';
 import { getAggregatePackageStatus } from './memberStatusPresentation';
-import { groupMemberPackagesForDisplay } from './packageCard.helpers';
+import {
+  findActiveInstallmentTarget,
+  findPendingPaymentTarget,
+  groupMemberPackagesForDisplay,
+} from './packageCard.helpers';
 import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
@@ -339,11 +343,12 @@ export default function PackageCard({
     const groupAddOns = pkg.addOns || [];
     const groupStatus = getAggregatePackageStatus([...basics, ...boosters, ...groupAddOns]);
     const addOnStatus = getAggregatePackageStatus(groupAddOns);
-    const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
+    const paymentItems = [...basics, ...boosters, ...groupAddOns];
+    const pendingPaymentTarget = findPendingPaymentTarget(paymentItems);
+    const activeInstallmentTarget = findActiveInstallmentTarget(paymentItems);
+    const anyPending = Boolean(pendingPaymentTarget);
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
-    const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item) => (
-      item?.paymentPlanType === 'INSTALLMENT' && item?.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
-    ));
+    const anyActiveInstallment = Boolean(activeInstallmentTarget);
     const editablePackages = ([...basics, ...boosters].filter(Boolean) as MemberPackage[])
       .filter((item) => canEditPackageStatus(item.status));
     const canEditGroup = editablePackages.length > 0;
@@ -587,16 +592,15 @@ export default function PackageCard({
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'PENDING_PAYMENT'}
                 />
-                {onVerifyPayment && (
+                {onVerifyPayment && pendingPaymentTarget && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const firstItem: MemberPackage | StandaloneAddOn | undefined = basics[0] || boosters[0] || groupAddOns[0];
                     onVerifyPayment(
-                      firstItem && isStandaloneAddOn(firstItem) ? firstItem.addOnId : firstItem?.packageId || '',
-                      firstItem?.status || 'PENDING_PAYMENT',
-                      firstItem?.paymentProofUrl,
-                      firstItem?.paymentProofFileName
+                      isStandaloneAddOn(pendingPaymentTarget) ? pendingPaymentTarget.addOnId : pendingPaymentTarget.packageId,
+                      pendingPaymentTarget.status,
+                      pendingPaymentTarget.paymentProofUrl,
+                      pendingPaymentTarget.paymentProofFileName
                     );
                   }}
                   className={styles.verifyButton}
@@ -652,16 +656,15 @@ export default function PackageCard({
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'ACTIVE'}
                 />
-                {onVerifyPayment && anyActiveInstallment && (
+                {onVerifyPayment && activeInstallmentTarget && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const firstItem: MemberPackage | StandaloneAddOn | undefined = basics[0] || boosters[0] || groupAddOns[0];
                       onVerifyPayment(
-                        firstItem && isStandaloneAddOn(firstItem) ? firstItem.addOnId : firstItem?.packageId || '',
-                        firstItem?.status || 'ACTIVE',
-                        firstItem?.paymentProofUrl,
-                        firstItem?.paymentProofFileName
+                        isStandaloneAddOn(activeInstallmentTarget) ? activeInstallmentTarget.addOnId : activeInstallmentTarget.packageId,
+                        activeInstallmentTarget.status,
+                        activeInstallmentTarget.paymentProofUrl,
+                        activeInstallmentTarget.paymentProofFileName
                       );
                     }}
                     className={styles.verifyButton}

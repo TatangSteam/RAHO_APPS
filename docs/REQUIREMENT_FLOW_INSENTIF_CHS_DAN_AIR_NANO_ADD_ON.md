@@ -8,7 +8,7 @@ Status: Draft requirement untuk review Product Owner, Operasional, HR/Payroll, F
 Menyediakan fitur yang dapat:
 
 - menetapkan Koordinator CHS yang membawahi satu atau beberapa tim Homecare dan cabang;
-- menghitung insentif bulanan Koordinator CHS, NAKES, dan MSO dari data operasional yang sah;
+- menghitung insentif bulanan Dokter Cabang, Koordinator CHS, NAKES, dan MSO dari data operasional yang sah;
 - mencegah satu aktivitas terhitung ganda pada komponen insentif yang sama;
 - memproses perhitungan melalui tahap draft, review, approval, dan pembayaran;
 - menambahkan tab **Air Nano & Add-On** pada detail member;
@@ -20,7 +20,7 @@ Menyediakan fitur yang dapat:
 
 1. Periode insentif menggunakan bulan kalender zona waktu Asia/Jakarta.
 2. Sumber utama hitungan infus adalah sesi terapi yang selesai dan tidak dibatalkan.
-3. Setiap sesi memiliki satu penerima kredit NAKES, satu penerima kredit MSO, satu tim, dan satu cabang untuk kepentingan insentif. Nilai tersebut disimpan sebagai snapshot agar histori tidak berubah saat assignment staf berubah.
+3. Setiap sesi memiliki satu penerima kredit Dokter Cabang, satu penerima kredit NAKES, satu penerima kredit MSO, satu tim, dan satu cabang untuk kepentingan insentif. Nilai tersebut disimpan sebagai snapshot agar histori tidak berubah saat assignment staf berubah.
 4. Perhitungan bersifat otomatis, tetapi pembayaran tetap memerlukan approval.
 5. Nominal insentif disimpan sebagai snapshot ketika periode dikunci.
 6. Koreksi setelah periode dikunci tidak mengubah hasil lama secara diam-diam. Koreksi dibuat sebagai adjustment yang memiliki alasan dan audit.
@@ -34,6 +34,8 @@ Menyediakan fitur yang dapat:
 | Infus berbayar | Sesi valid yang sumber paket/invoice-nya sudah lunas dan terverifikasi; sesi gratis atau sosial tidak termasuk |
 | Tusukan pribadi | Sesi valid yang kredit pelaksana tindakannya diberikan kepada Koordinator CHS yang bersangkutan |
 | Visit MSO | Satu sesi valid yang kredit MSO-nya diberikan kepada MSO tersebut; satu sesi hanya dihitung satu visit |
+| Dokter Cabang | Dokter utama yang ditugaskan secara efektif pada satu cabang untuk menerima insentif kinerja cabang |
+| Dokter Tim Homecare | Dokter yang ditugaskan pada satu tim Homecare; dapat merupakan orang yang sama dengan Koordinator CHS |
 | Tim Homecare | Tim aktif yang menggunakan master `HomecareTeam` dan memiliki assignment efektif pada tanggal sesi |
 | Tim HO | Tim Head Office yang dikonfigurasi sebagai tipe `HO`; definisi ini masih harus dikonfirmasi pada bagian keputusan bisnis |
 | Cabang memiliki Homecare | Cabang memiliki sedikitnya satu tim Homecare aktif pada salah satu hari dalam periode tersebut |
@@ -54,7 +56,9 @@ Requirement NAKES menyebut “>100 ke atas” dan requirement MSO menyebut “vi
 
 ## 4. Role dan hak akses
 
-### 4.1 Assignment Koordinator CHS
+### 4.1 Assignment penerima insentif
+
+#### 4.1.1 Koordinator CHS
 
 Assignment Koordinator CHS dibuat sebagai data baru yang terpisah dari role login existing. Satu assignment memiliki:
 
@@ -68,9 +72,17 @@ Assignment Koordinator CHS dibuat sebagai data baru yang terpisah dari role logi
 
 Perubahan assignment hanya berlaku mulai tanggal efektif dan tidak mengubah snapshot periode yang sudah dikunci.
 
+#### 4.1.2 Dokter Cabang dan Dokter Tim Homecare
+
+- Setiap cabang memiliki maksimal satu Dokter Cabang utama pada rentang tanggal yang sama.
+- Setiap tim Homecare memiliki maksimal satu Dokter Tim Homecare utama pada rentang tanggal yang sama.
+- Assignment memiliki `effectiveFrom`, `effectiveUntil`, status aktif, pembuat/perubah, dan alasan perubahan.
+- Koordinator CHS boleh merangkap sebagai Dokter Tim Homecare.
+- Perubahan assignment tidak mengubah hasil periode yang sudah dikunci.
+
 ### 4.2 Permission yang disarankan
 
-| Permission | Super Admin | Koordinator CHS | HR/Finance | NAKES/MSO |
+| Permission | Super Admin | Koordinator CHS | HR/Finance | Dokter Cabang/NAKES/MSO |
 |---|:---:|:---:|:---:|:---:|
 | `INCENTIVE.CONFIG_MANAGE` | Ya | Tidak | Tidak | Tidak |
 | `INCENTIVE.ASSIGNMENT_MANAGE` | Ya | Tidak | Tidak | Tidak |
@@ -92,6 +104,7 @@ Super Admin tetap dapat melihat dan mengelola seluruh scope.
 
 | Penerima | Komponen | Syarat | Nominal |
 |---|---|---|---:|
+| Dokter Cabang | Infus berbayar setelah target cabang | Cabang tanpa Homecare mencapai minimal 200 sesi, atau cabang dengan Homecare mencapai minimal 300 sesi | Rp2.500/infus berbayar |
 | NAKES | Insentif per infus | Setiap sesi valid yang dikreditkan kepada NAKES | Rp10.000/infus |
 | NAKES | Bonus bulanan | Jumlah sesi valid >100 atau minimal 101 | Rp1.000.000 satu kali |
 | MSO | Bonus visit bulanan | Visit valid >100 atau minimal 101, dan penjualan Air Nano lunas minimal 5 dus | Rp2.000.000 satu kali |
@@ -100,9 +113,29 @@ Super Admin tetap dapat melihat dan mengelola seluruh scope.
 | Koordinator CHS | Infus berbayar dari Homecare/cabang | Sesi valid dan telah lunas/terverifikasi | Rp1.000/infus berbayar |
 | Koordinator CHS | Tusukan pribadi | Sesi valid yang dilakukan sendiri; boleh berbayar, gratis, atau sosial | Rp10.000/infus |
 | Koordinator CHS | Bonus tusukan pribadi | Tusukan pribadi minimal 100 dalam satu bulan | Rp2.000.000 satu kali |
-| Koordinator CHS | Infus tim HO | Sesi valid yang dikreditkan ke tim HO dalam scope | Rp10.000/infus |
+| Koordinator CHS | Infus tim HO | Infus berbayar yang dikreditkan ke tim HO dalam scope | Rp10.000/infus berbayar |
+| Koordinator merangkap Dokter Tim Homecare | Omzet tim Homecare | Tim mencapai minimal 100 sesi dan infus sudah lunas/terverifikasi | Rp5.000/infus berbayar |
 
-### 5.2 Aturan NAKES
+### 5.2 Aturan Dokter Cabang
+
+1. Cabang tanpa tim Homecare aktif menggunakan target minimal 200 sesi valid dalam satu bulan.
+2. Cabang dengan tim Homecare aktif menggunakan target minimal 300 sesi valid dalam satu bulan.
+3. Jika target cabang tidak tercapai, Dokter Cabang tidak memperoleh komponen ini.
+4. Jika target tercapai, Dokter Cabang memperoleh Rp2.500 untuk setiap infus berbayar di cabang tersebut pada bulan yang sama.
+5. Jumlah Rp2.500 dihitung dari seluruh `sessionId` unik yang lunas/terverifikasi di cabang, bukan hanya sesi yang ditangani langsung oleh Dokter Cabang.
+6. Sesi gratis, sosial, belum lunas, dibatalkan, atau direfund tidak dihitung sebagai dasar nominal.
+7. Hanya Dokter Cabang utama dengan assignment efektif yang menerima insentif. Jika tidak ada assignment yang sah, hasil ditandai anomali dan approval periode diblokir.
+8. Target hanya berfungsi sebagai gerbang. Setelah lolos, tarif Rp2.500 berlaku untuk seluruh infus berbayar pada periode tersebut dan tidak hanya untuk infus ke-200/300 dan seterusnya.
+
+```text
+target_dokter_cabang = memiliki_tim_homecare ? 300 : 200
+eligible_dokter_cabang = jumlah_infus_valid_cabang >= target_dokter_cabang
+insentif_dokter_cabang = eligible_dokter_cabang
+  ? jumlah_infus_berbayar_cabang × Rp2.500
+  : Rp0
+```
+
+### 5.3 Aturan NAKES
 
 1. NAKES memperoleh Rp10.000 untuk setiap sesi valid yang dikreditkan kepadanya.
 2. Jika terdapat beberapa NAKES pada satu sesi, hanya NAKES utama atau `incentiveNakesId` yang menerima kredit.
@@ -119,7 +152,7 @@ bonus_nakes = jumlah_infus_valid >= 101 ? Rp1.000.000 : Rp0
 total_nakes = insentif_nakes + bonus_nakes
 ```
 
-### 5.3 Aturan MSO
+### 5.4 Aturan MSO
 
 1. MSO memperoleh bonus Rp2.000.000 satu kali apabila dalam satu bulan:
    - memiliki minimal 101 visit valid; dan
@@ -138,7 +171,7 @@ bonus_mso = visit_valid >= 101 AND dus_air_nano_lunas >= 5
   : Rp0
 ```
 
-### 5.4 Aturan Koordinator CHS dari tim Homecare
+### 5.5 Aturan Koordinator CHS dari tim Homecare
 
 1. Sistem menghitung sesi valid per tim Homecare per bulan.
 2. Tim harus berada dalam assignment koordinator pada tanggal sesi.
@@ -153,7 +186,7 @@ Rumus dasar:
 bonus_tim_hc = count(tim_hc dengan jumlah_infus_valid >= 100) × Rp500.000
 ```
 
-### 5.5 Aturan Koordinator CHS dari target cabang
+### 5.6 Aturan Koordinator CHS dari target cabang
 
 1. Cabang tanpa tim Homecare aktif menggunakan target minimal 200 sesi valid per bulan.
 2. Cabang yang memiliki tim Homecare aktif menggunakan target minimal 300 sesi valid per bulan.
@@ -166,7 +199,7 @@ target_cabang = memiliki_tim_homecare ? 300 : 200
 bonus_cabang = count(cabang dengan realisasi >= target_cabang) × Rp250.000
 ```
 
-### 5.6 Aturan Koordinator CHS dari infus berbayar
+### 5.7 Aturan Koordinator CHS dari infus berbayar
 
 1. Koordinator memperoleh Rp1.000 untuk setiap sesi berbayar dari cabang dan tim Homecare dalam scope-nya.
 2. Satu sesi yang sekaligus milik cabang dan tim Homecare hanya dihitung satu kali pada komponen ini.
@@ -178,7 +211,7 @@ bonus_cabang = count(cabang dengan realisasi >= target_cabang) × Rp250.000
 insentif_infus_berbayar_koordinator = jumlah_session_id_unik_yang_lunas × Rp1.000
 ```
 
-### 5.7 Aturan tusukan pribadi Koordinator CHS
+### 5.8 Aturan tusukan pribadi Koordinator CHS
 
 1. Koordinator memperoleh Rp10.000 untuk setiap tusukan pribadi.
 2. Sesi berbayar, gratis, atau sosial tetap dihitung.
@@ -190,18 +223,43 @@ insentif_pribadi = jumlah_tusukan_pribadi × Rp10.000
 bonus_pribadi = jumlah_tusukan_pribadi >= 100 ? Rp2.000.000 : Rp0
 ```
 
-### 5.8 Aturan tim HO
+### 5.9 Aturan tim HO
 
-1. Koordinator memperoleh Rp10.000 untuk setiap sesi valid dari tim HO yang berada dalam scope-nya.
+1. Koordinator memperoleh Rp10.000 untuk setiap infus berbayar dari tim HO yang berada dalam scope-nya.
 2. Satu sesi hanya boleh dikreditkan ke satu tim HO.
-3. Default fase awal: komponen ini menghitung semua sesi valid, tanpa melihat gratis/sosial, sampai diputuskan bahwa istilah “omzet” wajib berarti lunas.
-4. Sesi tim HO tidak dimasukkan lagi ke komponen Rp1.000 Homecare/cabang, kecuali Product Owner menyetujui penumpukan insentif.
+3. Hanya sesi dengan pembayaran lunas dan terverifikasi yang dihitung karena dasar komponen adalah omzet tim HO.
+4. Sesi gratis, sosial, belum lunas, dibatalkan, atau direfund tidak dihitung.
+5. Sesi tim HO tidak dimasukkan lagi ke komponen Rp1.000 Homecare/cabang, kecuali Product Owner menyetujui penumpukan insentif.
 
-### 5.9 Pencegahan hitung ganda
+```text
+insentif_tim_ho = jumlah_infus_berbayar_tim_ho × Rp10.000
+```
+
+### 5.10 Koordinator merangkap Dokter Tim Homecare
+
+1. Aturan ini hanya berlaku jika Koordinator CHS juga memiliki assignment efektif sebagai Dokter Tim Homecare pada tim yang sama.
+2. Tim Homecare harus mencapai minimal 100 sesi valid dalam bulan tersebut.
+3. Jika target tim tidak tercapai, komponen Rp5.000 tidak dibayarkan.
+4. Jika target tercapai, koordinator memperoleh Rp5.000 untuk setiap infus berbayar dari tim Homecare tersebut pada bulan yang sama.
+5. Dasar nominal adalah seluruh infus berbayar tim, bukan hanya sesi yang ditangani secara pribadi oleh koordinator.
+6. Sesi gratis, sosial, belum lunas, dibatalkan, atau direfund tidak dihitung.
+7. Target hanya menjadi gerbang; ketika lolos, seluruh infus berbayar dalam periode dihitung.
+8. Komponen Rp5.000 ini dapat terakumulasi dengan bonus target tim Rp500.000 dan komponen Rp1.000 per infus berbayar karena ketiganya merupakan hak yang berbeda.
+
+```text
+eligible_dokter_tim_hc = coordinator_is_team_doctor AND jumlah_infus_valid_tim >= 100
+insentif_dokter_tim_hc = eligible_dokter_tim_hc
+  ? jumlah_infus_berbayar_tim × Rp5.000
+  : Rp0
+```
+
+### 5.11 Pencegahan hitung ganda
 
 - Gunakan `sessionId` sebagai identitas unik per komponen insentif.
 - Target tim Homecare dan target cabang boleh sama-sama tercapai karena merupakan dua komponen berbeda.
+- Dokter Cabang dan Koordinator CHS dapat menerima insentif dari sesi yang sama karena penerima dan komponennya berbeda.
 - Insentif personal Koordinator dan target tim/cabang boleh terakumulasi.
+- Untuk koordinator yang merangkap Dokter Tim Homecare, tarif Rp5.000, tarif Rp1.000, dan bonus tim Rp500.000 boleh terakumulasi sesuai aturan yang dinyatakan eksplisit.
 - Rp10.000 NAKES dan Rp10.000 tusukan pribadi Koordinator tidak boleh dibayar dua kali kepada orang yang sama untuk sesi yang sama.
 - Penjualan Air Nano hanya menjadi syarat bonus MSO dan tidak otomatis menghasilkan insentif lain kecuali ada aturan tambahan.
 - Setiap baris hasil menyimpan `ruleCode`, sumber data, kuantitas, tarif, dan nominal agar dapat direkonsiliasi.
@@ -224,7 +282,17 @@ total           = Rp2.050.000
 - 110 visit dan 4 dus lunas: Rp0.
 - 100 visit dan 8 dus lunas: Rp0, karena aturan sementara adalah >100.
 
-### 6.3 Koordinator CHS
+### 6.3 Dokter Cabang
+
+Cabang memiliki tim Homecare, mencapai 320 sesi valid, dan 280 di antaranya merupakan infus berbayar:
+
+```text
+target cabang dengan Homecare = 300
+realisasi sesi valid          = 320, sehingga target tercapai
+280 × Rp2.500                 = Rp700.000
+```
+
+### 6.4 Koordinator CHS
 
 Contoh tanpa sesi yang terhitung ganda dalam komponen yang sama:
 
@@ -235,8 +303,9 @@ Contoh tanpa sesi yang terhitung ganda dalam komponen yang sama:
 | Infus berbayar Homecare/cabang | 180 sesi | Rp180.000 |
 | Tusukan pribadi | 100 sesi | Rp1.000.000 |
 | Bonus tusukan pribadi | Target tercapai | Rp2.000.000 |
-| Infus tim HO | 20 sesi | Rp200.000 |
-| **Total** |  | **Rp4.130.000** |
+| Infus tim HO | 20 infus berbayar | Rp200.000 |
+| Merangkap Dokter Tim Homecare | 90 infus berbayar dari tim yang mencapai 100 sesi | Rp450.000 |
+| **Total** |  | **Rp4.580.000** |
 
 ## 7. Status periode dan pembayaran insentif
 
@@ -265,10 +334,12 @@ Fase awal tidak melakukan transfer uang otomatis. Sistem menghitung, meminta app
 ```mermaid
 flowchart TD
     A[Super Admin membuka Konfigurasi Insentif] --> B[Pastikan tarif dan target aktif]
-    B --> C[Assign Koordinator ke tim Homecare dan cabang]
-    C --> D[Assign kredit NAKES dan MSO pada sesi]
-    D --> E[Konfigurasi tim HO bila digunakan]
-    E --> F[Konfigurasi katalog Air Nano per cabang]
+    B --> C[Assign Dokter Cabang utama]
+    C --> D[Assign Koordinator ke tim Homecare dan cabang]
+    D --> E[Assign Dokter Tim Homecare]
+    E --> F[Assign kredit NAKES dan MSO pada sesi]
+    F --> G[Konfigurasi tim HO bila digunakan]
+    G --> H[Konfigurasi katalog Air Nano per cabang]
 ```
 
 ### 8.2 Perhitungan bulanan
@@ -276,16 +347,18 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Periode bulan ditutup operasional] --> B[Ambil sesi selesai dan tidak dibatalkan]
-    B --> C[Ambil snapshot NAKES, MSO, tim, cabang, dan koordinator]
+    B --> C[Ambil snapshot Dokter Cabang, Dokter Tim HC, NAKES, MSO, tim, cabang, dan koordinator]
     C --> D[Rekonsiliasi invoice dan pembayaran]
     D --> E[Hitung Air Nano unit DUS yang lunas per MSO]
-    E --> F[Hitung setiap rule secara idempotent]
-    F --> G[Bangun detail dan total DRAFT]
-    G --> H{Ada data tanpa assignment atau konflik?}
-    H -- Ya --> I[Tandai anomali dan blok approval]
-    H -- Tidak --> J[Ajukan review]
-    I --> K[Perbaiki sumber atau buat adjustment beralasan]
-    K --> F
+    E --> F[Hitung target tim Homecare dan target cabang]
+    F --> G[Hitung infus berbayar per cabang, tim HC, dan tim HO]
+    G --> H[Hitung setiap rule secara idempotent]
+    H --> I[Bangun detail dan total DRAFT]
+    I --> J{Ada data tanpa assignment atau konflik?}
+    J -- Ya --> K[Tandai anomali dan blok approval]
+    J -- Tidak --> L[Ajukan review]
+    K --> M[Perbaiki sumber atau buat adjustment beralasan]
+    M --> H
 ```
 
 ### 8.3 Approval dan pembayaran
@@ -310,6 +383,7 @@ Menu yang disarankan:
 Finance / HR
 └── Insentif
     ├── Periode Bulanan
+    ├── Hasil Dokter Cabang
     ├── Hasil Koordinator CHS
     ├── Hasil NAKES
     ├── Hasil MSO
@@ -320,6 +394,7 @@ Finance / HR
 Dashboard periode menampilkan:
 
 - total insentif per tipe penerima;
+- realisasi dan insentif Dokter Cabang per cabang;
 - realisasi terhadap target per tim dan cabang;
 - breakdown per sesi/transaksi tanpa menampilkan data sensitif member secara berlebihan;
 - jumlah visit MSO dan jumlah dus Air Nano lunas;
@@ -338,6 +413,15 @@ Dashboard periode menampilkan:
 - `createdBy`, `updatedBy`, `changeReason`, timestamps;
 - unique assignment aktif yang tumpang tindih untuk scope yang sama.
 
+### `DoctorIncentiveAssignment`
+
+- `id`, `doctorUserId`;
+- `assignmentType`: `BRANCH_DOCTOR` atau `HOMECARE_TEAM_DOCTOR`;
+- `branchId` nullable, `homecareTeamId` nullable;
+- `effectiveFrom`, `effectiveUntil`, `isActive`;
+- `createdBy`, `updatedBy`, `changeReason`, timestamps;
+- maksimal satu assignment utama aktif yang tumpang tindih untuk cabang atau tim yang sama.
+
 ### `IncentiveRuleVersion`
 
 - `id`, `ruleCode`, `recipientType`, `version`;
@@ -347,6 +431,7 @@ Dashboard periode menampilkan:
 
 Rule awal:
 
+- `BRANCH_DOCTOR_TARGET_PAID_INFUS_2500`;
 - `NAKES_PER_INFUS_10K`;
 - `NAKES_MONTHLY_GT100_1M`;
 - `MSO_VISIT_GT100_AND_NANO_5BOX_2M`;
@@ -355,12 +440,14 @@ Rule awal:
 - `CHS_PAID_INFUS_1K`;
 - `CHS_PERSONAL_INFUS_10K`;
 - `CHS_PERSONAL_GTE100_2M`;
-- `CHS_HO_INFUS_10K`.
+- `CHS_HO_PAID_INFUS_10K`;
+- `CHS_HC_DOCTOR_GTE100_PAID_INFUS_5K`.
 
 ### `IncentiveCreditSnapshot`
 
 - `id`, `treatmentSessionId`;
 - `treatmentDate`, `branchId`, `homecareTeamId`, `hoTeamId`;
+- `branchDoctorUserId`, `homecareDoctorUserId`;
 - `nakesUserId`, `msoUserId`, `coordinatorUserId`;
 - `isPaidInfusion`, `isFree`, `isSocial`, `isPersonalNeedle`;
 - `sourcePaymentId`, `sourceInvoiceId`;
@@ -587,43 +674,55 @@ Implementasi dapat memakai `MemberNonTherapyPurchase` atau `MemberAddOn` existin
 18. Perhitungan ulang DRAFT menghasilkan hasil yang sama dan tidak membuat baris ganda.
 19. Periode APPROVED tidak berubah ketika sumber data diedit; koreksi masuk adjustment.
 20. Periode tidak dapat di-approve jika ada sesi tanpa assignment wajib atau konflik kredit.
+21. Dokter Cabang pada cabang tanpa Homecare dengan 199 sesi valid tidak memperoleh komponen Rp2.500.
+22. Dokter Cabang pada cabang tanpa Homecare dengan 200 sesi valid dan 160 infus berbayar memperoleh Rp400.000.
+23. Dokter Cabang pada cabang dengan Homecare dan 299 sesi valid tidak memperoleh komponen Rp2.500.
+24. Dokter Cabang pada cabang dengan Homecare, 300 sesi valid, dan 250 infus berbayar memperoleh Rp625.000 dari seluruh infus berbayar bulan tersebut.
+25. Cabang yang mencapai target tetapi tidak memiliki assignment Dokter Cabang utama ditandai sebagai anomali dan tidak dapat di-approve.
+26. Koordinator yang merangkap Dokter Tim Homecare dengan 99 sesi tim tidak memperoleh komponen Rp5.000.
+27. Koordinator yang merangkap Dokter Tim Homecare dengan 100 sesi valid dan 80 infus berbayar memperoleh Rp400.000 untuk komponen Dokter Tim Homecare; komponen tersebut dapat terakumulasi dengan Rp80.000 dari tarif Rp1.000 dan bonus tim Rp500.000.
+28. Komponen tim HO hanya menghitung sesi lunas/terverifikasi dan menolak sesi gratis, sosial, belum lunas, batal, atau refund.
 
 ### 16.2 Air Nano dan Add-On
 
-21. Detail member menampilkan tab Air Nano & Add-On.
-22. Daftar transaksi hanya menampilkan data member terkait dan mengikuti scope cabang pengguna.
-23. Dua belas SKU awal dapat diaktifkan dan diberi harga berbeda per cabang.
-24. Produk nonaktif pada cabang tidak tampil pada form transaksi baru di cabang tersebut.
-25. Perubahan harga tidak mengubah harga snapshot transaksi lama.
-26. Produk terhubung stok menolak transaksi jika SKU atau stok cabang tidak tersedia.
-27. Produk terhubung stok membuat reservasi tepat satu kali dan mengonsumsi stok setelah pembayaran terverifikasi.
-28. Pembatalan sebelum pembayaran melepaskan reservasi.
-29. Pembatalan setelah posting membuat reversal, bukan menghapus ledger.
-30. Produk tanpa stok dapat ditransaksikan tanpa inventory balance dan tidak membuat mutasi/HPP stok.
-31. Mode tanpa stok terlihat jelas pada detail transaksi dan audit.
-32. Perubahan mode stok hanya berlaku untuk transaksi baru.
-33. Produk yang telah memiliki histori tidak dapat dihapus; hanya dapat dinonaktifkan.
-34. Penjualan SKU `DUS` yang lunas dikreditkan ke MSO penjual pada periode yang benar.
-35. Dua request paralel tidak membuat invoice, reservasi, posting stok, atau kredit penjualan ganda.
-36. Fitur baru tidak mengubah sesi terapi, paket, invoice, atau stok historis yang sudah ada.
+29. Detail member menampilkan tab Air Nano & Add-On.
+30. Daftar transaksi hanya menampilkan data member terkait dan mengikuti scope cabang pengguna.
+31. Dua belas SKU awal dapat diaktifkan dan diberi harga berbeda per cabang.
+32. Produk nonaktif pada cabang tidak tampil pada form transaksi baru di cabang tersebut.
+33. Perubahan harga tidak mengubah harga snapshot transaksi lama.
+34. Produk terhubung stok menolak transaksi jika SKU atau stok cabang tidak tersedia.
+35. Produk terhubung stok membuat reservasi tepat satu kali dan mengonsumsi stok setelah pembayaran terverifikasi.
+36. Pembatalan sebelum pembayaran melepaskan reservasi.
+37. Pembatalan setelah posting membuat reversal, bukan menghapus ledger.
+38. Produk tanpa stok dapat ditransaksikan tanpa inventory balance dan tidak membuat mutasi/HPP stok.
+39. Mode tanpa stok terlihat jelas pada detail transaksi dan audit.
+40. Perubahan mode stok hanya berlaku untuk transaksi baru.
+41. Produk yang telah memiliki histori tidak dapat dihapus; hanya dapat dinonaktifkan.
+42. Penjualan SKU `DUS` yang lunas dikreditkan ke MSO penjual pada periode yang benar.
+43. Dua request paralel tidak membuat invoice, reservasi, posting stok, atau kredit penjualan ganda.
+44. Fitur baru tidak mengubah sesi terapi, paket, invoice, atau stok historis yang sudah ada.
 
 ## 17. Keputusan bisnis yang wajib ditutup sebelum development
 
 1. Apakah bonus NAKES dan MSO dimulai pada 100 atau 101? Draft ini memakai 101 karena teks menggunakan `>100`.
 2. Apa definisi resmi “tim HO”: Head Office, Homecare, atau kategori tim lain?
-3. Apakah infus tim HO Rp10.000 hanya untuk infus berbayar karena menggunakan istilah omzet, atau semua infus valid?
-4. Jika koordinator berubah di tengah bulan, bonus target tim/cabang diberikan kepada koordinator akhir bulan, dibagi proporsional, atau mengikuti jumlah sesi pada masa assignment?
-5. Apakah target cabang menghitung sesi Homecare di cabang tersebut atau hanya sesi on-site?
-6. Apakah cabang disebut “memiliki tim Homecare” berdasarkan keberadaan tim aktif, atau harus ada realisasi Homecare pada bulan tersebut?
-7. Apakah komponen Rp1.000 infus berbayar mencakup cicilan yang sudah dibayar sebagian, atau hanya invoice lunas penuh? Draft ini hanya menghitung lunas penuh.
-8. Apakah bonus NAKES boleh ditumpuk dengan bonus tusukan pribadi Koordinator jika orang yang sama memiliki dua fungsi? Draft ini tidak menumpuk.
-9. Apakah satu sesi dengan lebih dari satu NAKES dibagi, diberikan ke NAKES utama, atau masing-masing mendapat penuh? Draft ini memberikan ke satu penerima kredit.
-10. Siapa yang berwenang review, approve, dan menandai pembayaran insentif?
-11. Apakah pembayaran insentif perlu membuat jurnal payroll/expense otomatis pada fase awal?
-12. Berapa isi botol per dus untuk setiap ukuran jika konversi stok dus-botol diperlukan kemudian?
-13. Apakah harga Air Nano yang diberikan berlaku untuk semua cabang pada setup awal?
-14. Apakah operator cabang boleh memilih mode tanpa stok per transaksi? Draft ini hanya mengizinkan konfigurasi cabang, dengan override Super Admin beralasan.
-15. Kategori Add-On lain apa saja yang boleh dikelola selain Air Nano?
+3. Jika koordinator berubah di tengah bulan, bonus target tim/cabang diberikan kepada koordinator akhir bulan, dibagi proporsional, atau mengikuti jumlah sesi pada masa assignment?
+4. Apakah target cabang menghitung sesi Homecare di cabang tersebut atau hanya sesi on-site?
+5. Apakah cabang disebut “memiliki tim Homecare” berdasarkan keberadaan tim aktif, atau harus ada realisasi Homecare pada bulan tersebut?
+6. Jika terdapat lebih dari satu Dokter Cabang, apakah seluruh insentif diberikan kepada dokter utama atau dibagi? Draft ini menggunakan satu Dokter Cabang utama.
+7. Apakah Rp2.500 Dokter Cabang dihitung dari seluruh infus berbayar cabang atau hanya yang ditangani dokter tersebut? Draft ini menghitung seluruh infus berbayar cabang setelah target tercapai.
+8. Apakah Rp5.000 untuk Koordinator yang merangkap Dokter Tim Homecare dihitung dari seluruh infus berbayar tim atau hanya sesi yang ditangani pribadi? Draft ini menghitung seluruh infus berbayar tim.
+9. Apakah komponen Rp5.000 Dokter Tim Homecare boleh ditumpuk dengan Rp1.000 per infus dan bonus tim Rp500.000? Draft ini memperbolehkan ketiganya terakumulasi.
+10. Apakah target 100 tim Homecare menghitung sesi gratis dan sosial? Draft ini menghitung semua sesi valid, sedangkan tarif Rp5.000 hanya memakai sesi berbayar.
+11. Apakah komponen Rp1.000 infus berbayar mencakup cicilan yang sudah dibayar sebagian, atau hanya invoice lunas penuh? Draft ini hanya menghitung lunas penuh.
+12. Apakah bonus NAKES boleh ditumpuk dengan bonus tusukan pribadi Koordinator jika orang yang sama memiliki dua fungsi? Draft ini tidak menumpuk.
+13. Apakah satu sesi dengan lebih dari satu NAKES dibagi, diberikan ke NAKES utama, atau masing-masing mendapat penuh? Draft ini memberikan ke satu penerima kredit.
+14. Siapa yang berwenang review, approve, dan menandai pembayaran insentif?
+15. Apakah pembayaran insentif perlu membuat jurnal payroll/expense otomatis pada fase awal?
+16. Berapa isi botol per dus untuk setiap ukuran jika konversi stok dus-botol diperlukan kemudian?
+17. Apakah harga Air Nano yang diberikan berlaku untuk semua cabang pada setup awal?
+18. Apakah operator cabang boleh memilih mode tanpa stok per transaksi? Draft ini hanya mengizinkan konfigurasi cabang, dengan override Super Admin beralasan.
+19. Kategori Add-On lain apa saja yang boleh dikelola selain Air Nano?
 
 ## 18. Out of scope fase awal
 
@@ -639,11 +738,11 @@ Implementasi dapat memakai `MemberNonTherapyPurchase` atau `MemberAddOn` existin
 
 1. Tutup keputusan bisnis pada bagian 17.
 2. Tambahkan schema additive untuk assignment, rule version, periode, hasil, dan snapshot kredit.
-3. Lengkapi kredit NAKES/MSO/tim/cabang pada sesi tanpa mengubah sesi lama.
+3. Lengkapi snapshot Dokter Cabang, Dokter Tim Homecare, NAKES, MSO, tim, dan cabang tanpa mengubah sesi lama.
 4. Implementasikan kalkulator insentif idempotent dan laporan rekonsiliasi.
 5. Tambahkan workflow review, approval, adjustment, dan pencatatan pembayaran.
 6. Perluas master produk non-terapi dengan konfigurasi per cabang dan mode stok.
 7. Seed 12 produk Air Nano dan tambahkan tab Air Nano & Add-On pada detail member.
 8. Integrasikan transaksi ke invoice dan stok secara opsional berdasarkan snapshot konfigurasi.
-9. Jalankan unit, integration, concurrency, authorization, migration-safety, dan UAT minimal 36 acceptance criteria.
+9. Jalankan unit, integration, concurrency, authorization, migration-safety, dan UAT minimal 44 acceptance criteria.
 10. Deploy dengan backup terverifikasi dan migration additive; jangan menghitung ulang atau mengubah data lama tanpa perintah khusus.
