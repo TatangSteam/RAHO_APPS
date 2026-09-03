@@ -7,7 +7,6 @@ import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/t
 import { usePackageSelection } from './usePackageSelection';
 import BasicPackageSection from './BasicPackageSection';
 import BoosterPackageSection from './BoosterPackageSection';
-import AddOnSection from './AddOnSection';
 import DiscountSection from './DiscountSection';
 import PreviewSection from './PreviewSection';
 
@@ -135,12 +134,10 @@ export default function AssignPackageModal({
     toggleBooster,
     updateBoosterQty,
     updateBoosterServiceType,
-    isAddOnSelected,
-    getAddOnQuantity,
-    toggleAddOn,
-    updateAddOnQuantity,
     calculatePreview,
-  } = usePackageSelection(assignData, onAssignDataChange, pricingsList);
+  } = usePackageSelection(assignData, onAssignDataChange, pricingsList, {
+    includeAddOns: false,
+  });
 
   const preview = calculatePreview();
   const paymentPlan = assignData.paymentPlan || {
@@ -197,12 +194,12 @@ export default function AssignPackageModal({
               </div>
               <div className="assign-package-modal-title-copy">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                  Assign Paket & Add-On
+                  Assign Paket
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                   {pricingScopeName
                     ? `Katalog harga aktif: ${pricingScopeName}`
-                    : 'Pilih paket atau produk tambahan untuk member'}
+                    : 'Pilih paket untuk member'}
                 </p>
               </div>
             </div>
@@ -220,7 +217,7 @@ export default function AssignPackageModal({
           <div className="assign-package-modal-body flex-1 overflow-y-auto p-6 space-y-5 max-h-[calc(100vh-220px)]">
             {pricingsList.length === 0 && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                Belum ada harga paket aktif untuk scope {pricingScopeName || 'cabang member ini'}. Buat harga Global atau pilih scope cabang yang sesuai pada menu Harga Paket.
+                Belum ada harga paket aktif untuk scope {pricingScopeName || 'cabang member ini'}. Assign harga ke cabang tersebut melalui menu Harga Paket.
               </div>
             )}
 
@@ -241,14 +238,6 @@ export default function AssignPackageModal({
               toggleBooster={toggleBooster}
               updateBoosterQty={updateBoosterQty}
               updateBoosterServiceType={updateBoosterServiceType}
-            />
-
-            {/* ADD-ONS */}
-            <AddOnSection
-              isAddOnSelected={isAddOnSelected}
-              getAddOnQuantity={getAddOnQuantity}
-              toggleAddOn={toggleAddOn}
-              updateAddOnQuantity={updateAddOnQuantity}
             />
 
             {/* DISKON */}
@@ -351,7 +340,7 @@ export default function AssignPackageModal({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  {preview.items.length > 0 ? `Assign ${preview.items.length} Item` : 'Pilih Paket / Add-On'}
+                  {preview.items.length > 0 ? `Assign ${preview.items.length} Paket` : 'Pilih Paket'}
                 </>
               )}
             </button>

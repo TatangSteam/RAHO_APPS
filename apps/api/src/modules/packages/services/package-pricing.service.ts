@@ -19,15 +19,21 @@ export class PackagePricingService {
   /**
    * Get package pricings for a branch
    */
-  async getPackagePricings(branchId: string) {
+  async getPackagePricings(
+    branchId: string,
+    options: { includeGlobalFallback?: boolean } = {},
+  ) {
     try {
+      const includeGlobalFallback = options.includeGlobalFallback ?? true;
       const scopedPricings = await prisma.packagePricing.findMany({
-        where: {
-          OR: [{ branchId }, { branchId: null }],
-        },
+        where: includeGlobalFallback
+          ? { OR: [{ branchId }, { branchId: null }] }
+          : { branchId },
         orderBy: [{ packageType: 'asc' }, { totalSessions: 'asc' }],
       });
-      const pricings = resolveEffectivePackagePricings(scopedPricings, branchId);
+      const pricings = includeGlobalFallback
+        ? resolveEffectivePackagePricings(scopedPricings, branchId)
+        : scopedPricings;
       const serviceTypeNames = await this.getServiceTypeNames(pricings.map(p => p.serviceType));
 
       return pricings.map(p => ({

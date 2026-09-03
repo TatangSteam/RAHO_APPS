@@ -93,8 +93,11 @@ export class PackagesService {
   /**
    * Get package pricings for a branch
    */
-  async getPackagePricings(branchId: string) {
-    return await this.pricingService.getPackagePricings(branchId);
+  async getPackagePricings(
+    branchId: string,
+    options: { includeGlobalFallback?: boolean } = {},
+  ) {
+    return await this.pricingService.getPackagePricings(branchId, options);
   }
 
   /**

@@ -377,7 +377,7 @@ export default function MemberDetailPage() {
       // Pass member's registration branch to get correct pricing
       const memberBranchId = member?.registrationBranch?.id;
       devLog('Loading pricings for member branch:', memberBranchId);
-      const data = await packagesApi.getPackagePricings(memberBranchId);
+      const data = await packagesApi.getPackagePricings(memberBranchId, { branchOnly: true });
       devLog('Loaded pricings:', data);
       setPricings(Array.isArray(data) ? data : []);
       return true;
@@ -444,8 +444,8 @@ export default function MemberDetailPage() {
     devLog('assignData:', assignData);
     devLog('selectedPackages:', assignData.selectedPackages);
     
-    if (assignData.selectedPackages.length === 0 && assignData.selectedAddOns.length === 0) {
-      showToast.error('Pilih minimal 1 paket atau add-on');
+    if (assignData.selectedPackages.length === 0) {
+      showToast.error('Pilih minimal 1 paket');
       return;
     }
 
@@ -461,7 +461,6 @@ export default function MemberDetailPage() {
       // Prepare payload
       const payload: AssignPackageData = {
         packages: assignData.selectedPackages,
-        addOns: assignData.selectedAddOns.length > 0 ? assignData.selectedAddOns : undefined,
         discountPercent: assignData.discountPercent || undefined,
         discountAmount: assignData.discountAmount || undefined,
         discountNote: assignData.discountNote || undefined,
@@ -477,7 +476,7 @@ export default function MemberDetailPage() {
       devLog('Sending payload:', payload);
       
       await packagesApi.assignPackage(memberId, payload);
-      showToast.success('Paket / add-on berhasil diassign');
+      showToast.success('Paket berhasil diassign');
       setShowAssignModal(false);
       setAssignData({
         selectedPackages: [],

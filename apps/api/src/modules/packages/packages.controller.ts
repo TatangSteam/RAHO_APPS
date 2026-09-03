@@ -209,11 +209,13 @@ export class PackagesController {
       
       // Check if branchId query param is provided (for filtering by specific branch)
       const queryBranchId = req.query.branchId as string | undefined;
+      const branchOnly = req.query.catalogScope === 'BRANCH_ONLY';
+      const pricingOptions = { includeGlobalFallback: !branchOnly };
 
       // If branchId query param provided, use it (for ADMIN_MANAGER/SUPER_ADMIN filtering by member's branch)
       if (queryBranchId) {
         if (userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN') {
-          const pricings = await packagesService.getPackagePricings(queryBranchId);
+          const pricings = await packagesService.getPackagePricings(queryBranchId, pricingOptions);
           return sendSuccess(res, { pricings });
         }
         // Other roles can only filter by their own branch
@@ -233,7 +235,7 @@ export class PackagesController {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
       }
 
-      const pricings = await packagesService.getPackagePricings(userBranchId);
+      const pricings = await packagesService.getPackagePricings(userBranchId, pricingOptions);
       return sendSuccess(res, { pricings });
     } catch (error) {
       console.error('getPackagePricings error:', error);

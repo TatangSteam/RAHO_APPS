@@ -57,4 +57,33 @@ describe('PackagesController Super Admin assignment', () => {
     );
     expect(next).not.toHaveBeenCalled();
   });
+
+  it('requests branch-only pricing for the member assignment catalog', async () => {
+    const getPackagePricings = jest
+      .spyOn(PackagesService.prototype, 'getPackagePricings')
+      .mockResolvedValue([]);
+    const controller = new PackagesController();
+    const req = {
+      query: {
+        branchId: 'branch-member',
+        catalogScope: 'BRANCH_ONLY',
+      },
+      user: {
+        role: 'SUPER_ADMIN',
+        branchId: 'branch-home',
+      },
+    } as unknown as Request;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    } as unknown as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.getPackagePricings(req, res, next);
+
+    expect(getPackagePricings).toHaveBeenCalledWith('branch-member', {
+      includeGlobalFallback: false,
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
 });

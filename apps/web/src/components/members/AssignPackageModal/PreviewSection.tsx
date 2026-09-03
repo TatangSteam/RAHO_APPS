@@ -1,4 +1,4 @@
-import { BarChart3, Package, Rocket, Sparkles } from 'lucide-react';
+import { BarChart3, Package, Rocket } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatNumber';
 
 interface PreviewItem {
@@ -33,7 +33,7 @@ export default function PreviewSection({
       case 'BOOSTER':
         return <Rocket className="h-3.5 w-3.5 text-purple-400" />;
       default:
-        return <Sparkles className="h-3.5 w-3.5 text-amber-400" />;
+        return <Package className="h-3.5 w-3.5 text-blue-400" />;
     }
   };
 
@@ -47,7 +47,7 @@ export default function PreviewSection({
       <div className="text-sm space-y-2">
         {items.length === 0 ? (
           <p className="text-neutral-500 dark:text-neutral-500 text-center py-4">
-            Pilih minimal 1 paket atau add-on
+            Pilih minimal 1 paket
           </p>
         ) : (
           <>

@@ -36,7 +36,8 @@ interface PackageSelectionData {
 export function usePackageSelection<TAssignData extends PackageSelectionData>(
   assignData: TAssignData,
   onAssignDataChange: (data: TAssignData) => void,
-  pricingsList: PackagePricing[]
+  pricingsList: PackagePricing[],
+  options: { includeAddOns?: boolean } = {},
 ) {
   // ── BASIC helpers ──────────────────────────────────────────
   const isBasicSelected = (pricingId: string) =>
@@ -133,7 +134,6 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
     });
   };
 
-  // ── ADD-ON helpers ─────────────────────────────────────────
   const isAddOnSelected = (code: string) =>
     assignData.selectedAddOns.some(a => a.code === code);
 
@@ -150,7 +150,11 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
       onAssignDataChange({
         ...assignData,
         selectedAddOns: [...assignData.selectedAddOns, {
-          type: addon.type, code: addon.code, name: addon.name, price: addon.price, quantity: 1,
+          type: addon.type,
+          code: addon.code,
+          name: addon.name,
+          price: addon.price,
+          quantity: 1,
         }],
       });
     }
@@ -216,11 +220,18 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
       });
     });
 
-    assignData.selectedAddOns.forEach(addon => {
-      const totalPrice = addon.price * addon.quantity;
-      subtotal += totalPrice;
-      items.push({ name: addon.name, price: totalPrice, type: 'ADDON', details: `${addon.quantity} unit` });
-    });
+    if (options.includeAddOns ?? true) {
+      assignData.selectedAddOns.forEach(addon => {
+        const totalPrice = addon.price * addon.quantity;
+        subtotal += totalPrice;
+        items.push({
+          name: addon.name,
+          price: totalPrice,
+          type: 'ADDON',
+          details: `${addon.quantity} unit`,
+        });
+      });
+    }
 
     let discount = 0;
     if (assignData.discountPercent > 0) discount += subtotal * (Math.min(assignData.discountPercent, 100) / 100);

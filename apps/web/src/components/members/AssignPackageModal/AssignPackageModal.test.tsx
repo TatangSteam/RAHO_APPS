@@ -42,19 +42,42 @@ function AssignPackageHarness({
   );
 }
 
-describe('AssignPackageModal add-on purchase', () => {
-  it('allows an add-on-only selection and enables submission', () => {
+describe('AssignPackageModal package assignment', () => {
+  it('removes add-on choices and only enables submission after selecting a package', () => {
     const onSubmit = jest.fn();
-    render(<AssignPackageHarness onSubmit={onSubmit} />);
-
-    fireEvent.click(
-      screen.getByRole('checkbox', { name: /Air Nano Kuning 600ml 1 Botol/i }),
+    render(
+      <AssignPackageHarness
+        onSubmit={onSubmit}
+        pricings={[{
+          id: 'basic-pricing',
+          branchId: 'branch-jakarta',
+          packageType: 'BASIC',
+          totalSessions: 1,
+          price: 2_000_000,
+          boosterType: null,
+          serviceType: 'PM',
+          productCode: 'SRV-TNB-TRP-HC-001',
+          name: 'Terapi Nano Bubble 1X',
+          isActive: true,
+          createdAt: '2026-09-02T00:00:00.000Z',
+          updatedAt: '2026-09-02T00:00:00.000Z',
+        }]}
+      />,
     );
 
-    expect(screen.getByRole('button', { name: 'Assign 1 Item' })).toBeEnabled();
-    expect(screen.getAllByText('Rp 15.000').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Assign Paket' })).toBeInTheDocument();
+    expect(screen.queryByText(/ADD-ON PRODUK/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Air Nano Kuning 600ml/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pilih Paket' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign 1 Item' }));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /Terapi Nano Bubble 1X/i }),
+    );
+
+    expect(screen.getByRole('button', { name: 'Assign 1 Paket' })).toBeEnabled();
+    expect(screen.getAllByText('Rp 2.000.000').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Assign 1 Paket' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
@@ -85,5 +108,33 @@ describe('AssignPackageModal add-on purchase', () => {
     expect(screen.getByText('Katalog harga aktif: Raho Premier Jakarta')).toBeInTheDocument();
     expect(screen.getByText('Paket Aktif')).toBeInTheDocument();
     expect(screen.queryByText('Paket Nonaktif')).not.toBeInTheDocument();
+  });
+
+  it('shows the branch price for Program Sosial but requires assignment through approval', () => {
+    render(
+      <AssignPackageHarness
+        onSubmit={jest.fn()}
+        pricings={[{
+          id: 'social-pricing',
+          branchId: 'branch-jakarta',
+          packageType: 'BASIC',
+          totalSessions: 1,
+          price: 500_000,
+          boosterType: null,
+          serviceType: 'PS',
+          productCode: 'SRV-TNB-TRP-PS-001',
+          name: 'Terapi Nano Bubble 1X (Program Sosial)',
+          isActive: true,
+          createdAt: '2026-09-02T00:00:00.000Z',
+          updatedAt: '2026-09-02T00:00:00.000Z',
+        }]}
+      />,
+    );
+
+    expect(screen.getByText('Rp 500.000')).toBeInTheDocument();
+    expect(screen.getByText(/melalui Approval Inbox/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Terapi Nano Bubble 1X \(Program Sosial\)/i }),
+    ).toBeDisabled();
   });
 });

@@ -107,11 +107,17 @@ export const packagesApi = {
   },
 
   // Get package pricings
-  getPackagePricings: async (branchId?: string) => {
+  getPackagePricings: async (
+    branchId?: string,
+    options: { branchOnly?: boolean } = {},
+  ) => {
     // Add timestamp to prevent caching
     const queryParams = new URLSearchParams({ _t: Date.now().toString() });
     if (branchId) {
       queryParams.append('branchId', branchId);
+    }
+    if (options.branchOnly) {
+      queryParams.append('catalogScope', 'BRANCH_ONLY');
     }
     const response = await api.get(`/package-pricings?${queryParams.toString()}`);
     return response.data.data?.pricings || response.data.pricings || [];
