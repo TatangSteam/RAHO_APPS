@@ -4,7 +4,6 @@ import type { CSSProperties, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
-  Building2,
   ClipboardList,
   Copy,
   Download,
@@ -12,7 +11,9 @@ import {
   History,
   Loader2,
   MapPin,
+  ReceiptText,
   RefreshCw,
+  Search,
   ShieldCheck,
   TicketPercent,
   UserPlus,
@@ -53,11 +54,16 @@ type Voucher = {
   campaign: { code: string; title: string; basicSessions: number; boosterSessions: number };
   allowedLocation?: Pick<Location, 'id' | 'displayName' | 'city'> | null;
   claimedLocation?: Pick<Location, 'id' | 'displayName' | 'city'> | null;
+  claimedBy?: { name: string; staffCode?: string | null } | null;
 };
 type Operator = { id: string; username: string; fullName: string; isActive: boolean; lastLoginAt?: string | null; locations: Location[] };
 type Dashboard = { campaigns: Campaign[]; locations: Location[]; recentVouchers: Voucher[]; operators: Operator[] };
 type ClaimResult = Voucher & {
   idempotentReplay: boolean;
+};
+type ClaimHistoryResponse = {
+  items: Voucher[];
+  pagination: { page: number; perPage: number; total: number; totalPages: number };
 };
 
 type VoucherView = 'claim' | 'history' | 'registry' | 'campaigns' | 'locations' | 'operators';
@@ -116,8 +122,10 @@ export default function VoucherPartnershipPage() {
   const view = getVoucherView(pathname);
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isAllowed = isSuperAdmin || user?.role === 'VOUCHER_OPERATOR';
-  const isViewAllowed = isSuperAdmin || view === 'claim' || view === 'history';
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const canIssueVoucher = isSuperAdmin || isAdminManager;
+  const isAllowed = canIssueVoucher || user?.role === 'VOUCHER_OPERATOR';
+  const isViewAllowed = isSuperAdmin || view === 'claim' || view === 'history' || (isAdminManager && view === 'registry');
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -127,22 +135,62 @@ export default function VoucherPartnershipPage() {
   const [claimForm, setClaimForm] = useState({ code: '', recipientName: '', nik: '', dateOfBirth: '', locationId: '' });
   const [operatorForm, setOperatorForm] = useState({ fullName: '', username: '', password: '', locationIds: [] as string[] });
   const [registryFilter, setRegistryFilter] = useState({ campaignId: '', status: 'AVAILABLE' });
+  const [claimHistory, setClaimHistory] = useState<Voucher[]>([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFilter, setHistoryFilter] = useState({ campaignId: '', locationId: '' });
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPagination, setHistoryPagination] = useState({ page: 1, perPage: 25, total: 0, totalPages: 1 });
+  const [historyLoading, setHistoryLoading] = useState(false);
   const maximumBirthDate = useMemo(() => localDateInputValue(), []);
 
   const load = useCallback(async () => {
     try {
       const response = await api.get<{ data: Dashboard }>('/vouchers/dashboard');
       setDashboard(response.data.data);
-      setIssueForm((current) => ({ ...current, campaignId: current.campaignId || response.data.data.campaigns.find((item) => item.status === 'ACTIVE')?.id || '' }));
+      setIssueForm((current) => ({
+        ...current,
+        campaignId: current.campaignId || response.data.data.campaigns.find((item) => item.status === 'ACTIVE')?.id || '',
+        allowedLocationId: current.allowedLocationId || (user?.role === 'ADMIN_MANAGER' ? response.data.data.locations[0]?.id || '' : ''),
+      }));
       setClaimForm((current) => ({ ...current, locationId: current.locationId || response.data.data.locations[0]?.id || '' }));
     } catch (error) {
       showToast.error(errorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => { if (isAllowed) void load(); else setLoading(false); }, [isAllowed, load]);
+
+  useEffect(() => {
+    if (!isAllowed || view !== 'history') return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        setHistoryLoading(true);
+        const response = await api.get<{ data: ClaimHistoryResponse }>('/vouchers/claims', {
+          params: {
+            search: historySearch.trim() || undefined,
+            campaignId: historyFilter.campaignId || undefined,
+            locationId: historyFilter.locationId || undefined,
+            page: historyPage,
+            perPage: 25,
+          },
+        });
+        if (!active) return;
+        setClaimHistory(response.data.data.items);
+        setHistoryPagination(response.data.data.pagination);
+      } catch (error) {
+        if (active) showToast.error(errorMessage(error));
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [historyFilter.campaignId, historyFilter.locationId, historyPage, historySearch, isAllowed, view]);
 
   const totals = useMemo(() => (dashboard?.campaigns ?? []).reduce((result, campaign) => ({
     quota: result.quota + campaign.quota,
@@ -153,10 +201,6 @@ export default function VoucherPartnershipPage() {
     (!registryFilter.campaignId || dashboard?.campaigns.find((campaign) => campaign.id === registryFilter.campaignId)?.code === voucher.campaign.code) &&
     (!registryFilter.status || voucher.status === registryFilter.status)
   )), [dashboard?.campaigns, dashboard?.recentVouchers, registryFilter]);
-  const claimHistory = useMemo(() => (dashboard?.recentVouchers ?? []).filter((voucher) => (
-    ['CLAIMED', 'EXHAUSTED', 'EXPIRED'].includes(voucher.status)
-  )), [dashboard?.recentVouchers]);
-
   const pageCopy: Record<VoucherView, { title: string; description: string }> = {
     claim: { title: 'Klaim Voucher', description: 'Verifikasi identitas penerima dan aktifkan manfaat voucher pada lokasi yang ditugaskan.' },
     history: { title: 'Riwayat Klaim', description: 'Lihat klaim voucher sesuai lokasi yang menjadi scope akun Anda.' },
@@ -251,6 +295,28 @@ export default function VoucherPartnershipPage() {
     } finally { setBusy(null); }
   }
 
+  async function downloadClaimReceipt(voucher: Voucher) {
+    try {
+      setBusy(`receipt-${voucher.id}`);
+      const response = await api.get<Blob>(`/vouchers/claims/${voucher.id}/receipt`, { responseType: 'blob' });
+      const contentDisposition = String(response.headers['content-disposition'] || '');
+      const filename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1] || `bukti-klaim-${voucher.id}.pdf`;
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      showToast.success('Bukti tanda terima berhasil diunduh.');
+    } catch (error) {
+      showToast.error(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function generateCodes(campaign: Campaign) {
     if (campaign.remainingToGenerate <= 0) return;
     try {
@@ -264,13 +330,13 @@ export default function VoucherPartnershipPage() {
     } finally { setBusy(null); }
   }
 
-  function renderVoucherTable(vouchers: Voucher[], emptyMessage: string) {
+  function renderVoucherTable(vouchers: Voucher[], emptyMessage: string, showReceipt = false) {
     return (
       <div style={{ overflowX: 'auto', marginTop: 14 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
             <tr style={{ textAlign: 'left', color: 'var(--text-secondary)', fontSize: 12 }}>
-              {['Kode', 'Campaign', 'Tipe Voucher', 'Penerima', 'NIK', 'Status', 'Lokasi', 'Waktu'].map((item) => (
+              {['Kode', 'Campaign', 'Tipe Voucher', 'Penerima', 'NIK', 'Status', 'Lokasi', 'Waktu', ...(showReceipt ? ['Petugas', 'Bukti'] : [])].map((item) => (
                 <th key={item} style={{ padding: '9px 8px', borderBottom: '1px solid var(--border-color)' }}>{item}</th>
               ))}
             </tr>
@@ -286,6 +352,8 @@ export default function VoucherPartnershipPage() {
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.status}</td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.claimedLocation?.displayName || voucher.allowedLocation?.displayName || 'Semua lokasi'}</td>
                 <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(voucher.claimedAt || voucher.issuedAt))}</td>
+                {showReceipt && <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}>{voucher.claimedBy?.name || '-'}</td>}
+                {showReceipt && <td style={{ padding: 9, borderBottom: '1px solid var(--border-color)' }}><button type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => void downloadClaimReceipt(voucher)}>{busy === `receipt-${voucher.id}` ? <Loader2 size={15} className="animate-spin" /> : <ReceiptText size={15} />} PDF</button></td>}
               </tr>
             ))}
           </tbody>
@@ -329,7 +397,7 @@ export default function VoucherPartnershipPage() {
           <label style={labelStyle}>NIK penerima<input required inputMode="numeric" maxLength={16} style={fieldStyle} value={claimForm.nik} onChange={(event) => setClaimForm({ ...claimForm, nik: event.target.value.replace(/\D/g, '') })} placeholder="16 digit" /></label>
           <label style={labelStyle}>Tanggal lahir<input required type="date" max={maximumBirthDate} style={fieldStyle} value={claimForm.dateOfBirth} onChange={(event) => setClaimForm({ ...claimForm, dateOfBirth: event.target.value })} /><small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Tidak boleh tanggal hari mendatang.</small></label>
           <button className="btn btn-primary" disabled={busy !== null || !claimForm.locationId}>{busy === 'claim' ? <Loader2 size={17} className="animate-spin" /> : <BadgeCheck size={17} />} Verifikasi dan klaim</button>
-          {claimResult && <div style={{ border: '1px solid #22c55e', background: 'rgba(34,197,94,.08)', borderRadius: 10, padding: 14 }}><strong>Voucher berhasil diklaim oleh {claimResult.recipientName}</strong><div style={{ fontSize: 13, marginTop: 5 }}>{claimResult.campaign.basicSessions}× BASIC{claimResult.campaign.boosterSessions > 0 ? ` + ${claimResult.campaign.boosterSessions}× BOOSTER` : ''}. Tidak dibuat paket atau sesi terapi.</div></div>}
+          {claimResult && <div style={{ border: '1px solid #22c55e', background: 'rgba(34,197,94,.08)', borderRadius: 10, padding: 14 }}><strong>Voucher berhasil diklaim oleh {claimResult.recipientName}</strong><div style={{ fontSize: 13, marginTop: 5 }}>{claimResult.campaign.basicSessions}× BASIC{claimResult.campaign.boosterSessions > 0 ? ` + ${claimResult.campaign.boosterSessions}× BOOSTER` : ''}. Tidak dibuat paket atau sesi terapi.</div><button type="button" className="btn btn-secondary" style={{ marginTop: 12 }} disabled={busy !== null} onClick={() => void downloadClaimReceipt(claimResult)}>{busy === `receipt-${claimResult.id}` ? <Loader2 size={16} className="animate-spin" /> : <ReceiptText size={16} />} Unduh bukti tanda terima PDF</button></div>}
         </form>
       </section>}
 
@@ -340,14 +408,14 @@ export default function VoucherPartnershipPage() {
           <label style={labelStyle}>Kode pada voucher cetak <small style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>(tempel kode AVAILABLE dari hasil export, atau kosongkan untuk mengambil kode berikutnya)</small><input style={fieldStyle} value={issueForm.code} onChange={(event) => setIssueForm({ ...issueForm, code: cleanVoucherCodeInput(event.target.value) })} /></label>
           <label style={labelStyle}>Nama penerima<input required style={fieldStyle} value={issueForm.recipientName} onChange={(event) => setIssueForm({ ...issueForm, recipientName: event.target.value })} /></label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={labelStyle}>NIK<input required inputMode="numeric" maxLength={16} style={fieldStyle} value={issueForm.nik} onChange={(event) => setIssueForm({ ...issueForm, nik: event.target.value.replace(/\D/g, '') })} /></label><label style={labelStyle}>Tanggal lahir<input required type="date" max={maximumBirthDate} style={fieldStyle} value={issueForm.dateOfBirth} onChange={(event) => setIssueForm({ ...issueForm, dateOfBirth: event.target.value })} /></label></div>
-          <label style={labelStyle}>Berlaku di<select style={fieldStyle} value={issueForm.allowedLocationId} onChange={(event) => setIssueForm({ ...issueForm, allowedLocationId: event.target.value })}><option value="">Semua lokasi aktif</option>{dashboard.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}</select></label>
-          <button className="btn btn-primary" disabled={busy !== null}>{busy === 'issue' ? <Loader2 size={17} className="animate-spin" /> : <TicketPercent size={17} />} Terbitkan kode</button>
+          <label style={labelStyle}>Berlaku di<select required={isAdminManager} style={fieldStyle} value={issueForm.allowedLocationId} onChange={(event) => setIssueForm({ ...issueForm, allowedLocationId: event.target.value })}>{isSuperAdmin && <option value="">Semua lokasi aktif</option>}{isAdminManager && <option value="">Pilih lokasi klaim</option>}{dashboard.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}</select>{isAdminManager && <small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Admin Manager wajib menetapkan satu lokasi klaim aktif.</small>}</label>
+          <button className="btn btn-primary" disabled={busy !== null || (isAdminManager && !issueForm.allowedLocationId)}>{busy === 'issue' ? <Loader2 size={17} className="animate-spin" /> : <TicketPercent size={17} />} Terbitkan kode</button>
           {issuedCode && <div style={{ border: '1px solid #f59e0b', background: 'rgba(245,158,11,.09)', borderRadius: 10, padding: 14 }}><small>Kode lengkap hanya ditampilkan setelah penerbitan:</small><div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 7 }}><strong style={{ fontSize: 18, overflowWrap: 'anywhere' }}>{issuedCode}</strong><button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard.writeText(issuedCode); showToast.success('Kode disalin.'); }}><Copy size={15} /></button></div></div>}
         </form>
         <section className="card" style={{ padding: 21 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
             <div><h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><ClipboardList size={20} /> Registry Voucher</h2><p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Kode dan NIK pada layar selalu tersamarkan.</p></div>
-            <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void exportCodes()}>{busy === 'export' ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />} Export kode untuk print (CSV)</button>
+            {isSuperAdmin && <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void exportCodes()}>{busy === 'export' ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />} Export kode untuk print (CSV)</button>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10, marginTop: 15 }}><label style={labelStyle}>Filter campaign<select style={fieldStyle} value={registryFilter.campaignId} onChange={(event) => setRegistryFilter({ ...registryFilter, campaignId: event.target.value })}><option value="">Semua campaign</option>{dashboard.campaigns.map((campaign) => <option value={campaign.id} key={campaign.id}>{campaign.code}</option>)}</select></label><label style={labelStyle}>Filter status<select style={fieldStyle} value={registryFilter.status} onChange={(event) => setRegistryFilter({ ...registryFilter, status: event.target.value })}><option value="">Semua status</option>{['AVAILABLE', 'ISSUED', 'CLAIMED', 'EXHAUSTED', 'EXPIRED', 'CANCELLED'].map((status) => <option value={status} key={status}>{status}</option>)}</select></label></div>
           {renderVoucherTable(filteredVouchers, 'Belum ada voucher pada filter ini.')}
@@ -355,8 +423,17 @@ export default function VoucherPartnershipPage() {
       </>}
 
       {view === 'history' && <section className="card" style={{ padding: 21 }}>
-        <div><h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><History size={20} /> Riwayat Klaim</h2><p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>{isSuperAdmin ? 'Menampilkan klaim dari seluruh lokasi.' : 'Hanya klaim dari lokasi yang ditugaskan kepada akun Anda.'}</p></div>
-        {renderVoucherTable(claimHistory, 'Belum ada riwayat klaim pada scope lokasi ini.')}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div><h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><History size={20} /> Riwayat Klaim</h2><p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>{isSuperAdmin || isAdminManager ? 'Menampilkan klaim dari seluruh lokasi aktif.' : 'Hanya klaim dari lokasi yang ditugaskan kepada akun Anda.'}</p></div>
+          <div style={{ border: '1px solid rgba(34,197,94,.35)', background: 'rgba(34,197,94,.08)', color: '#16a34a', borderRadius: 999, padding: '7px 12px', fontSize: 13, fontWeight: 750 }}>{historyPagination.total} klaim ditemukan</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px,2fr) repeat(2,minmax(180px,1fr))', gap: 10, marginTop: 18 }}>
+          <label style={labelStyle}>Cari klaim<div style={{ position: 'relative' }}><Search size={17} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-secondary)' }} /><input style={{ ...fieldStyle, paddingLeft: 38 }} value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); setHistoryPage(1); }} placeholder="Nama, 4 digit NIK/kode, campaign, atau lokasi" /></div></label>
+          <label style={labelStyle}>Campaign<select style={fieldStyle} value={historyFilter.campaignId} onChange={(event) => { setHistoryFilter((current) => ({ ...current, campaignId: event.target.value })); setHistoryPage(1); }}><option value="">Semua campaign</option>{dashboard.campaigns.map((campaign) => <option value={campaign.id} key={campaign.id}>{campaign.code}</option>)}</select></label>
+          <label style={labelStyle}>Lokasi<select style={fieldStyle} value={historyFilter.locationId} onChange={(event) => { setHistoryFilter((current) => ({ ...current, locationId: event.target.value })); setHistoryPage(1); }}><option value="">Semua lokasi dalam scope</option>{dashboard.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName}</option>)}</select></label>
+        </div>
+        {historyLoading ? <div style={{ minHeight: 180, display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}><Loader2 className="animate-spin" /></div> : renderVoucherTable(claimHistory, historySearch ? 'Tidak ada klaim yang sesuai pencarian.' : 'Belum ada riwayat klaim pada scope lokasi ini.', true)}
+        {historyPagination.totalPages > 1 && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 16 }}><button type="button" className="btn btn-secondary" disabled={historyPage <= 1 || historyLoading} onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}>Sebelumnya</button><span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Halaman {historyPagination.page} dari {historyPagination.totalPages}</span><button type="button" className="btn btn-secondary" disabled={historyPage >= historyPagination.totalPages || historyLoading} onClick={() => setHistoryPage((page) => page + 1)}>Berikutnya</button></div>}
       </section>}
 
       {view === 'campaigns' && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(285px,1fr))', gap: 12 }}>

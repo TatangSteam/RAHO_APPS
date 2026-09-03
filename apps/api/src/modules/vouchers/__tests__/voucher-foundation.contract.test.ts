@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { claimVoucherSchema, issueVoucherSchema } from '../voucher.schema';
 import { decryptVoucherCode, encryptVoucherCode, hashVoucherIdentity } from '../voucher.crypto';
-import { normalizeVoucherCode } from '../voucher.service';
+import { createClaimReceiptPdf, normalizeVoucherCode } from '../voucher.service';
 
 const apiRoot = path.resolve(__dirname, '../../../..');
 const repoRoot = path.resolve(apiRoot, '../..');
@@ -89,6 +89,27 @@ describe('Voucher Partnership foundation', () => {
     expect(hashVoucherIdentity(identity)).not.toContain(identity);
   });
 
+  it('generates a valid PDF claim receipt without exposing full identity data', async () => {
+    const receipt = await createClaimReceiptPdf({
+      receiptNumber: 'VCR-20260903-TEST0001',
+      maskedCode: 'RAHO-****-1234',
+      recipientName: 'Penerima Voucher',
+      maskedNik: '************5678',
+      campaignCode: 'GIFT-10B',
+      campaignTitle: 'Gift Voucher 10 Basic',
+      basicSessions: 10,
+      boosterSessions: 0,
+      claimedAt: new Date('2026-09-03T03:00:00.000Z'),
+      locationName: 'RAHO Premier Jakarta',
+      locationCity: 'Jakarta',
+      operatorName: 'Pengelola Voucher',
+      operatorCode: 'STF-001',
+    });
+    expect(receipt.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(receipt.length).toBeGreaterThan(1_000);
+    expect(receipt.toString('latin1')).not.toContain('3173000000005678');
+  });
+
   it('registers the role-scoped Ekstra voucher pages', () => {
     const sidebar = fs.readFileSync(path.join(repoRoot, 'apps/web/src/components/layout/Sidebar.tsx'), 'utf8');
     const page = fs.readFileSync(path.join(repoRoot, 'apps/web/src/app/(staff)/extra/vouchers/page.tsx'), 'utf8');
@@ -100,7 +121,7 @@ describe('Voucher Partnership foundation', () => {
     expect(sidebar).toContain("href: '/extra/vouchers/campaigns'");
     expect(sidebar).toContain("href: '/extra/vouchers/locations'");
     expect(sidebar).toContain("href: '/extra/vouchers/operators'");
-    expect(sidebar).toContain("roles: ['SUPER_ADMIN', 'VOUCHER_OPERATOR']");
+    expect(sidebar).toContain("roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'VOUCHER_OPERATOR']");
     expect(sidebar).toContain("VOUCHER_OPERATOR: new Set(['/extra/vouchers', '/extra/vouchers/history'])");
     expect(middleware).toContain("pathname === '/extra/vouchers/history'");
     expect(middleware).not.toContain("pathname.startsWith('/extra/vouchers/')");
@@ -118,6 +139,22 @@ describe('Voucher Partnership foundation', () => {
     expect(page).toContain('Generate sisa');
     expect(page).toContain('AVAILABLE');
     expect(page).toContain('Klaim ini tidak membuat member, paket, atau sesi terapi.');
+    expect(page).toContain('Unduh bukti tanda terima PDF');
+    expect(page).toContain('Nama, 4 digit NIK/kode, campaign, atau lokasi');
+  });
+
+  it('supports scoped claim search, PDF receipts, and Admin Manager issuance', () => {
+    const routes = fs.readFileSync(path.join(apiRoot, 'src/modules/vouchers/voucher.routes.ts'), 'utf8');
+    const service = fs.readFileSync(path.join(apiRoot, 'src/modules/vouchers/voucher.service.ts'), 'utf8');
+    expect(routes).toContain("Role.ADMIN_MANAGER, Role.VOUCHER_OPERATOR");
+    expect(routes).toContain("router.get('/claims'");
+    expect(routes).toContain("router.get('/claims/:voucherId/receipt'");
+    expect(routes).toContain('VOUCHER_ISSUER_ROLES');
+    expect(service).toContain('listVoucherClaims');
+    expect(service).toContain('getVoucherClaimReceipt');
+    expect(service).toContain("new PDFDocument({ size: 'A4'");
+    expect(service).toContain('Admin Manager wajib memilih lokasi klaim yang dikelola');
+    expect(service).toContain("action: 'EXPORT'");
   });
 
   it('allows first-use activation while rate-limiting only suspicious identity failures', () => {

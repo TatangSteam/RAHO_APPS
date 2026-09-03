@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { Role } from '@prisma/client';
 import { sendCreated, sendSuccess } from '@utils/response';
-import { claimVoucherSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, updateVoucherOperatorSchema } from './voucher.schema';
-import { claimVoucher, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherDashboard, issueVoucher, updateVoucherOperator } from './voucher.service';
+import { claimVoucherSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, listVoucherClaimsSchema, updateVoucherOperatorSchema } from './voucher.schema';
+import { claimVoucher, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherClaimReceipt, getVoucherDashboard, issueVoucher, listVoucherClaims, updateVoucherOperator } from './voucher.service';
 
 export async function dashboard(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await getVoucherDashboard(req.user.userId, req.user.role as Role)); } catch (error) { next(error); }
@@ -10,6 +10,22 @@ export async function dashboard(req: Request, res: Response, next: NextFunction)
 
 export async function issue(req: Request, res: Response, next: NextFunction) {
   try { sendCreated(res, await issueVoucher(req.user.userId, req.user.role as Role, issueVoucherSchema.parse(req.body))); } catch (error) { next(error); }
+}
+
+export async function listClaims(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await listVoucherClaims(req.user.userId, req.user.role as Role, listVoucherClaimsSchema.parse(req.query)));
+  } catch (error) { next(error); }
+}
+
+export async function downloadClaimReceipt(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getVoucherClaimReceipt(req.user.userId, req.user.role as Role, req.params.voucherId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('Content-Length', result.buffer.length);
+    res.status(200).send(result.buffer);
+  } catch (error) { next(error); }
 }
 
 export async function claim(req: Request, res: Response, next: NextFunction) {

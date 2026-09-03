@@ -363,19 +363,19 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Klaim Voucher',
         href: '/extra/vouchers',
         icon: <TicketPercent size={20} />,
-        roles: ['SUPER_ADMIN', 'VOUCHER_OPERATOR'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'VOUCHER_OPERATOR'],
       },
       {
         label: 'Riwayat Klaim',
         href: '/extra/vouchers/history',
         icon: <History size={20} />,
-        roles: ['SUPER_ADMIN', 'VOUCHER_OPERATOR'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'VOUCHER_OPERATOR'],
       },
       {
-        label: 'Daftar Voucher',
+        label: 'Daftar & Terbitkan',
         href: '/extra/vouchers/registry',
         icon: <ClipboardList size={20} />,
-        roles: ['SUPER_ADMIN'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
       {
         label: 'Campaign',

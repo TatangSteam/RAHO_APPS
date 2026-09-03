@@ -86,18 +86,19 @@ Password disimpan dalam bentuk hash, tidak pernah dapat dibaca kembali, dan haru
 
 ### 4.2 Permission yang disarankan
 
-| Permission | Super Admin | Pengelola Voucher |
-|---|:---:|:---:|
-| `VOUCHER.VIEW` | Ya | Ya, lokasi sendiri |
-| `VOUCHER.CLAIM` | Ya | Ya, lokasi sendiri |
-| `VOUCHER.CLAIM_HISTORY` | Ya | Ya, lokasi sendiri |
-| `VOUCHER.ISSUE` | Ya | Tidak |
-| `VOUCHER.CORRECT_RECIPIENT` | Ya | Tidak |
-| `VOUCHER.CANCEL` | Ya | Tidak |
-| `VOUCHER.CAMPAIGN_MANAGE` | Ya | Tidak |
-| `VOUCHER.LOCATION_MANAGE` | Ya | Tidak |
-| `VOUCHER.OPERATOR_MANAGE` | Ya | Tidak |
-| `VOUCHER.REPORT_EXPORT` | Ya | Tidak secara default |
+| Permission | Super Admin | Admin Manager | Pengelola Voucher |
+|---|:---:|:---:|:---:|
+| `VOUCHER.VIEW` | Ya | Ya, seluruh lokasi aktif | Ya, lokasi sendiri |
+| `VOUCHER.CLAIM` | Ya | Ya, seluruh lokasi aktif | Ya, lokasi sendiri |
+| `VOUCHER.CLAIM_HISTORY` | Ya | Ya, seluruh lokasi aktif | Ya, lokasi sendiri |
+| `VOUCHER.CLAIM_RECEIPT_DOWNLOAD` | Ya | Ya, seluruh lokasi aktif | Ya, lokasi sendiri |
+| `VOUCHER.ISSUE` | Ya | Ya, wajib memilih satu lokasi aktif | Tidak |
+| `VOUCHER.CORRECT_RECIPIENT` | Ya | Tidak | Tidak |
+| `VOUCHER.CANCEL` | Ya | Tidak | Tidak |
+| `VOUCHER.CAMPAIGN_MANAGE` | Ya | Tidak | Tidak |
+| `VOUCHER.LOCATION_MANAGE` | Ya | Tidak | Tidak |
+| `VOUCHER.OPERATOR_MANAGE` | Ya | Tidak | Tidak |
+| `VOUCHER.REPORT_EXPORT` | Ya | Tidak | Tidak secara default |
 
 Akun pengelola tidak memperoleh akses ke member umum, finance, stok, data klinis, pengaturan sistem, atau menu Super Admin lainnya.
 
@@ -107,10 +108,10 @@ Tambahkan grup sidebar **Ekstra**.
 
 ```text
 Ekstra
-└── Voucher Partnership              SUPER_ADMIN, VOUCHER_OPERATOR
-    ├── Klaim Voucher                SUPER_ADMIN, VOUCHER_OPERATOR
-    ├── Riwayat Klaim                SUPER_ADMIN, VOUCHER_OPERATOR
-    ├── Daftar Voucher               SUPER_ADMIN
+└── Voucher Partnership              SUPER_ADMIN, ADMIN_MANAGER, VOUCHER_OPERATOR
+    ├── Klaim Voucher                SUPER_ADMIN, ADMIN_MANAGER, VOUCHER_OPERATOR
+    ├── Riwayat Klaim                SUPER_ADMIN, ADMIN_MANAGER, VOUCHER_OPERATOR
+    ├── Daftar & Terbitkan           SUPER_ADMIN, ADMIN_MANAGER
     ├── Campaign                     SUPER_ADMIN
     ├── Lokasi Klaim                 SUPER_ADMIN
     └── Akun Pengelola               SUPER_ADMIN
@@ -129,7 +130,7 @@ Setelah login, `VOUCHER_OPERATOR` langsung diarahkan ke `/extra/vouchers`.
 
 ## 6. Form registrasi/penerbitan voucher
 
-Super Admin dapat menerbitkan dan mengikat voucher ke penerima sebelum klaim. Kode cetak berstatus `AVAILABLE` juga dapat langsung diikat ke identitas penerima pada klaim pertama. Penerima tidak harus terdaftar sebagai member ERP.
+Super Admin dan Admin Manager dapat menerbitkan dan mengikat voucher ke penerima sebelum klaim. Admin Manager wajib memilih satu lokasi klaim aktif, sedangkan Super Admin dapat memilih semua lokasi aktif. Kode cetak berstatus `AVAILABLE` juga dapat langsung diikat ke identitas penerima pada klaim pertama. Penerima tidak harus terdaftar sebagai member ERP.
 
 ### 6.1 Field wajib
 
@@ -221,9 +222,19 @@ flowchart TD
     H --> I[Pengelola konfirmasi klaim]
     I --> J[Tandai voucher CLAIMED dan simpan identitas/lokasi/operator/waktu]
     J --> K[Tampilkan bukti klaim dan ringkasan manfaat]
+    K --> L[Pengelola dapat mengunduh tanda terima PDF]
 ```
 
-### 8.4 Pemenuhan manfaat
+### 8.4 Riwayat klaim dan tanda terima
+
+- Pengelola dapat melihat daftar voucher berstatus `CLAIMED` hanya pada lokasi assignment aktifnya.
+- Daftar dapat dicari berdasarkan nama penerima, empat digit terakhir NIK atau kode, campaign, nama lokasi, dan kota.
+- Filter campaign dan lokasi serta pagination diproses di server agar tetap cepat untuk histori besar.
+- Setiap klaim menyediakan tanda terima PDF berisi nomor bukti, identitas tersamarkan, campaign, manfaat, waktu Asia/Jakarta, lokasi, dan petugas pemroses.
+- Download PDF memvalidasi ulang scope lokasi di server dan dicatat sebagai audit `EXPORT`.
+- Tanda terima tidak menampilkan NIK atau kode voucher lengkap.
+
+### 8.5 Pemenuhan manfaat
 
 1. Sistem Voucher Partnership hanya mencatat bahwa voucher sudah diklaim.
 2. Nilai BASIC/BOOSTER ditampilkan sebagai ringkasan campaign, bukan saldo sesi ERP.
@@ -360,7 +371,8 @@ Pengelola hanya melihat:
 
 - klaim hari ini pada lokasi yang ditugaskan;
 - status klaim tanpa NIK lengkap;
-- riwayat aksi miliknya dan lokasi scope-nya.
+- riwayat klaim yang dapat dicari pada lokasi scope-nya;
+- tombol download tanda terima PDF untuk klaim dalam scope-nya.
 
 ## 15. Acceptance criteria/UAT minimum
 
@@ -386,6 +398,11 @@ Pengelola hanya melihat:
 20. Lokasi atau operator yang telah memiliki histori tidak dapat dihapus; hanya dapat dinonaktifkan.
 21. Kode cetak `AVAILABLE` dapat langsung diklaim menggunakan nama, NIK, dan DOB penerima; transaksi menaikkan `issuedCount` dan `claimedCount` masing-masing tepat satu kali.
 22. Tanggal lahir masa depan ditolak sebelum percobaan klaim dicatat dan tidak ikut memicu rate limit.
+23. Pengelola dapat mencari klaim berdasarkan nama, empat digit terakhir NIK/kode, campaign, atau lokasi tanpa melihat data lengkap.
+24. Pengelola hanya dapat membuka dan mengunduh tanda terima PDF untuk klaim dalam scope lokasi aktifnya.
+25. Tanda terima PDF memuat nomor bukti, identitas tersamarkan, manfaat, lokasi, waktu klaim, serta petugas dan download tercatat di audit.
+26. Admin Manager dengan akses penuh dapat menerbitkan voucher dengan memilih satu lokasi klaim aktif.
+27. Admin Manager dengan scope `MEMBER_VIEW_ONLY` tidak dapat menerbitkan voucher.
 
 ## 16. Keputusan bisnis yang wajib ditutup sebelum development
 

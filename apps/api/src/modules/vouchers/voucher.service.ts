@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
+import PDFDocument from 'pdfkit';
 import {
   AuditAction,
   CampaignVoucherStatus,
@@ -18,6 +19,7 @@ import type {
   UpdateVoucherOperatorInput,
   ExportVoucherCodesInput,
   GenerateVoucherCodesInput,
+  ListVoucherClaimsInput,
 } from './voucher.schema';
 import { decryptVoucherCode, encryptVoucherCode, hashVoucherIdentity } from './voucher.crypto';
 
@@ -82,8 +84,20 @@ function assertSuperAdmin(role: Role): void {
   if (role !== Role.SUPER_ADMIN) throw errors.forbidden('Hanya Super Admin yang dapat melakukan aksi ini.');
 }
 
+function assertVoucherIssuer(role: Role): void {
+  if (role !== Role.SUPER_ADMIN && role !== Role.ADMIN_MANAGER) {
+    throw errors.forbidden('Hanya Admin Manager atau Super Admin yang dapat menerbitkan voucher.');
+  }
+}
+
 async function getAllowedLocations(userId: string, role: Role) {
   if (role === Role.SUPER_ADMIN) {
+    return prisma.voucherClaimLocation.findMany({
+      where: { isActive: true },
+      orderBy: [{ city: 'asc' }, { displayName: 'asc' }],
+    });
+  }
+  if (role === Role.ADMIN_MANAGER) {
     return prisma.voucherClaimLocation.findMany({
       where: { isActive: true },
       orderBy: [{ city: 'asc' }, { displayName: 'asc' }],
@@ -101,6 +115,12 @@ async function getAllowedLocations(userId: string, role: Role) {
     },
     orderBy: [{ city: 'asc' }, { displayName: 'asc' }],
   });
+}
+
+async function getVoucherLocationScope(userId: string, role: Role): Promise<Prisma.CampaignVoucherWhereInput> {
+  if (role === Role.SUPER_ADMIN) return {};
+  const locationIds = (await getAllowedLocations(userId, role)).map((location) => location.id);
+  return { claimedLocationId: { in: locationIds } };
 }
 
 function presentVoucher(voucher: {
@@ -132,9 +152,11 @@ function presentVoucher(voucher: {
 export async function getVoucherDashboard(userId: string, role: Role) {
   const locations = await getAllowedLocations(userId, role);
   const locationIds = locations.map((location) => location.id);
-  const voucherScope = role === Role.SUPER_ADMIN
+  const voucherScope: Prisma.CampaignVoucherWhereInput = role === Role.SUPER_ADMIN
     ? {}
-    : { claimedLocationId: { in: locationIds } };
+    : role === Role.ADMIN_MANAGER
+      ? { OR: [{ createdBy: userId }, { updatedBy: userId }, { claimedLocationId: { in: locationIds } }] }
+      : { claimedLocationId: { in: locationIds } };
 
   const [campaigns, voucherCounts, recentVouchers, operators] = await Promise.all([
     prisma.voucherCampaign.findMany({ include: { _count: { select: { vouchers: true } } }, orderBy: [{ status: 'asc' }, { createdAt: 'asc' }] }),
@@ -190,8 +212,213 @@ export async function getVoucherDashboard(userId: string, role: Role) {
   };
 }
 
+export async function listVoucherClaims(userId: string, role: Role, input: ListVoucherClaimsInput) {
+  const scope = await getVoucherLocationScope(userId, role);
+  const search = input.search?.trim() ?? '';
+  const compactSearch = search.replace(/[^a-zA-Z0-9]/g, '');
+  const where: Prisma.CampaignVoucherWhereInput = {
+    status: CampaignVoucherStatus.CLAIMED,
+    ...(input.campaignId ? { campaignId: input.campaignId } : {}),
+    AND: [
+      scope,
+      ...(input.locationId ? [{ claimedLocationId: input.locationId }] : []),
+    ],
+  };
+
+  if (search) {
+    where.OR = [
+      { recipientNameSnapshot: { contains: search, mode: 'insensitive' } },
+      { campaign: { code: { contains: search, mode: 'insensitive' } } },
+      { campaign: { title: { contains: search, mode: 'insensitive' } } },
+      { claimedLocation: { displayName: { contains: search, mode: 'insensitive' } } },
+      { claimedLocation: { city: { contains: search, mode: 'insensitive' } } },
+      ...(compactSearch ? [
+        { codeLast4: { contains: compactSearch.slice(-4), mode: 'insensitive' as const } },
+        { nikLast4: { contains: compactSearch.slice(-4), mode: 'insensitive' as const } },
+      ] : []),
+    ];
+  }
+
+  const skip = (input.page - 1) * input.perPage;
+  const [total, vouchers] = await Promise.all([
+    prisma.campaignVoucher.count({ where }),
+    prisma.campaignVoucher.findMany({
+      where,
+      include: {
+        campaign: { select: { code: true, title: true, basicSessions: true, boosterSessions: true } },
+        allowedLocation: { select: { id: true, displayName: true, city: true } },
+        claimedLocation: { select: { id: true, displayName: true, city: true } },
+      },
+      orderBy: [{ claimedAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: input.perPage,
+    }),
+  ]);
+
+  const claimantIds = [...new Set(vouchers.map((voucher) => voucher.claimedBy).filter((id): id is string => Boolean(id)))];
+  const claimants = claimantIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: claimantIds } },
+        select: { id: true, email: true, staffCode: true, profile: { select: { fullName: true } } },
+      })
+    : [];
+  const claimantMap = new Map(claimants.map((claimant) => [claimant.id, claimant]));
+
+  return {
+    items: vouchers.map((voucher) => {
+      const claimant = voucher.claimedBy ? claimantMap.get(voucher.claimedBy) : null;
+      return {
+        ...presentVoucher(voucher),
+        claimedBy: claimant ? {
+          name: claimant.profile?.fullName ?? claimant.email,
+          staffCode: claimant.staffCode,
+        } : null,
+      };
+    }),
+    pagination: {
+      page: input.page,
+      perPage: input.perPage,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.perPage)),
+    },
+  };
+}
+
+function formatJakartaDateTime(value: Date): string {
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    dateStyle: 'long',
+    timeStyle: 'short',
+  }).format(value);
+}
+
+export function createClaimReceiptPdf(data: {
+  receiptNumber: string;
+  maskedCode: string;
+  recipientName: string;
+  maskedNik: string;
+  campaignCode: string;
+  campaignTitle: string;
+  basicSessions: number;
+  boosterSessions: number;
+  claimedAt: Date;
+  locationName: string;
+  locationCity: string;
+  operatorName: string;
+  operatorCode: string | null;
+}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const document = new PDFDocument({ size: 'A4', margin: 52, info: { Title: `Bukti Klaim ${data.receiptNumber}`, Author: 'RAHO Premier Club' } });
+    const chunks: Buffer[] = [];
+    document.on('data', (chunk: Buffer) => chunks.push(chunk));
+    document.on('end', () => resolve(Buffer.concat(chunks)));
+    document.on('error', reject);
+
+    document.rect(0, 0, 595.28, 112).fill('#111827');
+    document.fillColor('#F59E0B').font('Helvetica-Bold').fontSize(13).text('RAHO PREMIER CLUB', 52, 42);
+    document.fillColor('#FFFFFF').fontSize(24).text('BUKTI TANDA TERIMA VOUCHER', 52, 64);
+
+    document.fillColor('#111827').font('Helvetica-Bold').fontSize(11).text('Nomor bukti', 52, 145);
+    document.font('Helvetica').text(data.receiptNumber, 180, 145);
+    document.font('Helvetica-Bold').text('Status', 365, 145);
+    document.fillColor('#15803D').text('BERHASIL DIKLAIM', 425, 145);
+    document.moveTo(52, 172).lineTo(543, 172).strokeColor('#E5E7EB').stroke();
+
+    const rows: Array<[string, string]> = [
+      ['Penerima', data.recipientName],
+      ['NIK', data.maskedNik],
+      ['Kode voucher', data.maskedCode],
+      ['Campaign', `${data.campaignCode} - ${data.campaignTitle}`],
+      ['Manfaat', `${data.basicSessions}x BASIC${data.boosterSessions > 0 ? ` + ${data.boosterSessions}x BOOSTER` : ''}`],
+      ['Waktu klaim', `${formatJakartaDateTime(data.claimedAt)} WIB`],
+      ['Lokasi klaim', `${data.locationName} - ${data.locationCity}`],
+      ['Diproses oleh', `${data.operatorName}${data.operatorCode ? ` (${data.operatorCode})` : ''}`],
+    ];
+    let y = 198;
+    for (const [label, value] of rows) {
+      document.fillColor('#6B7280').font('Helvetica').fontSize(10).text(label.toUpperCase(), 52, y, { width: 120 });
+      document.fillColor('#111827').font('Helvetica-Bold').fontSize(11).text(value, 180, y - 1, { width: 360 });
+      y += 37;
+    }
+
+    document.roundedRect(52, y + 5, 491, 76, 8).fillAndStroke('#FFF7E6', '#F59E0B');
+    document.fillColor('#92400E').font('Helvetica-Bold').fontSize(11).text('Dokumen terverifikasi oleh sistem', 70, y + 24);
+    document.fillColor('#78350F').font('Helvetica').fontSize(9.5).text(
+      'Bukti ini diterbitkan otomatis setelah klaim berhasil. Data voucher dan NIK ditampilkan dalam bentuk tersamarkan untuk menjaga kerahasiaan penerima.',
+      70,
+      y + 43,
+      { width: 450, lineGap: 3 },
+    );
+
+    document.fillColor('#9CA3AF').font('Helvetica').fontSize(8.5).text(
+      `Dicetak ${formatJakartaDateTime(new Date())} WIB | ${data.receiptNumber}`,
+      52,
+      785,
+      { width: 491, align: 'center' },
+    );
+    document.end();
+  });
+}
+
+export async function getVoucherClaimReceipt(userId: string, role: Role, voucherId: string) {
+  const scope = await getVoucherLocationScope(userId, role);
+  const voucher = await prisma.campaignVoucher.findFirst({
+    where: { id: voucherId, status: CampaignVoucherStatus.CLAIMED, ...scope },
+    include: {
+      campaign: { select: { code: true, title: true, basicSessions: true, boosterSessions: true } },
+      claimedLocation: { select: { displayName: true, city: true } },
+    },
+  });
+  if (!voucher || !voucher.claimedAt || !voucher.claimedLocation) {
+    throw errors.notFound('Bukti klaim voucher tidak ditemukan atau tidak termasuk scope akun ini.');
+  }
+  const claimant = voucher.claimedBy
+    ? await prisma.user.findUnique({
+        where: { id: voucher.claimedBy },
+        select: { email: true, staffCode: true, profile: { select: { fullName: true } } },
+      })
+    : null;
+  const receiptNumber = `VCR-${voucher.claimedAt.toISOString().slice(0, 10).replace(/-/g, '')}-${voucher.id.slice(-8).toUpperCase()}`;
+  const buffer = await createClaimReceiptPdf({
+    receiptNumber,
+    maskedCode: maskCode(voucher.codeLast4),
+    recipientName: voucher.recipientNameSnapshot ?? 'Penerima voucher',
+    maskedNik: voucher.nikLast4 ? `************${voucher.nikLast4}` : '-',
+    campaignCode: voucher.campaign.code,
+    campaignTitle: voucher.campaign.title,
+    basicSessions: voucher.campaign.basicSessions,
+    boosterSessions: voucher.campaign.boosterSessions,
+    claimedAt: voucher.claimedAt,
+    locationName: voucher.claimedLocation.displayName,
+    locationCity: voucher.claimedLocation.city,
+    operatorName: claimant?.profile?.fullName ?? claimant?.email ?? 'Petugas voucher',
+    operatorCode: claimant?.staffCode ?? null,
+  });
+
+  await logAudit({
+    userId,
+    action: 'EXPORT',
+    module: 'VOUCHER',
+    resource: 'VoucherClaimReceipt',
+    resourceId: voucher.id,
+    entityCode: maskCode(voucher.codeLast4),
+    description: `Bukti klaim ${receiptNumber} diunduh.`,
+    meta: { receiptNumber, claimedLocationId: voucher.claimedLocationId },
+  });
+  return { filename: `bukti-klaim-${receiptNumber.toLowerCase()}.pdf`, buffer };
+}
+
 export async function issueVoucher(actorId: string, actorRole: Role, input: IssueVoucherInput) {
-  assertSuperAdmin(actorRole);
+  assertVoucherIssuer(actorRole);
+  if (actorRole === Role.ADMIN_MANAGER) {
+    if (!input.allowedLocationId) {
+      throw errors.badRequest('VOUCHER_LOCATION_REQUIRED', 'Admin Manager wajib memilih lokasi klaim yang dikelola.');
+    }
+    const allowedLocationIds = (await getAllowedLocations(actorId, actorRole)).map((location) => location.id);
+    if (!allowedLocationIds.includes(input.allowedLocationId)) {
+      throw errors.forbidden('Lokasi voucher tidak aktif atau tidak tersedia untuk Admin Manager.');
+    }
+  }
   const birthDate = parseDateOnly(input.dateOfBirth, 'Tanggal lahir');
   if (birthDate > new Date()) throw errors.badRequest('VOUCHER_INVALID_DATE', 'Tanggal lahir tidak boleh di masa depan.');
   const recipientName = input.recipientName.trim().replace(/\s+/g, ' ');

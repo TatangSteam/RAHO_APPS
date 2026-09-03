@@ -67,9 +67,18 @@ export const generateVoucherCodesSchema = z.object({
   count: z.number().int().min(1).max(200).optional(),
 });
 
+export const listVoucherClaimsSchema = z.object({
+  search: z.string().trim().max(100).optional(),
+  campaignId: z.string().min(1).optional(),
+  locationId: z.string().min(1).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 export type IssueVoucherInput = z.infer<typeof issueVoucherSchema>;
 export type ClaimVoucherInput = z.infer<typeof claimVoucherSchema>;
 export type CreateVoucherOperatorInput = z.infer<typeof createVoucherOperatorSchema>;
 export type UpdateVoucherOperatorInput = z.infer<typeof updateVoucherOperatorSchema>;
 export type ExportVoucherCodesInput = z.infer<typeof exportVoucherCodesSchema>;
 export type GenerateVoucherCodesInput = z.infer<typeof generateVoucherCodesSchema>;
+export type ListVoucherClaimsInput = z.infer<typeof listVoucherClaimsSchema>;
