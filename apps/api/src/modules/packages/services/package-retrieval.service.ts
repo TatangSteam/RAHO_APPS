@@ -88,6 +88,7 @@ export class PackageRetrievalService {
         ...packages.map(p => p.assignedBy),
         ...packages.filter(p => p.verifiedBy).map(p => p.verifiedBy!),
         ...addOns.map(a => a.assignedBy),
+        ...addOns.filter(a => a.sellerMsoId).map(a => a.sellerMsoId!),
         ...addOns.filter(a => a.verifiedBy).map(a => a.verifiedBy!),
       ]));
       
@@ -280,6 +281,11 @@ export class PackageRetrievalService {
       totalVerifiedPaid: addon.totalVerifiedPaid ? Number(addon.totalVerifiedPaid) : 0,
       paymentPlanStatus: addon.paymentPlanStatus || undefined,
       notes: addon.notes || undefined,
+      transactionDate: addon.transactionDate?.toISOString().slice(0, 10) || undefined,
+      sellerMsoId: addon.sellerMsoId || undefined,
+      sellerMsoName: addon.sellerMsoId
+        ? userMap.get(addon.sellerMsoId)?.profile?.fullName || 'MSO tidak ditemukan'
+        : undefined,
       branchName: addon.branch.name,
       assignedBy: userMap.get(addon.assignedBy)?.profile?.fullName || 'Unknown',
       verifiedBy: addon.verifiedBy ? userMap.get(addon.verifiedBy)?.profile?.fullName : undefined,

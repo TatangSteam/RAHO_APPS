@@ -8,6 +8,7 @@ import styles from './MemberPackagesTab.module.css';
 interface Props {
   packages: PackageDisplay[];
   loading: boolean;
+  hideGroupedAddOns?: boolean;
   onVerifyPayment?: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
@@ -30,6 +31,7 @@ const ITEMS_PER_PAGE = 5;
 export default function MemberPackagesTab({
   packages,
   loading,
+  hideGroupedAddOns = false,
   onVerifyPayment,
   onRefundPackage,
   onCancelPackage,
@@ -136,6 +138,7 @@ export default function MemberPackagesTab({
             <PackageCard
               key={key}
               pkg={pkg}
+              hideGroupedAddOns={hideGroupedAddOns}
               onVerifyPayment={onVerifyPayment}
               onRefundPackage={onRefundPackage}
               onCancelPackage={onCancelPackage}

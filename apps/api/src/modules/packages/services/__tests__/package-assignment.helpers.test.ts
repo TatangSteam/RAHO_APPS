@@ -71,6 +71,24 @@ describe('package assignment helpers', () => {
       }]);
     });
 
+    it('accepts the H2S product code while preserving the legacy inventory SKU', () => {
+      expect(normalizeAddOnAssignments([{
+        type: 'AIR_NANO',
+        code: 'PRD-ANN-H2S-001',
+        name: 'Air Nano Hijau H2S 600ml 1 Botol',
+        price: 15_000,
+        quantity: 1,
+      }])).toEqual([{
+        type: 'AIR_NANO',
+        code: 'PRD-ANN-HJU-001',
+        name: 'Air Nano Hijau H2S 600ml 1 Botol',
+        price: 15_000,
+        quantity: 1,
+        inventorySku: 'PRD-ANN-HJU-001',
+        inventoryQuantityPerUnit: 1,
+      }]);
+    });
+
     it('rejects an unknown code or mismatched type', () => {
       expect(() =>
         normalizeAddOnAssignments([

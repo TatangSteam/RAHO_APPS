@@ -15,6 +15,7 @@ import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
   pkg: PackageDisplay;
+  hideGroupedAddOns?: boolean;
   onVerifyPayment?: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
@@ -126,8 +127,23 @@ const formatPackageCodes = (codes: string[]): string => (
   `${codes[0]}${codes.length > 1 ? ` (+${codes.length - 1} lainnya)` : ''}`
 );
 
+const formatTransactionDate = (value?: string): string | null => {
+  if (!value) return null;
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
 export default function PackageCard({
   pkg,
+  hideGroupedAddOns = false,
   onVerifyPayment,
   onRefundPackage,
   onCancelPackage,
@@ -220,6 +236,7 @@ export default function PackageCard({
   // Standalone Add-On
   if (isAddOn && !isGroup) {
     const addon = pkg as StandaloneAddOn;
+    const transactionDate = formatTransactionDate(addon.transactionDate);
     return (
       <div className={styles.packageCard}>
         {/* Compact Header - Always Visible */}
@@ -235,7 +252,7 @@ export default function PackageCard({
                 {addon.notes?.split('(')[0]?.trim() || addon.addOnCode}
               </div>
               <div className={styles.compactSubtitle}>
-                {addon.addOnCode} • Qty: {addon.quantity}
+                {addon.addOnCode} • {transactionDate || 'Tanggal lama tidak tersedia'} • MSO: {addon.sellerMsoName || 'Data lama tidak tersedia'} • Qty: {addon.quantity}
               </div>
             </div>
           </div>
@@ -262,6 +279,14 @@ export default function PackageCard({
             )}
 
             <div className={styles.metaInfo}>
+              <div className={styles.metaItem}>
+                <span className={styles.metaIcon}>📅</span>
+                Tanggal transaksi: {transactionDate || 'Data lama tidak tersedia'}
+              </div>
+              <div className={styles.metaItem}>
+                <span className={styles.metaIcon}>👤</span>
+                MSO penjual: {addon.sellerMsoName || 'Data lama tidak tersedia'}
+              </div>
               <div className={styles.metaItem}>
                 <span className={styles.metaIcon}>📍</span>
                 {addon.branchName}
@@ -384,7 +409,7 @@ export default function PackageCard({
                 Paket Bundling
                 {totalBasicQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBasicQuantity} UNIT BASIC ({totalBasicSessions} SESI)</span>}
                 {totalBoosterQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBoosterQuantity} UNIT BOOSTER ({totalBoosterSessions} SESI)</span>}
-                {groupAddOns.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {groupAddOns.length} ADD-ON</span>}
+                {!hideGroupedAddOns && groupAddOns.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {groupAddOns.length} ADD-ON</span>}
               </div>
               <div className={styles.compactSubtitle}>
                 {totalRemainingSessions} sesi tersisa
@@ -465,7 +490,7 @@ export default function PackageCard({
             })}
 
             {/* Add-Ons */}
-            {groupAddOns.length > 0 && (
+            {!hideGroupedAddOns && groupAddOns.length > 0 && (
               <div className={`${styles.packageSection} ${styles.addOnSection}`}>
                 <div className={styles.packageHeader}>
                   <div className={styles.packageInfo}>

@@ -6,7 +6,6 @@ import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/t
 import { usePackageSelection } from '../AssignPackageModal/usePackageSelection';
 import BasicPackageSection from '../AssignPackageModal/BasicPackageSection';
 import BoosterPackageSection from '../AssignPackageModal/BoosterPackageSection';
-import AddOnSection from '../AssignPackageModal/AddOnSection';
 import DiscountSection from '../AssignPackageModal/DiscountSection';
 import PreviewSection from '../AssignPackageModal/PreviewSection';
 import styles from '../AssignPackageModal.module.css';
@@ -82,10 +81,6 @@ export default function EditPackageModal({
     toggleBooster,
     updateBoosterQty,
     updateBoosterServiceType,
-    isAddOnSelected,
-    getAddOnQuantity,
-    toggleAddOn,
-    updateAddOnQuantity,
     calculatePreview,
   } = usePackageSelection(editData, onEditDataChange, pricingsList);
 
@@ -117,7 +112,7 @@ export default function EditPackageModal({
             fontSize: '13px',
             color: 'var(--text-primary)'
           }}>
-            💡 <strong>Info:</strong> Anda dapat mengubah paket, jumlah sesi, booster, add-ons, dan diskon. Perubahan akan memperbarui invoice.
+            💡 <strong>Info:</strong> Anda dapat mengubah paket, jumlah sesi, booster, dan diskon. Transaksi Add-On baru dibuat dari tab Air Nano &amp; Add-On.
           </div>
 
           {/* PAKET BASIC */}
@@ -137,14 +132,6 @@ export default function EditPackageModal({
             toggleBooster={toggleBooster}
             updateBoosterQty={updateBoosterQty}
             updateBoosterServiceType={updateBoosterServiceType}
-          />
-
-          {/* ADD-ONS */}
-          <AddOnSection
-            isAddOnSelected={isAddOnSelected}
-            getAddOnQuantity={getAddOnQuantity}
-            toggleAddOn={toggleAddOn}
-            updateAddOnQuantity={updateAddOnQuantity}
           />
 
           {/* DISKON */}

@@ -37,6 +37,8 @@ export interface AssignPackageData {
     price: number;
     quantity: number;
   }>;
+  transactionDate?: string;
+  sellerMsoId?: string;
   discountPercent?: number;
   discountAmount?: number;
   discountNote?: string;

@@ -7,6 +7,7 @@ jest.mock('@lib/prisma', () => ({
     member: { findUnique: jest.fn() },
     branch: { findUnique: jest.fn() },
     packagePricing: { findMany: jest.fn() },
+    user: { findFirst: jest.fn() },
   },
 }));
 
@@ -133,5 +134,104 @@ describe('PackageAssignmentService branch access', () => {
     )).resolves.toMatchObject({ message: '0 item berhasil diassign' });
 
     expect(createPackagesTransaction).toHaveBeenCalled();
+  });
+
+  it('validates and forwards standalone add-on sale attribution', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(null);
+    (prisma.branch.findUnique as jest.Mock).mockResolvedValue({
+      id: 'branch-member',
+      branchCode: 'PUS',
+    });
+    (prisma.packagePricing.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'mso-1' });
+
+    const service = new PackageAssignmentService();
+    const internals = service as unknown as {
+      getNextSequences: () => Promise<{ basicSequence: number; boosterSequence: number }>;
+      createPackagesTransaction: (...args: unknown[]) => Promise<{
+        createdPackages: [];
+        createdAddOns: [];
+        totalBasicSessions: number;
+      }>;
+    };
+    jest.spyOn(internals, 'getNextSequences').mockResolvedValue({
+      basicSequence: 1,
+      boosterSequence: 1,
+    });
+    const createPackagesTransaction = jest
+      .spyOn(internals, 'createPackagesTransaction')
+      .mockResolvedValue({
+        createdPackages: [],
+        createdAddOns: [],
+        totalBasicSessions: 0,
+      });
+
+    await service.assignPackage(
+      'member-1',
+      {
+        packages: [],
+        addOns: [{
+          type: 'AIR_NANO',
+          code: 'PRD-ANN-KNG-001',
+          name: 'Air Nano Kuning 600ml 1 Botol',
+          price: 15_000,
+          quantity: 1,
+        }],
+        transactionDate: '2026-09-03',
+        sellerMsoId: 'mso-1',
+      },
+      'branch-member',
+      'super-admin-1',
+    );
+
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: 'mso-1',
+        isActive: true,
+        OR: [
+          { branchId: 'branch-member' },
+          { staffBranches: { some: { branchId: 'branch-member' } } },
+        ],
+      }),
+      select: { id: true },
+    });
+    expect(createPackagesTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sellerMsoId: 'mso-1',
+        transactionDate: new Date('2026-09-03T00:00:00.000Z'),
+      }),
+      1,
+      1,
+    );
+  });
+
+  it('rejects an MSO outside the transaction branch', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(null);
+    (prisma.branch.findUnique as jest.Mock).mockResolvedValue({
+      id: 'branch-member',
+      branchCode: 'PUS',
+    });
+    (prisma.packagePricing.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const service = new PackageAssignmentService();
+
+    await expect(service.assignPackage(
+      'member-1',
+      {
+        packages: [],
+        addOns: [{
+          type: 'AIR_NANO',
+          code: 'PRD-ANN-KNG-001',
+          name: 'Air Nano Kuning 600ml 1 Botol',
+          price: 15_000,
+          quantity: 1,
+        }],
+        transactionDate: '2026-09-03',
+        sellerMsoId: 'mso-other',
+      },
+      'branch-member',
+      'super-admin-1',
+    )).rejects.toMatchObject({ code: 'ADD_ON_SELLER_MSO_INVALID' });
   });
 });

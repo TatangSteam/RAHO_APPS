@@ -64,3 +64,42 @@ describe('assignPackageSchema service type master support', () => {
     })).toThrow();
   });
 });
+
+describe('assignPackageSchema standalone add-on attribution', () => {
+  const addOn = {
+    type: 'AIR_NANO' as const,
+    code: 'PRD-ANN-KNG-001',
+    name: 'Air Nano Kuning 600ml 1 Botol',
+    price: 15_000,
+    quantity: 1,
+  };
+
+  it('requires transaction date and seller MSO for a standalone add-on', () => {
+    const result = assignPackageSchema.safeParse({
+      packages: [],
+      addOns: [addOn],
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+
+    expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ['transactionDate'] }),
+      expect.objectContaining({ path: ['sellerMsoId'] }),
+    ]));
+  });
+
+  it('accepts complete attribution for a standalone add-on', () => {
+    const result = assignPackageSchema.parse({
+      packages: [],
+      addOns: [addOn],
+      transactionDate: '2026-09-03',
+      sellerMsoId: 'mso-1',
+    });
+
+    expect(result).toMatchObject({
+      transactionDate: '2026-09-03',
+      sellerMsoId: 'mso-1',
+    });
+  });
+});

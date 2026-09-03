@@ -7,6 +7,7 @@ import {
   PackageStatus,
   AuditAction,
   AddOnType,
+  Role,
   type Branch,
   type MemberAddOn,
   type MemberPackage,
@@ -91,6 +92,8 @@ interface PackageAssignmentTransactionParams {
   member: { id: string; registrationBranchId: string };
   socialProgramRequestId?: string;
   variableDiscountAmount: number;
+  transactionDate?: Date;
+  sellerMsoId?: string;
 }
 
 /**
@@ -244,6 +247,11 @@ export class PackageAssignmentService {
     );
     const totalDiscountAmount = variableDiscountAmount + fixedDiscountAmount;
     const paymentPlan = this.normalizePaymentPlan(data);
+    const addOnSaleAttribution = await this.resolveAddOnSaleAttribution(
+      data,
+      branchId,
+      normalizedAddOns.length > 0 && data.packages.length === 0,
+    );
 
     // Determine purchase group
     const purchaseGroupId = this.determinePurchaseGroup(packageDetails, normalizedAddOns);
@@ -270,6 +278,7 @@ export class PackageAssignmentService {
         member,
         socialProgramRequestId: approvedSocial?.requestId,
         variableDiscountAmount,
+        ...addOnSaleAttribution,
       },
       basicSequence,
       boosterSequence
@@ -394,6 +403,55 @@ export class PackageAssignmentService {
       installmentCount,
       installments,
     };
+  }
+
+  private async resolveAddOnSaleAttribution(
+    data: AssignPackageInput,
+    branchId: string,
+    required: boolean,
+  ): Promise<{ transactionDate?: Date; sellerMsoId?: string }> {
+    if (!data.transactionDate || !data.sellerMsoId) {
+      if (required) {
+        throw {
+          status: 400,
+          code: 'ADD_ON_SALE_ATTRIBUTION_REQUIRED',
+          message: 'Tanggal transaksi dan MSO penjual wajib diisi',
+        };
+      }
+      return {};
+    }
+
+    const transactionDate = new Date(`${data.transactionDate}T00:00:00.000Z`);
+    if (Number.isNaN(transactionDate.getTime())) {
+      throw {
+        status: 400,
+        code: 'ADD_ON_TRANSACTION_DATE_INVALID',
+        message: 'Tanggal transaksi tidak valid',
+      };
+    }
+
+    const sellerMso = await prisma.user.findFirst({
+      where: {
+        id: data.sellerMsoId,
+        isActive: true,
+        role: { in: [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG] },
+        OR: [
+          { branchId },
+          { staffBranches: { some: { branchId } } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!sellerMso) {
+      throw {
+        status: 409,
+        code: 'ADD_ON_SELLER_MSO_INVALID',
+        message: 'MSO penjual tidak aktif atau tidak bertugas di cabang transaksi',
+      };
+    }
+
+    return { transactionDate, sellerMsoId: sellerMso.id };
   }
 
   /**
@@ -626,6 +684,8 @@ export class PackageAssignmentService {
             totalVerifiedPaid: 0,
             paymentPlanStatus: params.paymentPlan.type === 'INSTALLMENT' ? 'PENDING_FIRST_PAYMENT' : null,
             notes: `${addon.name} (${addon.code})${params.notes ? ' - ' + params.notes : ''}`,
+            transactionDate: params.transactionDate || null,
+            sellerMsoId: params.sellerMsoId || null,
             productCode: addon.code,
             inventorySku: addon.inventorySku || null,
             stockQuantity: addon.inventoryQuantityPerUnit
@@ -704,6 +764,8 @@ export class PackageAssignmentService {
           originalType: addon.originalType,
           originalCode: addon.originalCode,
           quantity: addon.quantity,
+          transactionDate: addon.transactionDate?.toISOString().slice(0, 10),
+          sellerMsoId: addon.sellerMsoId,
           purchaseGroupId: result.purchaseGroupId,
         },
       });

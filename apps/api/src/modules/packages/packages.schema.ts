@@ -50,6 +50,11 @@ export const assignPackageSchema = z.object({
     price: z.number().min(0),
     quantity: z.number().int().min(1),
   })).default([]),
+
+  // Required for standalone Air Nano/Add-On transactions. Nullable database
+  // fields preserve compatibility with historical package bundles.
+  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal transaksi tidak valid').optional(),
+  sellerMsoId: z.string().trim().min(1, 'MSO penjual wajib dipilih').optional(),
   
   // Discount
   discountPercent: z.number().min(0).max(100).optional(),
@@ -71,6 +76,23 @@ export const assignPackageSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: 'Minimal 1 paket atau add-on harus dipilih',
     });
+  }
+
+  if (data.packages.length === 0 && data.addOns.length > 0) {
+    if (!data.transactionDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['transactionDate'],
+        message: 'Tanggal transaksi wajib diisi',
+      });
+    }
+    if (!data.sellerMsoId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sellerMsoId'],
+        message: 'MSO penjual wajib dipilih',
+      });
+    }
   }
 
   if (data.paymentPlan?.type === 'INSTALLMENT') {

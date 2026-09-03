@@ -1,11 +1,12 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
 import { packagesApi, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
+import { usersApi, type StaffMember } from '@/lib/usersApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType, MemberPackage, StandaloneAddOn } from '@/types/package';
 import type { Invoice } from '@/types/invoice';
@@ -24,6 +25,8 @@ import MemberDiagnosesTab from '@/components/members/MemberDiagnosesTab';
 import MemberTherapyPlansTab from '@/components/members/MemberTherapyPlansTab';
 import SendNotificationModal from '@/components/members/SendNotificationModal';
 import AssignPackageModal from '@/components/members/AssignPackageModal';
+import AssignAddOnModal, { type AddOnTransactionData } from '@/components/members/AssignAddOnModal';
+import MemberAddOnsTab from '@/components/members/MemberAddOnsTab';
 import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
@@ -38,6 +41,7 @@ import MemberDestructionModal from '@/components/members/MemberDestructionModal'
 import { getActiveMemberPackagesByType } from '@/components/members/memberStatusPresentation';
 import {
   ClipboardList,
+  Droplets,
   FlaskConical,
   Package,
   Pill,
@@ -47,9 +51,9 @@ import {
   UserRound,
 } from 'lucide-react';
 
-type MemberDetailTab = 'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
+type MemberDetailTab = 'profil' | 'paket' | 'air-nano-addon' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
 
-const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'therapy-plan', 'diagnosa', 'sesi', 'lab-results'];
+const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'air-nano-addon', 'therapy-plan', 'diagnosa', 'sesi', 'lab-results'];
 
 const MEMBER_DETAIL_TAB_META: Record<MemberDetailTab, {
   label: string;
@@ -57,6 +61,7 @@ const MEMBER_DETAIL_TAB_META: Record<MemberDetailTab, {
 }> = {
   profil: { label: 'Profil', icon: UserRound },
   paket: { label: 'Paket', icon: Package },
+  'air-nano-addon': { label: 'Air Nano & Add-On', icon: Droplets },
   sesi: { label: 'Sesi Terapi', icon: Stethoscope },
   diagnosa: { label: 'Diagnosis', icon: ClipboardList },
   'therapy-plan': { label: 'Therapy Plan', icon: Pill },
@@ -106,6 +111,37 @@ function resolvePackagePricing(pkg: MemberPackage, pricings: PackagePricing[]): 
   }
 
   return pricings.find((pricing) => pricing.id === pkg.packagePricingId);
+}
+
+function getJakartaDateInputValue(date = new Date()): string {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function getMemberAddOnTransactions(items: PackageDisplay[]): StandaloneAddOn[] {
+  const addOns = new Map<string, StandaloneAddOn>();
+
+  items.forEach(item => {
+    if (item.isGroup) {
+      item.addOns?.forEach(addOn => addOns.set(addOn.addOnId, addOn));
+      return;
+    }
+    if ('isAddOn' in item && item.isAddOn) {
+      addOns.set(item.addOnId, item);
+    }
+  });
+
+  return Array.from(addOns.values()).sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+}
+
+function getPackageOnlyTransactions(items: PackageDisplay[]): PackageDisplay[] {
+  return items.filter(item => !('isAddOn' in item && item.isAddOn));
 }
 
 function buildEditPackageSelections(packages: MemberPackage[], pricings: PackagePricing[]) {
@@ -166,8 +202,13 @@ export default function MemberDetailPage() {
 
   // Package state
   const [packages, setPackages] = useState<PackageDisplay[]>([]);
+  const packageTransactions = useMemo(() => getPackageOnlyTransactions(packages), [packages]);
+  const addOnTransactions = useMemo(() => getMemberAddOnTransactions(packages), [packages]);
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAddOnModal, setShowAddOnModal] = useState(false);
+  const [msoStaff, setMsoStaff] = useState<StaffMember[]>([]);
+  const [loadingMsoStaff, setLoadingMsoStaff] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedPackageId, setSelectedPackageId] = useState('');
   const [pricings, setPricings] = useState<PackagePricing[]>([]);
@@ -194,6 +235,12 @@ export default function MemberDetailPage() {
       type: 'FULL_PAYMENT' as 'FULL_PAYMENT' | 'INSTALLMENT',
       installmentCount: 2,
     },
+  });
+  const [addOnTransactionData, setAddOnTransactionData] = useState<AddOnTransactionData>({
+    selectedAddOns: [],
+    transactionDate: getJakartaDateInputValue(),
+    sellerMsoId: '',
+    notes: '',
   });
   const [verifyNotes, setVerifyNotes] = useState('');
   const [verifyPaidAmount, setVerifyPaidAmount] = useState<number>(0);
@@ -410,6 +457,28 @@ export default function MemberDetailPage() {
     setShowAssignModal(true);
   };
 
+  const handleOpenAddOnModal = async () => {
+    const branchId = member?.registrationBranch?.id;
+    if (!branchId) {
+      showToast.error('Cabang registrasi member tidak ditemukan');
+      return;
+    }
+
+    setShowAddOnModal(true);
+    setLoadingMsoStaff(true);
+    try {
+      const staff = await usersApi.getAdminLayanan(branchId);
+      setMsoStaff(staff);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Load MSO staff error:', error);
+      setMsoStaff([]);
+      showToast.error(error.response?.data?.error?.message || 'Gagal memuat daftar MSO');
+    } finally {
+      setLoadingMsoStaff(false);
+    }
+  };
+
   const handleDeleteMember = async () => {
     if (!member || !canDeleteMember || deletingMember) return;
 
@@ -497,6 +566,80 @@ export default function MemberDetailPage() {
       showToast.error(error.response?.data?.error?.message || 'Gagal assign paket');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAssignAddOn = async () => {
+    if (addOnTransactionData.selectedAddOns.length === 0) {
+      showToast.error('Pilih minimal 1 produk Air Nano atau Add-On');
+      return;
+    }
+    if (!addOnTransactionData.transactionDate || !addOnTransactionData.sellerMsoId) {
+      showToast.error('Tanggal transaksi dan MSO penjual wajib diisi');
+      return;
+    }
+    if (submitting) return;
+
+    try {
+      setSubmitting(true);
+      await packagesApi.assignPackage(memberId, {
+        packages: [],
+        addOns: addOnTransactionData.selectedAddOns,
+        transactionDate: addOnTransactionData.transactionDate,
+        sellerMsoId: addOnTransactionData.sellerMsoId,
+        notes: addOnTransactionData.notes || undefined,
+        paymentPlan: { type: 'FULL_PAYMENT' },
+      });
+      showToast.success('Transaksi Air Nano & Add-On berhasil dibuat');
+      setShowAddOnModal(false);
+      setAddOnTransactionData({
+        selectedAddOns: [],
+        transactionDate: getJakartaDateInputValue(),
+        sellerMsoId: '',
+        notes: '',
+      });
+      await Promise.all([loadPackages(), loadMemberDetail(false)]);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Assign add-on error:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal membuat transaksi Add-On');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenPaymentVerification = async (
+    itemId: string,
+    itemStatus: string,
+    proofUrl?: string,
+    proofFileName?: string,
+  ) => {
+    setSelectedPackageId(itemId);
+    setSelectedPackageProof({
+      url: proofUrl || null,
+      fileName: proofFileName || null,
+      status: itemStatus,
+    });
+    setVerifyNotes('');
+    setVerifyPaidAmount(0);
+    setVerifyInvoice(null);
+    setPaymentProof({ file: null, preview: null });
+    setShowVerifyModal(true);
+
+    try {
+      const invoice = await invoiceApi.getInvoiceByPackageId(itemId);
+      setVerifyInvoice(invoice);
+      if (
+        invoice.paymentPlanType === 'INSTALLMENT' &&
+        invoice.installmentNumber &&
+        invoice.installmentTotal &&
+        invoice.installmentNumber >= invoice.installmentTotal
+      ) {
+        setVerifyPaidAmount(getRemainingInvoiceAmount(invoice));
+      }
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Load verification invoice error:', error);
     }
   };
 
@@ -921,37 +1064,10 @@ export default function MemberDetailPage() {
                 </div>}
               </div>
               <MemberPackagesTab
-                packages={packages}
+                packages={packageTransactions}
                 loading={loadingPackages}
-                onVerifyPayment={canAssignPackage ? async (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
-                  setSelectedPackageId(packageId);
-                  setSelectedPackageProof({
-                    url: proofUrl || null,
-                    fileName: proofFileName || null,
-                    status: packageStatus
-                  });
-                  // Reset state before opening modal
-                  setVerifyNotes('');
-                  setVerifyPaidAmount(0);
-                  setVerifyInvoice(null);
-                  setPaymentProof({ file: null, preview: null });
-                  setShowVerifyModal(true);
-                  try {
-                    const invoice = await invoiceApi.getInvoiceByPackageId(packageId);
-                    setVerifyInvoice(invoice);
-                    if (
-                      invoice.paymentPlanType === 'INSTALLMENT' &&
-                      invoice.installmentNumber &&
-                      invoice.installmentTotal &&
-                      invoice.installmentNumber >= invoice.installmentTotal
-                    ) {
-                      setVerifyPaidAmount(getRemainingInvoiceAmount(invoice));
-                    }
-                  } catch (error) {
-      assertCaughtError(error);
-                    devError('Load verification invoice error:', error);
-                  }
-                } : undefined}
+                hideGroupedAddOns
+                onVerifyPayment={canAssignPackage ? handleOpenPaymentVerification : undefined}
                 onRefundPackage={canAssignPackage ? (packageId: string, packageCode: string, finalPrice: number) => {
                   setSelectedPackageId(packageId);
                   setRefundPackageCode(packageCode);
@@ -1016,6 +1132,41 @@ export default function MemberDetailPage() {
                   });
                   setShowEditModal(true);
                 } : undefined}
+              />
+            </section>
+          )}
+
+          {visitedTabs.has('air-nano-addon') && (
+            <section
+              id="member-tab-panel-air-nano-addon"
+              role="tabpanel"
+              aria-labelledby="member-tab-air-nano-addon"
+              hidden={activeTab !== 'air-nano-addon'}
+            >
+              <div className="member-packages-header">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+                    Produk Non-Terapi
+                  </p>
+                  <h3 className="mt-1 text-lg font-bold text-neutral-950 dark:text-white">
+                    Air Nano & Add-On
+                  </h3>
+                </div>
+                {canAssignPackage && (
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenAddOnModal()}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-black transition hover:bg-amber-400"
+                  >
+                    <Plus size={16} />
+                    Tambah Transaksi
+                  </button>
+                )}
+              </div>
+              <MemberAddOnsTab
+                addOns={addOnTransactions}
+                loading={loadingPackages}
+                onVerifyPayment={canAssignPackage ? handleOpenPaymentVerification : undefined}
               />
             </section>
           )}
@@ -1098,6 +1249,18 @@ export default function MemberDetailPage() {
         onClose={() => setShowAssignModal(false)}
         onAssignDataChange={handleAssignDataChange}
         onSubmit={handleAssignPackage}
+      />
+
+      <AssignAddOnModal
+        show={showAddOnModal}
+        branchName={member.registrationBranch?.name}
+        msoStaff={msoStaff}
+        loadingMsoStaff={loadingMsoStaff}
+        data={addOnTransactionData}
+        submitting={submitting}
+        onChange={setAddOnTransactionData}
+        onClose={() => setShowAddOnModal(false)}
+        onSubmit={handleAssignAddOn}
       />
 
       <MemberDestructionModal

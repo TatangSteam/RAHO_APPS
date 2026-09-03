@@ -883,6 +883,7 @@ model User {
   packagesRejected   MemberPackage[]            @relation("PackageRejectedBy")
   packagesRefunded   MemberPackage[]            @relation("PackageRefundedBy")
   addOnsAssigned     MemberAddOn[]              @relation("AddOnAssignedBy")
+  addOnsSold         MemberAddOn[]              @relation("AddOnSellerMso")
   addOnsVerified     MemberAddOn[]              @relation("AddOnVerifiedBy")
   addOnsRejected     MemberAddOn[]              @relation("AddOnRejectedBy")
   nonTherapyAssigned MemberNonTherapyPurchase[] @relation("NonTherapyAssignedBy")
@@ -1872,6 +1873,8 @@ model MemberAddOn {
   totalVerifiedPaid   Decimal         @default(0) @db.Decimal(12, 2)
   paymentPlanStatus   String?
   notes               String?
+  transactionDate     DateTime?       @db.Date
+  sellerMsoId         String?
 
   // Canonical commerce/inventory identity for physical add-ons.
   productCode        String?
@@ -1899,6 +1902,7 @@ model MemberAddOn {
   branch            Branch                  @relation(fields: [branchId], references: [id])
   package           MemberPackage?          @relation(fields: [packageId], references: [id])
   assignedByUser    User                    @relation("AddOnAssignedBy", fields: [assignedBy], references: [id])
+  sellerMso         User?                   @relation("AddOnSellerMso", fields: [sellerMsoId], references: [id])
   verifiedByUser    User?                   @relation("AddOnVerifiedBy", fields: [verifiedBy], references: [id])
   rejectedByUser    User?                   @relation("AddOnRejectedBy", fields: [rejectedBy], references: [id])
   stockReservations AddOnStockReservation[]
@@ -1910,6 +1914,8 @@ model MemberAddOn {
   @@index([productCode])
   @@index([inventorySku])
   @@index([inventoryPostingId])
+  @@index([sellerMsoId, transactionDate, status])
+  @@index([transactionDate, branchId])
   @@map("member_add_ons")
 }
 

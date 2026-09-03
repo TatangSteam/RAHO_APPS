@@ -8,6 +8,8 @@ interface AddOnSectionProps {
   getAddOnQuantity: (code: string) => number;
   toggleAddOn: (addon: AddOnPricing) => void;
   updateAddOnQuantity: (code: string, quantity: number) => void;
+  title?: string;
+  description?: string;
 }
 
 function AddOnQuantityInput({
@@ -57,16 +59,18 @@ export default function AddOnSection({
   getAddOnQuantity,
   toggleAddOn,
   updateAddOnQuantity,
+  title = 'ADD-ONS (Opsional)',
+  description = 'Tambahkan produk non-terapi seperti Air Nano atau Rokok Kenkou',
 }: AddOnSectionProps) {
   return (
     <div className="assign-package-section space-y-3">
       <h4 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
         <Sparkles className="h-4 w-4" />
-        ADD-ONS (Opsional)
+        {title}
       </h4>
       <div className="assign-package-section-box p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
         <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-4">
-          Tambahkan produk non-terapi seperti Air Nano atau Rokok Kenkou
+          {description}
         </p>
 
         {/* Air Nano Section */}

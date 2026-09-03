@@ -499,7 +499,8 @@ flowchart TD
     A[Petugas membuka detail member] --> B[Pilih tab Air Nano dan Add-On]
     B --> C[Klik Tambah transaksi]
     C --> D[Pilih cabang]
-    D --> E[Sistem menampilkan produk aktif pada cabang]
+    D --> D1[Isi tanggal transaksi dan pilih MSO penjual]
+    D1 --> E[Sistem menampilkan produk aktif pada cabang]
     E --> F[Pilih produk dan kuantitas]
     F --> G[Sistem mengambil harga snapshot cabang]
     G --> H{Produk terhubung ke stok?}
@@ -560,6 +561,7 @@ Dengan struktur ini, SKU tetap konsisten tetapi harga dan ketersediaan dapat ber
 Aturan scope:
 
 - pengguna hanya dapat menjual produk aktif pada cabang yang berada dalam scope-nya;
+- tanggal transaksi dan MSO penjual wajib diisi; MSO harus aktif dan bertugas pada cabang transaksi;
 - Super Admin dapat melihat dan mengatur semua cabang;
 - harga transaksi selalu mengambil konfigurasi cabang transaksi, bukan cabang asal member;
 - perubahan harga hanya berlaku pada transaksi baru;
@@ -629,7 +631,7 @@ Implementasi boleh memperluas `NonTherapyProduct` existing daripada membuat tabe
 ### `MemberAddOnTransaction`
 
 - `id`, `transactionCode`, `memberId`, `branchId`, `productId`;
-- `sellerMsoId`, `quantity`;
+- `transactionDate`, `sellerMsoId`, `quantity`;
 - `productNameSnapshot`, `skuSnapshot`, `unitSnapshot`;
 - `pricePerUnitSnapshot`, `totalPrice`;
 - `trackInventorySnapshot`, `inventorySkuSnapshot`, `stockQuantitySnapshot`;
@@ -698,7 +700,7 @@ Implementasi dapat memakai `MemberNonTherapyPurchase` atau `MemberAddOn` existin
 39. Mode tanpa stok terlihat jelas pada detail transaksi dan audit.
 40. Perubahan mode stok hanya berlaku untuk transaksi baru.
 41. Produk yang telah memiliki histori tidak dapat dihapus; hanya dapat dinonaktifkan.
-42. Penjualan SKU `DUS` yang lunas dikreditkan ke MSO penjual pada periode yang benar.
+42. Penjualan SKU `DUS` wajib memiliki tanggal transaksi dan MSO penjual; setelah lunas, penjualan dikreditkan ke MSO tersebut pada periode tanggal transaksi yang benar.
 43. Dua request paralel tidak membuat invoice, reservasi, posting stok, atau kredit penjualan ganda.
 44. Fitur baru tidak mengubah sesi terapi, paket, invoice, atau stok historis yang sudah ada.
 
