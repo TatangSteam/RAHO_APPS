@@ -65,6 +65,20 @@ const BACKGROUNDS: Array<{ key: BackgroundKey; name: string; colors: string }> =
   { key: 'CLEAN_LIGHT', name: 'Minimal Terang', colors: 'linear-gradient(135deg,#253142,#f6f7f9)' },
 ];
 
+function TemplateThumbnail({ background }: { background: string }) {
+  return (
+    <div style={{ position: 'relative', height: 126, overflow: 'hidden', background }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.76)' }} />
+      <div style={{ position: 'absolute', left: 10, top: 9, color: '#8f1920', fontSize: 8, fontWeight: 800 }}>RAHO PREMIER</div>
+      <div aria-hidden="true" style={{ position: 'absolute', right: 8, top: 7, width: 44, height: 28, background: 'url(/asset/LOGORAHO.png) center/contain no-repeat' }} />
+      <strong style={{ position: 'absolute', left: 10, top: 30, color: '#8f1920', fontSize: 20, lineHeight: .88, letterSpacing: '-.04em' }}>Salam<br />Sehat</strong>
+      <div style={{ position: 'absolute', left: 10, bottom: 25, width: 42, height: 23, borderRadius: 6, background: '#fff', border: '1px solid rgba(143,25,32,.28)' }} />
+      <div style={{ position: 'absolute', right: 9, bottom: 15, width: 48, height: 61, borderRadius: 8, background: 'rgba(143,25,32,.18)', border: '3px solid #9f1d24' }} />
+      <div style={{ position: 'absolute', left: -10, right: -10, bottom: -20, height: 40, borderRadius: '50% 50% 0 0', background: '#8f1920' }} />
+    </div>
+  );
+}
+
 export default function WhatsAppSettingsPage() {
   const { user } = useAuthStore();
   const [status, setStatus] = useState<StatusData | null>(null);
@@ -114,9 +128,9 @@ export default function WhatsAppSettingsPage() {
     const previewUrl = URL.createObjectURL(file);
     const image = new window.Image();
     image.onload = () => {
-      if (image.naturalWidth < 720 || image.naturalHeight < 720) {
+      if (image.naturalWidth < 720 || image.naturalHeight < 900) {
         URL.revokeObjectURL(previewUrl);
-        showToast.error('Resolusi minimal background adalah 720×720 px.');
+        showToast.error('Resolusi minimal background adalah 720×900 px.');
         return;
       }
       if (customPreview) URL.revokeObjectURL(customPreview);
@@ -306,30 +320,32 @@ export default function WhatsAppSettingsPage() {
         </section>
 
         <section className="card" style={{ padding: 22 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><ImageIcon size={19} /> Background Pesan</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>Pilihan ini berlaku untuk semua laporan baru.</p>
+          <h2 style={{ fontSize: 17, fontWeight: 750, display: 'flex', gap: 8 }}><ImageIcon size={19} /> Template Kartu Laporan</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>
+            Hanya Super Admin yang dapat mengganti background. Pilihan aktif berlaku untuk semua laporan baru.
+          </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
             {BACKGROUNDS.map((item) => (
               <button key={item.key} type="button" onClick={() => setBackground(item.key)} style={{ padding: 0, overflow: 'hidden', borderRadius: 12, border: background === item.key ? '2px solid #22c55e' : '1px solid var(--surface-border)', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
-                <div style={{ height: 78, background: item.colors }} />
+                <TemplateThumbnail background={item.colors} />
                 <div style={{ padding: 9, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 650 }}>{item.name}{background === item.key && <CheckCircle2 size={15} color="#22c55e" />}</div>
               </button>
             ))}
             {(status?.connection.customBackground || customPreview) && (
               <button type="button" onClick={() => setBackground('CUSTOM')} style={{ padding: 0, overflow: 'hidden', borderRadius: 12, border: background === 'CUSTOM' ? '2px solid #22c55e' : '1px solid var(--surface-border)', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
-                <div style={{ height: 78, backgroundImage: `linear-gradient(rgba(255,255,255,.15),rgba(255,255,255,.15)),url(${customPreview || status?.connection.customBackground?.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                <TemplateThumbnail background={`linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)),url(${customPreview || status?.connection.customBackground?.url}) center/cover`} />
                 <div style={{ padding: 9, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 650 }}>Upload Sendiri{background === 'CUSTOM' && <CheckCircle2 size={15} color="#22c55e" />}</div>
               </button>
             )}
           </div>
-          <button className="btn btn-primary" disabled={busy || background === status?.connection.defaultBackgroundKey} style={{ marginTop: 15 }} onClick={() => void perform(async () => { await api.put('/integrations/whatsapp/config', { backgroundKey: background }); }, 'Background WhatsApp disimpan')}><ShieldCheck size={16} /> Simpan background</button>
+          <button className="btn btn-primary" disabled={busy || background === status?.connection.defaultBackgroundKey} style={{ marginTop: 15 }} onClick={() => void perform(async () => { await api.put('/integrations/whatsapp/config', { backgroundKey: background }); }, 'Template laporan WhatsApp disimpan')}><ShieldCheck size={16} /> Simpan template aktif</button>
 
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--surface-border)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 750 }}><Upload size={17} /> Upload background sendiri</h3>
             <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,.45)', background: 'rgba(245,158,11,.08)', fontSize: 12, lineHeight: 1.65 }}>
-              <strong style={{ display: 'block', color: '#f59e0b', fontSize: 13 }}>Ukuran gambar yang digunakan: 1080×1080 px</strong>
-              <span>Rekomendasi rasio <strong>1:1</strong> • Minimal <strong>720×720 px</strong> • Maksimal <strong>5 MB</strong> • Format <strong>JPG, PNG, WebP</strong>.</span><br />
-              <span style={{ color: 'var(--text-secondary)' }}>Gambar tidak persegi akan dipotong otomatis dari bagian tengah.</span>
+              <strong style={{ display: 'block', color: '#f59e0b', fontSize: 13 }}>Ukuran kartu WhatsApp: 1080×1350 px</strong>
+              <span>Rasio <strong>4:5</strong> • Minimal <strong>720×900 px</strong> • Maksimal <strong>5 MB</strong> • Format <strong>JPG, PNG, WebP</strong>.</span><br />
+              <span style={{ color: 'var(--text-secondary)' }}>Gambar akan dipotong dari tengah dan diberi lapisan agar tulisan tetap terbaca.</span>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 11, minHeight: 44, padding: '10px 13px', borderRadius: 10, border: '1px dashed var(--surface-border)', background: 'var(--surface-input)', cursor: busy ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700 }}>
               <ImageIcon size={17} /> {customFile ? 'Ganti gambar' : 'Pilih gambar background'}
@@ -337,7 +353,7 @@ export default function WhatsAppSettingsPage() {
             </label>
             {customFile && customDimensions && (
               <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: 11, marginTop: 11, alignItems: 'center' }}>
-                <div style={{ width: 88, height: 88, borderRadius: 10, backgroundImage: `url(${customPreview})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid var(--surface-border)' }} />
+                <div style={{ width: 88, aspectRatio: '4 / 5', borderRadius: 10, backgroundImage: `url(${customPreview})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid var(--surface-border)' }} />
                 <div style={{ minWidth: 0, fontSize: 12, lineHeight: 1.6 }}>
                   <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customFile.name}</strong>
                   <span style={{ color: 'var(--text-secondary)' }}>{customDimensions.width}×{customDimensions.height} px • {(customFile.size / 1024 / 1024).toFixed(2)} MB</span>
@@ -347,7 +363,7 @@ export default function WhatsAppSettingsPage() {
             )}
             {!customFile && status?.connection.customBackground && (
               <p style={{ marginTop: 10, color: 'var(--text-secondary)', fontSize: 11 }}>
-                Tersimpan: <strong>{status.connection.customBackground.fileName || 'background.webp'}</strong> • {status.connection.customBackground.width || 1080}×{status.connection.customBackground.height || 1080} px • {((status.connection.customBackground.fileSize || 0) / 1024 / 1024).toFixed(2)} MB
+                Tersimpan: <strong>{status.connection.customBackground.fileName || 'background.webp'}</strong> • {status.connection.customBackground.width || 1080}×{status.connection.customBackground.height || 1350} px • {((status.connection.customBackground.fileSize || 0) / 1024 / 1024).toFixed(2)} MB
               </p>
             )}
           </div>

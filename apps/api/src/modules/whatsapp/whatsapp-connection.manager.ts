@@ -19,8 +19,10 @@ import { uploadFile } from '@config/minio';
 
 const SYSTEM_ACTOR = 'SYSTEM';
 const CUSTOM_BACKGROUND_KEY = 'CUSTOM' as const;
-const CUSTOM_BACKGROUND_SIZE = 1080;
-const CUSTOM_BACKGROUND_MIN_DIMENSION = 720;
+const CUSTOM_BACKGROUND_WIDTH = 1080;
+const CUSTOM_BACKGROUND_HEIGHT = 1350;
+const CUSTOM_BACKGROUND_MIN_WIDTH = 720;
+const CUSTOM_BACKGROUND_MIN_HEIGHT = 900;
 const CUSTOM_BACKGROUND_MAX_BYTES = 5 * 1024 * 1024;
 const CUSTOM_BACKGROUND_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -152,17 +154,17 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
         message: 'Dimensi gambar tidak dapat dibaca.',
       };
     }
-    if (metadata.width < CUSTOM_BACKGROUND_MIN_DIMENSION || metadata.height < CUSTOM_BACKGROUND_MIN_DIMENSION) {
+    if (metadata.width < CUSTOM_BACKGROUND_MIN_WIDTH || metadata.height < CUSTOM_BACKGROUND_MIN_HEIGHT) {
       throw {
         status: 400,
         code: 'WHATSAPP_BACKGROUND_TOO_SMALL',
-        message: `Resolusi minimal ${CUSTOM_BACKGROUND_MIN_DIMENSION}×${CUSTOM_BACKGROUND_MIN_DIMENSION} px.`,
+        message: `Resolusi minimal ${CUSTOM_BACKGROUND_MIN_WIDTH}×${CUSTOM_BACKGROUND_MIN_HEIGHT} px (rasio 4:5 disarankan).`,
       };
     }
 
     const normalized = await sharp(file.buffer)
       .rotate()
-      .resize(CUSTOM_BACKGROUND_SIZE, CUSTOM_BACKGROUND_SIZE, { fit: 'cover', position: 'centre' })
+      .resize(CUSTOM_BACKGROUND_WIDTH, CUSTOM_BACKGROUND_HEIGHT, { fit: 'cover', position: 'centre' })
       .webp({ quality: 90 })
       .toBuffer();
     const objectKey = `uploads/whatsapp/backgrounds/${Date.now()}-${actorId}.webp`;
@@ -181,8 +183,8 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
         customBackgroundFileName: file.originalname,
         customBackgroundMimeType: 'image/webp',
         customBackgroundFileSize: normalized.length,
-        customBackgroundWidth: CUSTOM_BACKGROUND_SIZE,
-        customBackgroundHeight: CUSTOM_BACKGROUND_SIZE,
+        customBackgroundWidth: CUSTOM_BACKGROUND_WIDTH,
+        customBackgroundHeight: CUSTOM_BACKGROUND_HEIGHT,
         createdBy: actorId,
         updatedBy: actorId,
       },
@@ -193,8 +195,8 @@ class WhatsAppConnectionManager implements WhatsAppProvider {
         customBackgroundFileName: file.originalname,
         customBackgroundMimeType: 'image/webp',
         customBackgroundFileSize: normalized.length,
-        customBackgroundWidth: CUSTOM_BACKGROUND_SIZE,
-        customBackgroundHeight: CUSTOM_BACKGROUND_SIZE,
+        customBackgroundWidth: CUSTOM_BACKGROUND_WIDTH,
+        customBackgroundHeight: CUSTOM_BACKGROUND_HEIGHT,
         updatedBy: actorId,
       },
       select: {

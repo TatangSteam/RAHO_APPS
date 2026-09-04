@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import NextImage from 'next/image';
-import { AlertCircle, CheckCircle2, Eye, Image as ImageIcon, MessageCircle, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, CheckCircle2, Eye, Image as ImageIcon, MessageCircle, Palette, RefreshCw } from 'lucide-react';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
 import { sessionApi, type WhatsAppReportDelivery, type WhatsAppReportPreview } from '@/lib/sessionApi';
+import { useAuthStore } from '@/stores/authStore';
 
 function idempotencyKey(sessionId: string) {
   return `SESSION_REPORT:MANUAL:${sessionId}:${crypto.randomUUID()}`;
 }
 
 export default function WhatsAppReportCard({ sessionId }: { sessionId: string }) {
+  const { user } = useAuthStore();
   const [preview, setPreview] = useState<WhatsAppReportPreview | null>(null);
   const [deliveries, setDeliveries] = useState<WhatsAppReportDelivery[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,28 +67,37 @@ export default function WhatsAppReportCard({ sessionId }: { sessionId: string })
             <MessageCircle size={21} color="#16a34a" /> Laporan WhatsApp
           </h3>
           <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)', fontSize: 13 }}>
-            Preview foto berbingkai dan caption sebelum masuk antrean pengiriman.
+            Periksa kartu bergambar dan pesan WhatsApp sebelum masuk antrean pengiriman.
           </p>
         </div>
         <button type="button" className="btn btn-secondary" onClick={() => void loadPreview()} disabled={loading}>
-          {loading ? <RefreshCw size={16} className="animate-spin" /> : <Eye size={16} />} Preview
+          {loading ? <RefreshCw size={16} className="animate-spin" /> : <Eye size={16} />} Muat preview
         </button>
       </div>
 
-      <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: 12 }}>
-        Background pesan ditetapkan oleh Super Admin agar identitas laporan konsisten.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14, color: 'var(--text-muted)', fontSize: 12 }}>
+        <Palette size={14} /> Template ditetapkan oleh Super Admin agar identitas laporan konsisten.
+        {user?.role === 'SUPER_ADMIN' && (
+          <Link href="/admin/integrations/whatsapp" style={{ color: '#f59e0b', fontWeight: 700 }}>Atur template</Link>
+        )}
+      </div>
 
       {preview && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 420px) minmax(260px, 1fr)', gap: 20, marginTop: 20 }}>
-          <NextImage
-            src={preview.imageDataUrl}
-            alt={`Preview ${preview.background.name}`}
-            width={1080}
-            height={1080}
-            unoptimized
-            style={{ width: '100%', height: 'auto', borderRadius: 16, border: '1px solid var(--surface-border)' }}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 20, marginTop: 20, alignItems: 'start' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span>KARTU LAPORAN 4:5</span>
+              <strong style={{ color: 'var(--text-secondary)' }}>{preview.background.name}</strong>
+            </div>
+            <NextImage
+              src={preview.imageDataUrl}
+              alt={`Preview ${preview.background.name}`}
+              width={1080}
+              height={1350}
+              unoptimized
+              style={{ display: 'block', width: '100%', maxWidth: 430, height: 'auto', margin: '0 auto', borderRadius: 16, border: '1px solid var(--surface-border)', boxShadow: '0 12px 32px rgba(0,0,0,.2)' }}
+            />
+          </div>
           <div>
             <div style={{ padding: 12, borderRadius: 10, background: 'var(--surface-input)', fontSize: 13 }}>
               <strong>Tujuan: {preview.recipientMasked || 'Nomor belum valid'}</strong>
@@ -100,9 +112,14 @@ export default function WhatsAppReportCard({ sessionId }: { sessionId: string })
                 {preview.doctorEvaluationIncluded ? ' Evaluasi tersedia dan ikut dimasukkan.' : ' Laporan dikirim tanpa evaluasi dokter.'}
               </p>
             </div>
-            <pre style={{ marginTop: 12, padding: 14, maxHeight: 310, overflow: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, border: '1px solid var(--surface-border)', borderRadius: 10 }}>
-              {preview.caption}
-            </pre>
+            <div style={{ marginTop: 12, padding: '12px 10px 16px', borderRadius: 12, background: '#0b141a', border: '1px solid rgba(255,255,255,.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '0 4px 10px', color: '#d1d7db', fontSize: 11, fontWeight: 700 }}>
+                <MessageCircle size={14} color="#25d366" /> PREVIEW PESAN WHATSAPP
+              </div>
+              <pre style={{ margin: 0, padding: 14, maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, lineHeight: 1.55, color: '#e9edef', background: '#005c4b', borderRadius: '7px 7px 2px 7px', boxShadow: '0 1px 1px rgba(0,0,0,.2)' }}>
+                {preview.caption}
+              </pre>
+            </div>
             <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 14 }}>
               <button type="button" className="btn btn-primary" onClick={() => void queueReport()} disabled={sending || !preview.readyToQueue}>
                 <MessageCircle size={16} /> {sending ? 'Mengantrekan...' : 'Masukkan antrean'}

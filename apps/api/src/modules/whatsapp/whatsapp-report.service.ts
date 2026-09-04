@@ -22,12 +22,12 @@ type ConfiguredBackground = {
   objectKey?: string;
 };
 
-async function configuredBackground(requestedKey?: SessionReportBackgroundKey): Promise<ConfiguredBackground> {
+async function configuredBackground(): Promise<ConfiguredBackground> {
   const connection = await prisma.whatsAppConnection.findUnique({
     where: { id: GLOBAL_WHATSAPP_CONNECTION_ID },
     select: { defaultBackgroundKey: true, customBackgroundObjectKey: true },
   });
-  const key = getSessionReportBackground(requestedKey ?? connection?.defaultBackgroundKey).key;
+  const key = getSessionReportBackground(connection?.defaultBackgroundKey).key;
   if (key === 'CUSTOM' && connection?.customBackgroundObjectKey) {
     return { key, objectKey: connection.customBackgroundObjectKey };
   }
@@ -63,7 +63,6 @@ const SAFE_DELIVERY_SELECT = {
 export async function previewSessionReport(
   sessionId: string,
   actorUserId: string,
-  backgroundKey?: SessionReportBackgroundKey,
 ) {
   const report = await buildSessionReportSnapshot(sessionId);
   await assertBranchAccess(actorUserId, report.branchId);
@@ -77,7 +76,9 @@ export async function previewSessionReport(
   } catch {
     // Preview remains available with the explicit no-photo layout.
   }
-  const configured = await configuredBackground(backgroundKey);
+  // Preview and delivery always use the centrally approved Super Admin
+  // setting; staff cannot override branding per session.
+  const configured = await configuredBackground();
   const selectedBackground = getSessionReportBackground(configured.key);
   const customBackground = await loadCustomBackground(configured.objectKey);
   const image = await renderSessionReportImage(report.snapshot, photo, selectedBackground.key, customBackground);
@@ -125,7 +126,6 @@ export async function queueManualSessionReport(input: {
   sessionId: string;
   actorUserId: string;
   idempotencyKey: string;
-  backgroundKey?: SessionReportBackgroundKey;
 }) {
   const { report, recipient } = await assertSessionReportCanQueue(input.sessionId, input.actorUserId);
   // The approved background is centrally governed by Super Admin. Ignore a

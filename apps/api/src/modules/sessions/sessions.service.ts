@@ -37,7 +37,6 @@ import {
   previewSessionReport,
   queueManualSessionReport,
 } from '../whatsapp/whatsapp-report.service';
-import type { SessionReportBackgroundKey } from '../whatsapp/whatsapp-backgrounds';
 
 /**
  * Main Sessions Service - Orchestrates all session-related operations
@@ -110,22 +109,19 @@ export class SessionsService {
   async previewWhatsAppReport(
     sessionId: string,
     userId: string,
-    backgroundKey?: SessionReportBackgroundKey,
   ) {
-    return previewSessionReport(sessionId, userId, backgroundKey);
+    return previewSessionReport(sessionId, userId);
   }
 
   async queueWhatsAppReport(input: {
     sessionId: string;
     userId: string;
     idempotencyKey: string;
-    backgroundKey?: SessionReportBackgroundKey;
   }) {
     return queueManualSessionReport({
       sessionId: input.sessionId,
       actorUserId: input.userId,
       idempotencyKey: input.idempotencyKey,
-      backgroundKey: input.backgroundKey,
     });
   }
 

@@ -1031,12 +1031,11 @@ export class SessionsController {
         );
       }
 
-      const input = whatsappReportRequestSchema.parse(req.body ?? {});
+      whatsappReportRequestSchema.parse(req.body ?? {});
       const result = await sessionsService.queueWhatsAppReport({
         sessionId: req.params.sessionId,
         userId: req.user!.userId,
         idempotencyKey,
-        backgroundKey: input.background,
       });
       return sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
     } catch (err) {

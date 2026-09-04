@@ -87,9 +87,14 @@ describe('WhatsApp session report foundation contract', () => {
     expect(routes).toContain("router.post('/config/background', upload.single('background')");
     expect(manager).toContain('updateDefaultBackground');
     expect(manager).toContain('uploadCustomBackground');
-    expect(manager).toContain('CUSTOM_BACKGROUND_SIZE = 1080');
+    expect(manager).toContain('CUSTOM_BACKGROUND_WIDTH = 1080');
+    expect(manager).toContain('CUSTOM_BACKGROUND_HEIGHT = 1350');
     expect(report).toContain('configuredBackground');
     expect(report).toContain("stale client's selection");
+
+    const renderer = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-report.renderer.ts'), 'utf8');
+    expect(renderer).toContain("imi: 'logo-imi-new.png'");
+    expect(renderer).toContain("raho: 'LOGORAHO.png'");
   });
 
   it('does not require doctor evaluation or completed-session status to queue a report', () => {

@@ -315,23 +315,18 @@ export const sessionApi = {
     return response.data.data;
   },
 
-  previewWhatsAppReport: async (
-    sessionId: string,
-    background?: WhatsAppReportBackground,
-  ): Promise<WhatsAppReportPreview> => {
-    const response = await api.get(`/treatment-sessions/${sessionId}/whatsapp-report/preview`, {
-      params: background ? { background } : undefined,
-    });
+  previewWhatsAppReport: async (sessionId: string): Promise<WhatsAppReportPreview> => {
+    const response = await api.get(`/treatment-sessions/${sessionId}/whatsapp-report/preview`);
     return response.data.data;
   },
 
   queueWhatsAppReport: async (
     sessionId: string,
-    input: { background?: WhatsAppReportBackground; idempotencyKey: string },
+    input: { idempotencyKey: string },
   ) => {
     const response = await api.post(
       `/treatment-sessions/${sessionId}/whatsapp-report`,
-      input.background ? { background: input.background } : {},
+      {},
       { headers: { 'Idempotency-Key': input.idempotencyKey } },
     );
     return response.data.data;
@@ -396,7 +391,7 @@ export const sessionApi = {
   },
 };
 
-export type WhatsAppReportBackground = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GOLD' | 'CLEAN_LIGHT';
+export type WhatsAppReportBackground = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GOLD' | 'CLEAN_LIGHT' | 'CUSTOM';
 
 export interface WhatsAppReportPreview {
   recipientMasked: string | null;

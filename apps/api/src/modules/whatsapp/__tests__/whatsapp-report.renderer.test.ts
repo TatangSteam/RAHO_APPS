@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { renderSessionReportImage } from '../whatsapp-report.renderer';
+import {
+  renderSessionReportImage,
+  SESSION_REPORT_HEIGHT,
+  SESSION_REPORT_WIDTH,
+} from '../whatsapp-report.renderer';
 import type { SessionReportSnapshot } from '../whatsapp-report.types';
 import { SESSION_REPORT_BACKGROUND_KEYS } from '../whatsapp-backgrounds';
 
@@ -21,14 +25,14 @@ describe('WhatsApp session report image renderer', () => {
     const image = await renderSessionReportImage(snapshot);
     const metadata = await sharp(image).metadata();
     expect(metadata.format).toBe('png');
-    expect(metadata.width).toBe(1080);
-    expect(metadata.height).toBe(1080);
+    expect(metadata.width).toBe(SESSION_REPORT_WIDTH);
+    expect(metadata.height).toBe(SESSION_REPORT_HEIGHT);
 
     const headerStats = await sharp(image)
       .extract({ left: 60, top: 35, width: 650, height: 150 })
       .stats();
     const noPhotoStats = await sharp(image)
-      .extract({ left: 500, top: 585, width: 490, height: 80 })
+      .extract({ left: 625, top: 630, width: 320, height: 260 })
       .stats();
     expect(headerStats.channels.some((channel) => channel.stdev > 5)).toBe(true);
     expect(noPhotoStats.channels.some((channel) => channel.stdev > 2)).toBe(true);
@@ -52,8 +56,8 @@ describe('WhatsApp session report image renderer', () => {
     }).jpeg().toBuffer();
     const image = await renderSessionReportImage(snapshot, undefined, 'CUSTOM', custom);
     const metadata = await sharp(image).metadata();
-    expect(metadata.width).toBe(1080);
-    expect(metadata.height).toBe(1080);
+    expect(metadata.width).toBe(SESSION_REPORT_WIDTH);
+    expect(metadata.height).toBe(SESSION_REPORT_HEIGHT);
     expect(metadata.format).toBe('png');
   });
 });
