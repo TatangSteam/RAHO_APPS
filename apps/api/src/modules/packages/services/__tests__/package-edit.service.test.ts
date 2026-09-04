@@ -208,7 +208,7 @@ describe('PackageEditService', () => {
     },
   );
 
-  it('keeps the used row when consolidating a paid bundle quantity', async () => {
+  it('consolidates historical usage and active balance into the selected total', async () => {
     const service = new PackageEditService();
     const usedPackage = {
       id: 'pkg-booster-used',
@@ -216,15 +216,16 @@ describe('PackageEditService', () => {
       memberId: 'member-1',
       branchId: 'branch-1',
       purchaseGroupId: 'group-active',
-      packagePricingId: 'pricing-booster',
+      packagePricingId: 'pricing-booster-premier',
       packageType: PackageType.BOOSTER,
       productCode: 'BST-GT-P1-PM',
       boosterType: 'GT',
       serviceType: 'PM',
-      totalSessions: 1,
-      usedSessions: 1,
-      finalPrice: 1000000,
-      status: PackageStatus.ACTIVE,
+      totalSessions: 4,
+      usedSessions: 4,
+      finalPrice: 4000000,
+      status: PackageStatus.EXPIRED,
+      expiredAt: new Date('2026-08-08T01:00:00.000Z'),
       paymentPlanType: 'FULL_PAYMENT',
       installmentTotal: null,
       installmentSchedule: null,
@@ -242,37 +243,67 @@ describe('PackageEditService', () => {
       member: { memberNo: 'MBR-001', user: { profile: { fullName: 'Member Bundle' } } },
       branch: { id: 'branch-1', branchCode: 'PUS' },
     };
+    const secondUsedPackage = {
+      ...usedPackage,
+      id: 'pkg-booster-used-2',
+      packageCode: 'PKG-PUS-BST-USED-2',
+      totalSessions: 3,
+      usedSessions: 3,
+      finalPrice: 3000000,
+    };
     const unusedPackage = {
       ...usedPackage,
       id: 'pkg-booster-unused',
       packageCode: 'PKG-PUS-BST-UNUSED',
+      totalSessions: 15,
       usedSessions: 0,
+      finalPrice: 15000000,
+      status: PackageStatus.ACTIVE,
+      expiredAt: null,
     };
     const updatedUsedPackage = {
       ...usedPackage,
-      totalSessions: 2,
-      finalPrice: 2000000,
+      totalSessions: 12,
+      usedSessions: 4,
+      packagePricingId: 'pricing-booster-social',
+      productCode: 'BST-GT-P1-PS',
+      serviceType: 'PS',
+      finalPrice: 7500000,
+      status: PackageStatus.ACTIVE,
+      expiredAt: null,
+    };
+    const preservedSecondUsedPackage = {
+      ...secondUsedPackage,
+      totalSessions: 3,
+      packagePricingId: 'pricing-booster-social',
+      productCode: 'BST-GT-P1-PS',
+      serviceType: 'PS',
+      finalPrice: 0,
+      status: PackageStatus.EXPIRED,
     };
 
     mockPrisma.memberPackage.findUnique.mockResolvedValue(null);
     mockPrisma.memberPackage.findMany
-      .mockResolvedValueOnce([usedPackage])
+      .mockResolvedValueOnce([unusedPackage])
       .mockResolvedValueOnce([
         { id: unusedPackage.id, packageCode: unusedPackage.packageCode, usedSessions: 0 },
-        { id: usedPackage.id, packageCode: usedPackage.packageCode, usedSessions: 1 },
+        { id: usedPackage.id, packageCode: usedPackage.packageCode, usedSessions: 4 },
+        { id: secondUsedPackage.id, packageCode: secondUsedPackage.packageCode, usedSessions: 3 },
       ])
-      .mockResolvedValueOnce([unusedPackage, usedPackage]);
+      .mockResolvedValueOnce([unusedPackage, secondUsedPackage, usedPackage]);
     mockPrisma.packagePricing.findMany.mockResolvedValue([{
-      id: 'pricing-booster',
+      id: 'pricing-booster-social',
       branchId: 'branch-1',
       packageType: PackageType.BOOSTER,
-      productCode: 'BST-GT-P1-PM',
+      productCode: 'BST-GT-P1-PS',
       boosterType: 'GT',
-      serviceType: 'PM',
+      serviceType: 'PS',
       totalSessions: 1,
-      price: 1000000,
+      price: 500000,
     }]);
-    mockPrisma.memberPackage.update.mockResolvedValue(updatedUsedPackage);
+    mockPrisma.memberPackage.update
+      .mockResolvedValueOnce(updatedUsedPackage)
+      .mockResolvedValueOnce(preservedSecondUsedPackage);
     mockPrisma.memberPackage.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.memberAddOn.findMany.mockResolvedValue([]);
     mockPrisma.invoice.findFirst.mockResolvedValue(null);
@@ -282,10 +313,10 @@ describe('PackageEditService', () => {
       'group-active',
       {
         packages: [{
-          pricingId: 'pricing-booster',
-          quantity: 2,
+          pricingId: 'pricing-booster-social',
+          quantity: 15,
           boosterType: 'GT',
-          serviceType: 'PM',
+          serviceType: 'PS',
         }],
       },
       'manager-1',
@@ -296,14 +327,43 @@ describe('PackageEditService', () => {
     expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: usedPackage.id },
-        data: expect.objectContaining({ totalSessions: 2, finalPrice: 2000000 }),
+        data: expect.objectContaining({
+          totalSessions: 12,
+          packagePricingId: 'pricing-booster-social',
+          productCode: 'BST-GT-P1-PS',
+          serviceType: 'PS',
+          finalPrice: 7500000,
+          status: PackageStatus.ACTIVE,
+          expiredAt: null,
+        }),
       }),
     );
+    expect(mockPrisma.memberPackage.update.mock.calls[0]?.[0].data).not.toHaveProperty('usedSessions');
+    expect(mockPrisma.memberPackage.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: {
+        purchaseGroupId: 'group-active',
+        OR: [
+          { status: { in: [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION, PackageStatus.ACTIVE] } },
+          { status: PackageStatus.EXPIRED, usedSessions: { gt: 0 } },
+        ],
+      },
+    }));
+    expect(mockPrisma.memberPackage.update).toHaveBeenNthCalledWith(2, {
+      where: { id: secondUsedPackage.id },
+      data: expect.objectContaining({
+        totalSessions: 3,
+        packagePricingId: 'pricing-booster-social',
+        productCode: 'BST-GT-P1-PS',
+        serviceType: 'PS',
+        finalPrice: 0,
+        status: PackageStatus.EXPIRED,
+      }),
+    });
     expect(mockPrisma.memberPackage.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [unusedPackage.id] } },
       data: { status: PackageStatus.CANCELLED },
     });
-    expect(result.packages).toEqual([updatedUsedPackage]);
+    expect(result.packages).toEqual([updatedUsedPackage, preservedSecondUsedPackage]);
   });
 
   it('rejects removing a used package from a paid active bundle', async () => {

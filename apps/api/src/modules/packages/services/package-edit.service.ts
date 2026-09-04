@@ -7,6 +7,7 @@ import {
   MemberAddOn,
   MemberPackage,
   PackageStatus,
+  PackageType,
   Prisma,
 } from '@prisma/client';
 import type { EditPackageInput } from '../packages.schema';
@@ -29,6 +30,27 @@ type EditableMemberPackage = Prisma.MemberPackageGetPayload<{
 type PackageSelection = EditPackageInput['packages'][number];
 
 const PRIVILEGED_PACKAGE_EDIT_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
+
+function buildEditScopeWhere(
+  packageId: string,
+  purchaseGroupId: string | null,
+  editableStatuses: PackageStatus[],
+  includeHistoricalUsage: boolean,
+): Prisma.MemberPackageWhereInput {
+  if (!purchaseGroupId) {
+    return { id: packageId, status: { in: editableStatuses } };
+  }
+
+  return includeHistoricalUsage
+    ? {
+        purchaseGroupId,
+        OR: [
+          { status: { in: editableStatuses } },
+          { status: PackageStatus.EXPIRED, usedSessions: { gt: 0 } },
+        ],
+      }
+    : { purchaseGroupId, status: { in: editableStatuses } };
+}
 
 /**
  * Package Edit Service
@@ -139,11 +161,19 @@ export class PackageEditService {
     const purchaseGroupId = memberPackage.purchaseGroupId;
     const memberId = memberPackage.memberId;
     const replacementStatus = memberPackage.status;
+    const includeHistoricalUsage = Boolean(
+      purchaseGroupId &&
+      hasPrivilegedEditAccess &&
+      replacementStatus === PackageStatus.ACTIVE,
+    );
 
     const packagesInEditScope = await prisma.memberPackage.findMany({
-      where: purchaseGroupId
-        ? { purchaseGroupId, status: { in: editableStatuses } }
-        : { id: memberPackage.id },
+      where: buildEditScopeWhere(
+        memberPackage.id,
+        purchaseGroupId,
+        editableStatuses,
+        includeHistoricalUsage,
+      ),
       select: {
         id: true,
         packageCode: true,
@@ -180,6 +210,7 @@ export class PackageEditService {
           memberId,
           replacementStatus,
           editableStatuses,
+          includeHistoricalUsage,
         }),
       );
     } catch (error) {
@@ -223,6 +254,7 @@ export class PackageEditService {
     memberId: string;
     replacementStatus: PackageStatus;
     editableStatuses: PackageStatus[];
+    includeHistoricalUsage: boolean;
   }) {
     const {
       db,
@@ -234,6 +266,7 @@ export class PackageEditService {
       memberId,
       replacementStatus,
       editableStatuses,
+      includeHistoricalUsage,
     } = params;
 
     // Serialize edits for the same purchase. The UI already guards against a
@@ -246,9 +279,12 @@ export class PackageEditService {
     // Re-read after acquiring the lock so a waiting request sees rows that a
     // previous edit consolidated or soft-cancelled.
     const currentPackages = (await db.memberPackage.findMany({
-      where: purchaseGroupId
-        ? { purchaseGroupId, status: { in: editableStatuses } }
-        : { id: memberPackage.id, status: { in: editableStatuses } },
+      where: buildEditScopeWhere(
+        memberPackage.id,
+        purchaseGroupId,
+        editableStatuses,
+        includeHistoricalUsage,
+      ),
       orderBy: { createdAt: 'asc' },
     })).sort((left, right) => right.usedSessions - left.usedSessions);
 
@@ -306,12 +342,31 @@ export class PackageEditService {
     const remainingSelections = [...selectedPackages];
     const updatedPackages: MemberPackage[] = [];
     const packageIdsToCancel: string[] = [];
+    const processedPackageIds = new Set<string>();
+    const matchesSelectedCatalog = (
+      pkg: MemberPackage,
+      selection: PackageSelection,
+      pricing: (typeof pricings)[number],
+    ) => {
+      if (pkg.packagePricingId === selection.pricingId) return true;
+
+      // Service tier is part of BOOSTER pricing (for example Premier versus
+      // Social), but changing that tier must still edit the same booster
+      // balance instead of appending a second package beside its used rows.
+      return (
+        pkg.packageType === PackageType.BOOSTER &&
+        pricing.packageType === PackageType.BOOSTER &&
+        Boolean(pkg.boosterType) &&
+        pkg.boosterType === (selection.boosterType || pricing.boosterType)
+      );
+    };
 
     for (const currentPackage of currentPackages) {
+      if (processedPackageIds.has(currentPackage.id)) continue;
+
       const matchIndex = remainingSelections.findIndex(({ selection, pricing }) => {
-        if (currentPackage.packagePricingId) {
-          return selection.pricingId === currentPackage.packagePricingId;
-        }
+        if (matchesSelectedCatalog(currentPackage, selection, pricing)) return true;
+        if (currentPackage.packagePricingId) return false;
 
         // Only packages imported without a pricing relation may use catalog
         // attributes as a fallback. Two BASIC prices can share service/type
@@ -365,14 +420,40 @@ export class PackageEditService {
 
       const [{ selection, pricing }] = remainingSelections.splice(resolvedMatchIndex, 1);
       const newTotalSessions = pricing.totalSessions * selection.quantity;
+      const matchingPricingRows = currentPackages.filter(
+        pkg => !processedPackageIds.has(pkg.id) && matchesSelectedCatalog(pkg, selection, pricing),
+      );
+      const additionalUsedRows = matchingPricingRows.filter(
+        pkg => pkg.id !== currentPackage.id && pkg.usedSessions > 0,
+      );
+      const unusedDuplicateRows = matchingPricingRows.filter(
+        pkg => pkg.id !== currentPackage.id && pkg.usedSessions === 0,
+      );
+      const additionalUsedSessions = additionalUsedRows.reduce(
+        (total, pkg) => total + pkg.usedSessions,
+        0,
+      );
+      const aggregateUsedSessions = currentPackage.usedSessions + additionalUsedSessions;
 
-      if (newTotalSessions < currentPackage.usedSessions) {
+      if (newTotalSessions < aggregateUsedSessions) {
         throw {
           status: 422,
           code: 'TOTAL_SESSIONS_BELOW_USED',
-          message: `Jumlah sesi paket ${currentPackage.packageCode} tidak boleh lebih kecil dari ${currentPackage.usedSessions} sesi yang sudah terpakai.`,
+          message: `Jumlah sesi paket ${currentPackage.packageCode} tidak boleh lebih kecil dari ${aggregateUsedSessions} sesi yang sudah terpakai.`,
         };
       }
+
+      // Older purchases can store every consumed voucher in its own EXPIRED
+      // row and the editable balance in another ACTIVE row. Treat the number
+      // selected in the modal as the final aggregate total. Keep every used
+      // row for its session references, but move all remaining capacity and
+      // the current catalog price onto one owner row.
+      const ownerTotalSessions = newTotalSessions - additionalUsedSessions;
+      const editedStatus = replacementStatus === PackageStatus.ACTIVE
+        ? ownerTotalSessions > currentPackage.usedSessions
+          ? PackageStatus.ACTIVE
+          : PackageStatus.EXPIRED
+        : replacementStatus;
 
       const updatedPackage = await db.memberPackage.update({
         where: { id: currentPackage.id },
@@ -380,7 +461,15 @@ export class PackageEditService {
           packagePricingId: pricing.id,
           packageType: pricing.packageType,
           productCode: pricing.productCode,
-          totalSessions: newTotalSessions,
+          totalSessions: ownerTotalSessions,
+          ...(replacementStatus === PackageStatus.ACTIVE
+            ? {
+                status: editedStatus,
+                expiredAt: editedStatus === PackageStatus.EXPIRED
+                  ? currentPackage.expiredAt || new Date()
+                  : null,
+              }
+            : {}),
           finalPrice: calculateCatalogPackageTotal(pricing, selection.quantity),
           discountPercent: null,
           discountAmount: null,
@@ -394,6 +483,37 @@ export class PackageEditService {
       });
 
       updatedPackages.push(updatedPackage);
+      processedPackageIds.add(currentPackage.id);
+
+      for (const historicalPackage of additionalUsedRows) {
+        const preservedPackage = await db.memberPackage.update({
+          where: { id: historicalPackage.id },
+          data: {
+            packagePricingId: pricing.id,
+            packageType: pricing.packageType,
+            productCode: pricing.productCode,
+            totalSessions: historicalPackage.usedSessions,
+            status: PackageStatus.EXPIRED,
+            expiredAt: historicalPackage.expiredAt || new Date(),
+            finalPrice: 0,
+            discountPercent: null,
+            discountAmount: null,
+            discountNote: null,
+            boosterType: pricing.boosterType,
+            serviceType: pricing.serviceType,
+            purchaseGroupId: targetPurchaseGroupId,
+            notes: data.notes,
+          },
+        });
+
+        updatedPackages.push(preservedPackage);
+        processedPackageIds.add(historicalPackage.id);
+      }
+
+      for (const duplicatePackage of unusedDuplicateRows) {
+        packageIdsToCancel.push(duplicatePackage.id);
+        processedPackageIds.add(duplicatePackage.id);
+      }
     }
 
     const sourcePaymentData = {
