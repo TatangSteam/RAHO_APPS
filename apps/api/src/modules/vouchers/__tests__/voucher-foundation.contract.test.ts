@@ -165,6 +165,9 @@ describe('Voucher Partnership foundation', () => {
     expect(page).toContain('Akun Pengelola');
     expect(page).toContain('Export kode untuk print (CSV)');
     expect(page).toContain('Generate sisa');
+    expect(page).toContain('Tambah voucher dummy');
+    expect(page).toContain('Voucher dummy siap diuji');
+    expect(page).toContain('Salin data dummy');
     expect(page).toContain('AVAILABLE');
     expect(page).toContain('Klaim ini tidak membuat member, paket, atau sesi terapi.');
     expect(page).toContain('Unduh bukti tanda terima PDF');

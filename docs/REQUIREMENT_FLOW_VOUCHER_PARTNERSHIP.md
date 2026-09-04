@@ -156,6 +156,15 @@ Super Admin dan Admin Manager dapat menerbitkan dan mengikat voucher ke penerima
 - Kode lengkap hanya ditampilkan saat berhasil dibuat atau tersedia pada dokumen distribusi yang aksesnya dibatasi.
 - Penerbitan menghasilkan status `ISSUED` dan audit event `VOUCHER_ISSUED`.
 
+### 6.3 Voucher dummy untuk pengujian
+
+- Super Admin dapat menerbitkan satu voucher dummy dari kartu campaign berstatus `ACTIVE`.
+- Voucher dummy memakai satu kuota campaign dan mengikuti transaksi, enkripsi kode, serta audit penerbitan yang sama dengan voucher biasa.
+- Sistem membuat nama penerima berawalan `DUMMY TEST`, NIK testing 16 digit yang unik, dan tanggal lahir testing agar mudah dibedakan dari data operasional.
+- Setelah berhasil, kode lengkap dan identitas testing ditampilkan satu kali serta dapat disalin untuk menguji flow klaim.
+- Pembuatan ditolak apabila campaign tidak aktif atau kuotanya telah habis.
+- Klaim voucher dummy tetap tidak membuat member, paket, invoice, atau sesi terapi.
+
 ## 7. Status voucher
 
 ```text
