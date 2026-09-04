@@ -1594,6 +1594,7 @@ model VoucherClaimLocation {
   id                     String   @id @default(cuid())
   code                   String   @unique
   displayName            String
+  locationGroup          String   @default("PARTNER")
   partnerName            String?
   city                   String
   address                String?
@@ -1616,6 +1617,7 @@ model VoucherClaimLocation {
   claimAttempts       VoucherClaimAttempt[]
 
   @@index([city, isActive])
+  @@index([locationGroup, city, isActive])
   @@index([branchId])
   @@map("voucher_claim_locations")
 }

@@ -277,8 +277,29 @@ Sumber: `List Cabang dan Partner Raho Non Format - NEW PARTNERSHIP.csv` dari pen
 - Nomor HP tetap disimpan sebagai string agar angka `0` di depan tidak hilang.
 - Lokasi dengan nomor HP kosong tetap boleh diimport tetapi diberi status kelengkapan `INCOMPLETE`.
 - Tautan foto pada CSV hanya nama file, bukan file fisik; foto tidak dianggap tersedia sampai diunggah dan diverifikasi.
-- Super Admin dapat mengaktifkan/nonaktifkan lokasi. Lokasi yang sudah mempunyai klaim tidak boleh dihapus.
+- Dropdown lokasi dikelompokkan menjadi `RAHO_REGULER`, `RAHO_PREMIER`, dan `PARTNER`.
+- Super Admin dapat menambahkan dan menonaktifkan lokasi. Aksi hapus menggunakan soft delete agar histori klaim tetap utuh.
+- Lokasi yang masih menjadi batas lokasi voucher `AVAILABLE` atau `ISSUED` tidak dapat dinonaktifkan.
 - Setiap akun pengelola harus memiliki sedikitnya satu lokasi aktif.
+
+### 9.2 Lokasi awal RAHO Reguler
+
+| ID seed | Tempat layanan | Kota |
+|---|---|---|
+| `VCL-REG-001` | RAHO Citraland | Surabaya |
+| `VCL-REG-002` | RAHO Metropolis | Surabaya |
+| `VCL-REG-003` | RAHO Armada | Surabaya |
+| `VCL-REG-004` | RAHO Premier Darmo Hill | Surabaya |
+| `VCL-REG-005` | RAHO Premier Jaksa Agung | Surabaya |
+| `VCL-REG-006` | RAHO Banjarmasin | Banjarmasin |
+| `VCL-REG-007` | RAHO Bogor | Bogor |
+| `VCL-REG-008` | RAHO Malang | Malang |
+| `VCL-REG-009` | RAHO Tulungagung | Tulungagung |
+| `VCL-REG-010` | RAHO Solo | Solo |
+| `VCL-REG-011` | RAHO Kelapa Gading | Jakarta |
+| `VCL-REG-012` | RAHO BSD/Tangerang | Tangerang Selatan |
+| `VCL-REG-013` | RAHO PIK2 | Tangerang |
+| `VCL-REG-014` | RAHO Lippo Mall Nusantara | Jakarta |
 
 ## 10. Model data konseptual
 
@@ -304,7 +325,7 @@ Sumber: `List Cabang dan Partner Raho Non Format - NEW PARTNERSHIP.csv` dari pen
 
 ### `VoucherClaimLocation`
 
-- `id`, `code`, `displayName`, `partnerName`, `city`, `address`;
+- `id`, `code`, `displayName`, `locationGroup`, `partnerName`, `city`, `address`;
 - `phone`, `mapsUrl`, `frontPhotoUrl`;
 - `branchId` nullable, `sourceReference`, `dataCompletenessStatus`, `isActive`;
 - `createdBy`, `updatedBy`, timestamps.

@@ -16,6 +16,8 @@ router.post('/claim', authorize(VOUCHER_ROLES), controller.claim);
 router.get('/export', authorize([Role.SUPER_ADMIN]), controller.exportCodes);
 router.post('/campaigns/:campaignId/generate', authorize([Role.SUPER_ADMIN]), controller.generateCodes);
 router.post('/issue', authorize(VOUCHER_ISSUER_ROLES), controller.issue);
+router.post('/locations', authorize([Role.SUPER_ADMIN]), controller.createLocation);
+router.delete('/locations/:locationId', authorize([Role.SUPER_ADMIN]), controller.archiveLocation);
 router.post('/operators', authorize([Role.SUPER_ADMIN]), controller.createOperator);
 router.patch('/operators/:operatorId', authorize([Role.SUPER_ADMIN]), controller.updateOperator);
 

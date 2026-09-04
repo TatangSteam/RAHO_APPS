@@ -11,13 +11,16 @@ import {
   History,
   Loader2,
   MapPin,
+  Plus,
   ReceiptText,
   RefreshCw,
   Search,
   ShieldCheck,
   TicketPercent,
+  Trash2,
   UserPlus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
@@ -42,7 +45,17 @@ type Campaign = {
   status: string;
 };
 
-type Location = { id: string; code: string; displayName: string; city: string; partnerName?: string | null };
+type LocationGroup = 'RAHO_REGULER' | 'RAHO_PREMIER' | 'PARTNER';
+type Location = {
+  id: string;
+  code: string;
+  displayName: string;
+  locationGroup: LocationGroup;
+  city: string;
+  partnerName?: string | null;
+  address?: string | null;
+  phone?: string | null;
+};
 type Voucher = {
   id: string;
   maskedCode: string;
@@ -67,6 +80,12 @@ type ClaimHistoryResponse = {
 };
 
 type VoucherView = 'claim' | 'history' | 'registry' | 'campaigns' | 'locations' | 'operators';
+
+const LOCATION_GROUPS: Array<{ value: LocationGroup; label: string }> = [
+  { value: 'RAHO_REGULER', label: 'RAHO Reguler' },
+  { value: 'RAHO_PREMIER', label: 'RAHO Premier' },
+  { value: 'PARTNER', label: 'Partner' },
+];
 
 function getVoucherView(pathname: string): VoucherView {
   if (pathname.endsWith('/history')) return 'history';
@@ -133,6 +152,14 @@ export default function VoucherPartnershipPage() {
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
   const [issueForm, setIssueForm] = useState({ campaignId: '', code: '', recipientName: '', nik: '', dateOfBirth: '', allowedLocationId: '' });
   const [claimForm, setClaimForm] = useState({ code: '', recipientName: '', nik: '', dateOfBirth: '', locationId: '' });
+  const [locationForm, setLocationForm] = useState({
+    displayName: '',
+    locationGroup: 'RAHO_REGULER' as LocationGroup,
+    city: '',
+    partnerName: '',
+    address: '',
+    phone: '',
+  });
   const [operatorForm, setOperatorForm] = useState({ fullName: '', username: '', password: '', locationIds: [] as string[] });
   const [registryFilter, setRegistryFilter] = useState({ campaignId: '', status: 'AVAILABLE' });
   const [claimHistory, setClaimHistory] = useState<Voucher[]>([]);
@@ -142,6 +169,10 @@ export default function VoucherPartnershipPage() {
   const [historyPagination, setHistoryPagination] = useState({ page: 1, perPage: 25, total: 0, totalPages: 1 });
   const [historyLoading, setHistoryLoading] = useState(false);
   const maximumBirthDate = useMemo(() => localDateInputValue(), []);
+  const groupedLocations = useMemo(() => LOCATION_GROUPS.map((group) => ({
+    ...group,
+    locations: (dashboard?.locations ?? []).filter((location) => location.locationGroup === group.value),
+  })).filter((group) => group.locations.length > 0), [dashboard?.locations]);
 
   const load = useCallback(async () => {
     try {
@@ -206,9 +237,44 @@ export default function VoucherPartnershipPage() {
     history: { title: 'Riwayat Klaim', description: 'Lihat klaim voucher sesuai lokasi yang menjadi scope akun Anda.' },
     registry: { title: 'Daftar Voucher', description: 'Terbitkan voucher, pantau status, dan export kode lengkap untuk proses cetak.' },
     campaigns: { title: 'Campaign Voucher', description: 'Pantau kuota, manfaat, nilai komersial, dan ketersediaan kode setiap campaign.' },
-    locations: { title: 'Lokasi Klaim', description: 'Daftar cabang dan partner yang dapat digunakan sebagai tempat klaim voucher.' },
+    locations: { title: 'Lokasi Klaim', description: 'Kelola daftar RAHO Reguler, RAHO Premier, dan partner yang tersedia saat klaim voucher.' },
     operators: { title: 'Akun Pengelola', description: 'Buat akun operator dan tentukan satu atau beberapa lokasi yang boleh dikelola.' },
   };
+
+  async function submitLocation(event: FormEvent) {
+    event.preventDefault();
+    try {
+      setBusy('location-create');
+      await api.post('/vouchers/locations', {
+        ...locationForm,
+        partnerName: locationForm.partnerName || null,
+        address: locationForm.address || null,
+        phone: locationForm.phone || null,
+      });
+      setLocationForm({ displayName: '', locationGroup: 'RAHO_REGULER', city: '', partnerName: '', address: '', phone: '' });
+      showToast.success('Lokasi klaim berhasil ditambahkan.');
+      await load();
+    } catch (error) {
+      showToast.error(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function archiveLocation(location: Location) {
+    if (!window.confirm(`Hapus ${location.displayName} dari pilihan lokasi klaim? Histori lama tetap disimpan.`)) return;
+    try {
+      setBusy(`location-delete-${location.id}`);
+      await api.delete(`/vouchers/locations/${location.id}`);
+      showToast.success('Lokasi dihapus dari pilihan klaim.');
+      setClaimForm((current) => current.locationId === location.id ? { ...current, locationId: '' } : current);
+      await load();
+    } catch (error) {
+      showToast.error(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function submitClaim(event: FormEvent) {
     event.preventDefault();
@@ -391,7 +457,20 @@ export default function VoucherPartnershipPage() {
       {view === 'claim' && <section style={{ display: 'grid', gridTemplateColumns: 'minmax(300px,620px)', gap: 16, alignItems: 'start', marginBottom: 18 }}>
         <form className="card" style={{ padding: 21, display: 'grid', gap: 13 }} onSubmit={submitClaim}>
           <div><h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><BadgeCheck size={20} color="#22c55e" /> Klaim Voucher</h2><p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Kode AVAILABLE dapat langsung diklaim dengan identitas penerima. Klaim ini tidak membuat member, paket, atau sesi terapi.</p></div>
-          <label style={labelStyle}>Lokasi aktual<select required style={fieldStyle} value={claimForm.locationId} onChange={(event) => setClaimForm({ ...claimForm, locationId: event.target.value })}><option value="">Pilih lokasi</option>{dashboard.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}</select></label>
+          <label style={labelStyle}>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              Lokasi aktual
+              {isSuperAdmin && <Link href="/extra/vouchers/locations" style={{ color: '#f59e0b', fontSize: 12, fontWeight: 750 }}>Kelola lokasi</Link>}
+            </span>
+            <select required style={fieldStyle} value={claimForm.locationId} onChange={(event) => setClaimForm({ ...claimForm, locationId: event.target.value })}>
+              <option value="">Pilih lokasi</option>
+              {groupedLocations.map((group) => (
+                <optgroup label={group.label} key={group.value}>
+                  {group.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </label>
           <label style={labelStyle}>Kode voucher<input required autoComplete="off" style={fieldStyle} value={claimForm.code} onChange={(event) => setClaimForm({ ...claimForm, code: cleanVoucherCodeInput(event.target.value) })} placeholder="RAHO-..." /><small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Tanda kutip dari hasil copy CSV akan dibersihkan otomatis.</small></label>
           <label style={labelStyle}>Nama penerima<input required autoComplete="name" maxLength={150} style={fieldStyle} value={claimForm.recipientName} onChange={(event) => setClaimForm({ ...claimForm, recipientName: event.target.value })} placeholder="Nama lengkap penerima voucher" /></label>
           <label style={labelStyle}>NIK penerima<input required inputMode="numeric" maxLength={16} style={fieldStyle} value={claimForm.nik} onChange={(event) => setClaimForm({ ...claimForm, nik: event.target.value.replace(/\D/g, '') })} placeholder="16 digit" /></label>
@@ -408,7 +487,7 @@ export default function VoucherPartnershipPage() {
           <label style={labelStyle}>Kode pada voucher cetak <small style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>(tempel kode AVAILABLE dari hasil export, atau kosongkan untuk mengambil kode berikutnya)</small><input style={fieldStyle} value={issueForm.code} onChange={(event) => setIssueForm({ ...issueForm, code: cleanVoucherCodeInput(event.target.value) })} /></label>
           <label style={labelStyle}>Nama penerima<input required style={fieldStyle} value={issueForm.recipientName} onChange={(event) => setIssueForm({ ...issueForm, recipientName: event.target.value })} /></label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={labelStyle}>NIK<input required inputMode="numeric" maxLength={16} style={fieldStyle} value={issueForm.nik} onChange={(event) => setIssueForm({ ...issueForm, nik: event.target.value.replace(/\D/g, '') })} /></label><label style={labelStyle}>Tanggal lahir<input required type="date" max={maximumBirthDate} style={fieldStyle} value={issueForm.dateOfBirth} onChange={(event) => setIssueForm({ ...issueForm, dateOfBirth: event.target.value })} /></label></div>
-          <label style={labelStyle}>Berlaku di<select required={isAdminManager} style={fieldStyle} value={issueForm.allowedLocationId} onChange={(event) => setIssueForm({ ...issueForm, allowedLocationId: event.target.value })}>{isSuperAdmin && <option value="">Semua lokasi aktif</option>}{isAdminManager && <option value="">Pilih lokasi klaim</option>}{dashboard.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}</select>{isAdminManager && <small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Admin Manager wajib menetapkan satu lokasi klaim aktif.</small>}</label>
+          <label style={labelStyle}>Berlaku di<select required={isAdminManager} style={fieldStyle} value={issueForm.allowedLocationId} onChange={(event) => setIssueForm({ ...issueForm, allowedLocationId: event.target.value })}>{isSuperAdmin && <option value="">Semua lokasi aktif</option>}{isAdminManager && <option value="">Pilih lokasi klaim</option>}{groupedLocations.map((group) => <optgroup label={group.label} key={group.value}>{group.locations.map((location) => <option value={location.id} key={location.id}>{location.displayName} — {location.city}</option>)}</optgroup>)}</select>{isAdminManager && <small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Admin Manager wajib menetapkan satu lokasi klaim aktif.</small>}</label>
           <button className="btn btn-primary" disabled={busy !== null || (isAdminManager && !issueForm.allowedLocationId)}>{busy === 'issue' ? <Loader2 size={17} className="animate-spin" /> : <TicketPercent size={17} />} Terbitkan kode</button>
           {issuedCode && <div style={{ border: '1px solid #f59e0b', background: 'rgba(245,158,11,.09)', borderRadius: 10, padding: 14 }}><small>Kode lengkap hanya ditampilkan setelah penerbitan:</small><div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 7 }}><strong style={{ fontSize: 18, overflowWrap: 'anywhere' }}>{issuedCode}</strong><button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard.writeText(issuedCode); showToast.success('Kode disalin.'); }}><Copy size={15} /></button></div></div>}
         </form>
@@ -448,11 +527,39 @@ export default function VoucherPartnershipPage() {
         ))}
       </section>}
 
-      {view === 'locations' && <section className="card" style={{ padding: 21 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 10 }}>
-          {dashboard.locations.map((location) => <article key={location.id} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 14 }}><div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><MapPin size={18} color="#f59e0b" /><div><strong>{location.displayName}</strong><div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 3 }}>{location.code} · {location.city}</div>{location.partnerName && <div style={{ fontSize: 13, marginTop: 5 }}>Partner: {location.partnerName}</div>}</div></div></article>)}
-        </div>
-      </section>}
+      {view === 'locations' && <div style={{ display: 'grid', gap: 16 }}>
+        <form className="card" style={{ padding: 21, display: 'grid', gap: 13 }} onSubmit={submitLocation}>
+          <div>
+            <h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><Plus size={20} color="#22c55e" /> Tambah Lokasi Klaim</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Lokasi baru langsung tersedia untuk Super Admin dan Admin Manager. Akses Pengelola Voucher tetap mengikuti assignment lokasi.</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 10 }}>
+            <label style={labelStyle}>Nama lokasi<input required maxLength={150} style={fieldStyle} value={locationForm.displayName} onChange={(event) => setLocationForm({ ...locationForm, displayName: event.target.value })} placeholder="Contoh: RAHO Surabaya" /></label>
+            <label style={labelStyle}>Kelompok<select required style={fieldStyle} value={locationForm.locationGroup} onChange={(event) => setLocationForm({ ...locationForm, locationGroup: event.target.value as LocationGroup })}>{LOCATION_GROUPS.map((group) => <option value={group.value} key={group.value}>{group.label}</option>)}</select></label>
+            <label style={labelStyle}>Kota<input required maxLength={100} style={fieldStyle} value={locationForm.city} onChange={(event) => setLocationForm({ ...locationForm, city: event.target.value })} /></label>
+            <label style={labelStyle}>Telepon<input maxLength={40} style={fieldStyle} value={locationForm.phone} onChange={(event) => setLocationForm({ ...locationForm, phone: event.target.value })} /></label>
+          </div>
+          {locationForm.locationGroup === 'PARTNER' && <label style={labelStyle}>Nama partner<input maxLength={150} style={fieldStyle} value={locationForm.partnerName} onChange={(event) => setLocationForm({ ...locationForm, partnerName: event.target.value })} /></label>}
+          <label style={labelStyle}>Alamat<textarea maxLength={500} rows={3} style={{ ...fieldStyle, resize: 'vertical' }} value={locationForm.address} onChange={(event) => setLocationForm({ ...locationForm, address: event.target.value })} /></label>
+          <button className="btn btn-primary" style={{ justifySelf: 'start' }} disabled={busy !== null}>{busy === 'location-create' ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />} Tambahkan lokasi</button>
+        </form>
+
+        {groupedLocations.map((group) => <section className="card" style={{ padding: 21 }} key={group.value}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800 }}>{group.label}</h2>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{group.locations.length} lokasi aktif</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
+            {group.locations.map((location) => <article key={location.id} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 14, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', minWidth: 0 }}>
+                <MapPin size={18} color="#f59e0b" style={{ flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}><strong>{location.displayName}</strong><div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 3 }}>{location.code} · {location.city}</div>{location.partnerName && <div style={{ fontSize: 13, marginTop: 5 }}>Partner: {location.partnerName}</div>}{location.address && <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 5 }}>{location.address}</div>}{location.phone && <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 3 }}>{location.phone}</div>}</div>
+              </div>
+              <button type="button" className="btn btn-secondary" title="Hapus dari pilihan klaim" aria-label={`Hapus ${location.displayName}`} disabled={busy !== null} onClick={() => void archiveLocation(location)}>{busy === `location-delete-${location.id}` ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button>
+            </article>)}
+          </div>
+        </section>)}
+      </div>}
 
       {view === 'operators' && <section className="card" style={{ padding: 21 }}>
         <h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><UserPlus size={20} /> Buat Akun Pengelola</h2>

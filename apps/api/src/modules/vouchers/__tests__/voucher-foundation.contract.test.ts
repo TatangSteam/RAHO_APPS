@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { claimVoucherSchema, issueVoucherSchema } from '../voucher.schema';
+import { claimVoucherSchema, createVoucherLocationSchema, issueVoucherSchema } from '../voucher.schema';
 import { decryptVoucherCode, encryptVoucherCode, hashVoucherIdentity } from '../voucher.crypto';
 import { createClaimReceiptPdf, normalizeVoucherCode } from '../voucher.service';
 
@@ -63,6 +63,34 @@ describe('Voucher Partnership foundation', () => {
     );
     expect(priceAlignmentMigration).toContain('"totalPrice" = NULL');
     expect(priceAlignmentMigration).toContain("WHERE \"code\" = 'GIFT-10B'");
+  });
+
+  it('adds the RAHO Reguler location group and all 14 supplied locations', () => {
+    const migration = fs.readFileSync(
+      path.join(apiRoot, 'prisma/migrations/20260904110000_manage_voucher_claim_locations/migration.sql'),
+      'utf8',
+    );
+    expect(migration).toContain('"locationGroup"');
+    expect(migration.match(/\('VCL-REG-\d{3}'/g)).toHaveLength(14);
+    expect(migration).toContain("'RAHO Citraland'");
+    expect(migration).toContain("'RAHO Lippo Mall Nusantara'");
+    expect(migration).toContain("HAVING COUNT(DISTINCT assignment.\"locationId\") = 20");
+    expect(migration).toContain('scope."validUntil"');
+  });
+
+  it('validates a managed voucher claim location', () => {
+    expect(createVoucherLocationSchema.safeParse({
+      displayName: 'RAHO Surabaya',
+      locationGroup: 'RAHO_REGULER',
+      city: 'Surabaya',
+      address: 'Jl. Contoh No. 1',
+      phone: '08123456789',
+    }).success).toBe(true);
+    expect(createVoucherLocationSchema.safeParse({
+      displayName: 'X',
+      locationGroup: 'LAINNYA',
+      city: '',
+    }).success).toBe(false);
   });
 
   it('keeps raw voucher codes and NIK values out of voucher persistence', () => {
@@ -141,6 +169,10 @@ describe('Voucher Partnership foundation', () => {
     expect(page).toContain('Klaim ini tidak membuat member, paket, atau sesi terapi.');
     expect(page).toContain('Unduh bukti tanda terima PDF');
     expect(page).toContain('Nama, 4 digit NIK/kode, campaign, atau lokasi');
+    expect(page).toContain('RAHO Reguler');
+    expect(page).toContain('Kelola lokasi');
+    expect(page).toContain('Tambah Lokasi Klaim');
+    expect(page).toContain('Hapus dari pilihan klaim');
   });
 
   it('supports scoped claim search, PDF receipts, and Admin Manager issuance', () => {
@@ -150,11 +182,16 @@ describe('Voucher Partnership foundation', () => {
     expect(routes).toContain("router.get('/claims'");
     expect(routes).toContain("router.get('/claims/:voucherId/receipt'");
     expect(routes).toContain('VOUCHER_ISSUER_ROLES');
+    expect(routes).toContain("router.post('/locations', authorize([Role.SUPER_ADMIN])");
+    expect(routes).toContain("router.delete('/locations/:locationId', authorize([Role.SUPER_ADMIN])");
     expect(service).toContain('listVoucherClaims');
     expect(service).toContain('getVoucherClaimReceipt');
     expect(service).toContain("new PDFDocument({ size: 'A4'");
     expect(service).toContain('Admin Manager wajib memilih lokasi klaim yang dikelola');
     expect(service).toContain("action: 'EXPORT'");
+    expect(service).toContain('createVoucherClaimLocation');
+    expect(service).toContain('archiveVoucherClaimLocation');
+    expect(service).toContain("deletionMode: 'SOFT_DELETE'");
   });
 
   it('allows first-use activation while rate-limiting only suspicious identity failures', () => {

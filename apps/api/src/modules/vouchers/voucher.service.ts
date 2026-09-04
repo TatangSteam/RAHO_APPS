@@ -14,6 +14,7 @@ import { AppError, errors } from '@middleware/errorHandler';
 import { logAudit } from '@utils/auditLog';
 import type {
   ClaimVoucherInput,
+  CreateVoucherLocationInput,
   CreateVoucherOperatorInput,
   IssueVoucherInput,
   UpdateVoucherOperatorInput,
@@ -210,6 +211,117 @@ export async function getVoucherDashboard(userId: string, role: Role) {
       locations: operator.voucherOperatorLocations.map((assignment) => assignment.location),
     })),
   };
+}
+
+export async function createVoucherClaimLocation(
+  actorId: string,
+  actorRole: Role,
+  input: CreateVoucherLocationInput,
+) {
+  assertSuperAdmin(actorRole);
+  const duplicate = await prisma.voucherClaimLocation.findFirst({
+    where: {
+      displayName: { equals: input.displayName, mode: 'insensitive' },
+      city: { equals: input.city, mode: 'insensitive' },
+    },
+    select: { id: true, isActive: true },
+  });
+  if (duplicate?.isActive) {
+    throw errors.conflict(
+      'VOUCHER_LOCATION_DUPLICATE',
+      'Lokasi dengan nama dan kota yang sama sudah tersedia.',
+    );
+  }
+
+  if (duplicate) {
+    const location = await prisma.voucherClaimLocation.update({
+      where: { id: duplicate.id },
+      data: {
+        isActive: true,
+        displayName: input.displayName,
+        locationGroup: input.locationGroup,
+        city: input.city,
+        partnerName: input.partnerName || null,
+        address: input.address || null,
+        phone: input.phone || null,
+        mapsUrl: input.mapsUrl || null,
+        dataCompletenessStatus: input.address && input.phone ? 'COMPLETE' : 'INCOMPLETE',
+        updatedBy: actorId,
+      },
+    });
+    await logAudit({
+      userId: actorId,
+      action: AuditAction.UPDATE,
+      module: 'VOUCHER',
+      resource: 'VoucherClaimLocation',
+      resourceId: location.id,
+      meta: { reactivated: true, code: location.code, displayName: location.displayName },
+    });
+    return location;
+  }
+
+  const code = `VCL-${randomBytes(5).toString('hex').toUpperCase()}`;
+  const location = await prisma.voucherClaimLocation.create({
+    data: {
+      code,
+      displayName: input.displayName,
+      locationGroup: input.locationGroup,
+      city: input.city,
+      partnerName: input.partnerName || null,
+      address: input.address || null,
+      phone: input.phone || null,
+      mapsUrl: input.mapsUrl || null,
+      sourceReference: 'MANUAL',
+      dataCompletenessStatus: input.address && input.phone ? 'COMPLETE' : 'INCOMPLETE',
+      createdBy: actorId,
+      updatedBy: actorId,
+    },
+  });
+  await logAudit({
+    userId: actorId,
+    action: AuditAction.CREATE,
+    module: 'VOUCHER',
+    resource: 'VoucherClaimLocation',
+    resourceId: location.id,
+    meta: { code: location.code, displayName: location.displayName, city: location.city, locationGroup: location.locationGroup },
+  });
+  return location;
+}
+
+export async function archiveVoucherClaimLocation(actorId: string, actorRole: Role, locationId: string) {
+  assertSuperAdmin(actorRole);
+  const location = await prisma.voucherClaimLocation.findFirst({
+    where: { id: locationId, isActive: true },
+    select: { id: true, code: true, displayName: true, city: true, locationGroup: true },
+  });
+  if (!location) throw errors.notFound('Lokasi klaim aktif tidak ditemukan.');
+
+  const activeVoucherCount = await prisma.campaignVoucher.count({
+    where: {
+      allowedLocationId: locationId,
+      status: { in: [CampaignVoucherStatus.AVAILABLE, CampaignVoucherStatus.ISSUED] },
+    },
+  });
+  if (activeVoucherCount > 0) {
+    throw errors.conflict(
+      'VOUCHER_LOCATION_IN_USE',
+      `Lokasi masih digunakan oleh ${activeVoucherCount} voucher aktif dan belum dapat dihapus.`,
+    );
+  }
+
+  await prisma.voucherClaimLocation.update({
+    where: { id: locationId },
+    data: { isActive: false, updatedBy: actorId },
+  });
+  await logAudit({
+    userId: actorId,
+    action: AuditAction.DELETE,
+    module: 'VOUCHER',
+    resource: 'VoucherClaimLocation',
+    resourceId: location.id,
+    meta: { ...location, deletionMode: 'SOFT_DELETE' },
+  });
+  return { id: location.id, isActive: false };
 }
 
 export async function listVoucherClaims(userId: string, role: Role, input: ListVoucherClaimsInput) {

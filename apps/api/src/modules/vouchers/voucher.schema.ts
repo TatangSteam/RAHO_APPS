@@ -58,6 +58,16 @@ export const updateVoucherOperatorSchema = z.object({
   validUntil: dateSchema.nullable().optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Minimal satu perubahan wajib diisi.');
 
+export const createVoucherLocationSchema = z.object({
+  displayName: z.string().trim().min(2).max(150),
+  locationGroup: z.enum(['RAHO_REGULER', 'RAHO_PREMIER', 'PARTNER']),
+  city: z.string().trim().min(2).max(100),
+  partnerName: z.string().trim().max(150).nullable().optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  mapsUrl: z.string().trim().url('Tautan Google Maps tidak valid.').max(1000).nullable().optional(),
+});
+
 export const exportVoucherCodesSchema = z.object({
   campaignId: z.string().min(1).optional(),
   status: z.nativeEnum(CampaignVoucherStatus).optional(),
@@ -79,6 +89,7 @@ export type IssueVoucherInput = z.infer<typeof issueVoucherSchema>;
 export type ClaimVoucherInput = z.infer<typeof claimVoucherSchema>;
 export type CreateVoucherOperatorInput = z.infer<typeof createVoucherOperatorSchema>;
 export type UpdateVoucherOperatorInput = z.infer<typeof updateVoucherOperatorSchema>;
+export type CreateVoucherLocationInput = z.infer<typeof createVoucherLocationSchema>;
 export type ExportVoucherCodesInput = z.infer<typeof exportVoucherCodesSchema>;
 export type GenerateVoucherCodesInput = z.infer<typeof generateVoucherCodesSchema>;
 export type ListVoucherClaimsInput = z.infer<typeof listVoucherClaimsSchema>;

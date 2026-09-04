@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { Role } from '@prisma/client';
 import { sendCreated, sendSuccess } from '@utils/response';
-import { claimVoucherSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, listVoucherClaimsSchema, updateVoucherOperatorSchema } from './voucher.schema';
-import { claimVoucher, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherClaimReceipt, getVoucherDashboard, issueVoucher, listVoucherClaims, updateVoucherOperator } from './voucher.service';
+import { claimVoucherSchema, createVoucherLocationSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, listVoucherClaimsSchema, updateVoucherOperatorSchema } from './voucher.schema';
+import { archiveVoucherClaimLocation, claimVoucher, createVoucherClaimLocation, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherClaimReceipt, getVoucherDashboard, issueVoucher, listVoucherClaims, updateVoucherOperator } from './voucher.service';
 
 export async function dashboard(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await getVoucherDashboard(req.user.userId, req.user.role as Role)); } catch (error) { next(error); }
@@ -30,6 +30,26 @@ export async function downloadClaimReceipt(req: Request, res: Response, next: Ne
 
 export async function claim(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await claimVoucher(req.user.userId, req.user.role as Role, claimVoucherSchema.parse(req.body))); } catch (error) { next(error); }
+}
+
+export async function createLocation(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendCreated(res, await createVoucherClaimLocation(
+      req.user.userId,
+      req.user.role as Role,
+      createVoucherLocationSchema.parse(req.body),
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function archiveLocation(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await archiveVoucherClaimLocation(
+      req.user.userId,
+      req.user.role as Role,
+      req.params.locationId,
+    ));
+  } catch (error) { next(error); }
 }
 
 export async function createOperator(req: Request, res: Response, next: NextFunction) {
