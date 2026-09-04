@@ -29,8 +29,9 @@ ENV NPM_CONFIG_AUDIT=false \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
 
-# Prisma engines need OpenSSL available at runtime for migrate/seed commands.
-RUN apk add --no-cache openssl
+# Prisma engines need OpenSSL, while Sharp/librsvg needs an installed font to
+# render the WhatsApp report text instead of empty square glyphs.
+RUN apk add --no-cache openssl font-dejavu
 
 # Install only production deps
 COPY --from=builder /usr/src/app/package*.json ./

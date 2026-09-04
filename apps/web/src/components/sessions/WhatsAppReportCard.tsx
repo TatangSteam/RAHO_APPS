@@ -146,7 +146,7 @@ export default function WhatsAppReportCard({
           {deliveries.map((delivery) => (
             <div key={delivery.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--surface-border)', fontSize: 12 }}>
               <span><ImageIcon size={14} style={{ display: 'inline', marginRight: 6 }} />{delivery.recipientMasked}</span>
-              <span>{delivery.status === 'SENT' && <CheckCircle2 size={14} style={{ display: 'inline', marginRight: 5 }} />}{delivery.status} · percobaan {delivery.attempts}/{delivery.maxAttempts}</span>
+              <span>{delivery.status === 'SENT' && <CheckCircle2 size={14} style={{ display: 'inline', marginRight: 5 }} />}{delivery.status}{' \u00B7 '}percobaan {delivery.attempts}/{delivery.maxAttempts}</span>
             </div>
           ))}
         </div>

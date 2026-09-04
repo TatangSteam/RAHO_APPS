@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import sharp from 'sharp';
 import { renderSessionReportImage } from '../whatsapp-report.renderer';
 import type { SessionReportSnapshot } from '../whatsapp-report.types';
@@ -21,6 +23,20 @@ describe('WhatsApp session report image renderer', () => {
     expect(metadata.format).toBe('png');
     expect(metadata.width).toBe(1080);
     expect(metadata.height).toBe(1080);
+
+    const headerStats = await sharp(image)
+      .extract({ left: 60, top: 35, width: 650, height: 150 })
+      .stats();
+    const noPhotoStats = await sharp(image)
+      .extract({ left: 500, top: 585, width: 490, height: 80 })
+      .stats();
+    expect(headerStats.channels.some((channel) => channel.stdev > 5)).toBe(true);
+    expect(noPhotoStats.channels.some((channel) => channel.stdev > 2)).toBe(true);
+  });
+
+  it('installs the report font in the production API image', () => {
+    const dockerfile = readFileSync(path.resolve(__dirname, '../../../../Dockerfile'), 'utf8');
+    expect(dockerfile).toContain('font-dejavu');
   });
 
   it.each(SESSION_REPORT_BACKGROUND_KEYS)('renders selectable %s background', async (background) => {
