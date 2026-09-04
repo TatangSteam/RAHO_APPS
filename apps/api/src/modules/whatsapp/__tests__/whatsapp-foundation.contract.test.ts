@@ -13,7 +13,7 @@ describe('WhatsApp session report foundation contract', () => {
     expect(routes).toContain('controller.previewWhatsAppReport.bind(controller)');
     expect(routes).toContain("'/:sessionId/whatsapp-report'");
     expect(routes).toContain("'/:sessionId/whatsapp-deliveries'");
-    expect(routes).toContain("'/:sessionId/whatsapp-consent'");
+    expect(routes).not.toContain("'/:sessionId/whatsapp-consent'");
   });
 
   it('adds immutable encrypted delivery fields without touching old clinical rows', () => {
@@ -32,7 +32,7 @@ describe('WhatsApp session report foundation contract', () => {
     const service = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp-report.service.ts'), 'utf8');
     const safeSelect = service.slice(
       service.indexOf('const SAFE_DELIVERY_SELECT'),
-      service.indexOf('async function loadTrustedSessionPhoto'),
+      service.indexOf('export async function previewSessionReport'),
     );
     expect(safeSelect).toContain('recipientMasked: true');
     expect(safeSelect).not.toContain('recipientEncrypted');
@@ -40,13 +40,14 @@ describe('WhatsApp session report foundation contract', () => {
     expect(service).toContain("error.code === 'P2002'");
   });
 
-  it('pins Baileys and implements claim, consent recheck, retry, and provider message id', () => {
+  it('pins Baileys and implements claim, retry, provider message id, and private photo loading', () => {
     const packageJson = readFileSync(resolve(apiRoot, 'package.json'), 'utf8');
     const worker = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/whatsapp.worker.ts'), 'utf8');
     const provider = readFileSync(resolve(apiRoot, 'src/modules/whatsapp/baileys-whatsapp.provider.ts'), 'utf8');
     expect(packageJson).toContain('"@whiskeysockets/baileys": "6.7.24"');
     expect(worker).toContain('whatsAppDelivery.updateMany');
-    expect(worker).toContain('communicationConsent?.whatsappTreatmentReport');
+    expect(worker).not.toContain('communicationConsent');
+    expect(worker).toContain('loadSessionPhoto(payload.photoUrl)');
     expect(worker).toContain('WhatsAppDeliveryStatus.RETRY');
     expect(worker).toContain('providerMessageId: result.messageId');
     expect(provider).toContain('this.socket.sendMessage');
@@ -98,6 +99,7 @@ describe('WhatsApp session report foundation contract', () => {
     expect(snapshot).toContain('operationalReportReady');
     expect(report).toContain('evaluationRequired: false');
     expect(report).not.toContain('WHATSAPP_SESSION_NOT_COMPLETED');
+    expect(report).not.toContain('WHATSAPP_CONSENT_REQUIRED');
     expect(report).toContain('WHATSAPP_REPORT_NOT_READY');
   });
 

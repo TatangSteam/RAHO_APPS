@@ -36,7 +36,6 @@ import {
   listSessionReportDeliveries,
   previewSessionReport,
   queueManualSessionReport,
-  updateSessionReportConsent,
 } from '../whatsapp/whatsapp-report.service';
 import type { SessionReportBackgroundKey } from '../whatsapp/whatsapp-backgrounds';
 
@@ -132,20 +131,6 @@ export class SessionsService {
 
   async listWhatsAppReportDeliveries(sessionId: string, userId: string) {
     return listSessionReportDeliveries(sessionId, userId);
-  }
-
-  async updateWhatsAppReportConsent(input: {
-    sessionId: string;
-    userId: string;
-    enabled: boolean;
-    source?: string;
-  }) {
-    return updateSessionReportConsent({
-      sessionId: input.sessionId,
-      actorUserId: input.userId,
-      enabled: input.enabled,
-      source: input.source,
-    });
   }
 
   async getAllSessions(params: { 

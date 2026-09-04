@@ -325,14 +325,6 @@ export const sessionApi = {
     return response.data.data;
   },
 
-  updateWhatsAppConsent: async (sessionId: string, enabled: boolean) => {
-    const response = await api.put(`/treatment-sessions/${sessionId}/whatsapp-consent`, {
-      enabled,
-      source: 'SESSION_WORKFLOW_UI',
-    });
-    return response.data.data;
-  },
-
   queueWhatsAppReport: async (
     sessionId: string,
     input: { background?: WhatsAppReportBackground; idempotencyKey: string },
@@ -408,7 +400,6 @@ export type WhatsAppReportBackground = 'RAHO_RED' | 'HEALTH_GREEN' | 'PREMIUM_GO
 
 export interface WhatsAppReportPreview {
   recipientMasked: string | null;
-  consentActive: boolean;
   phoneValid: boolean;
   readyToQueue: boolean;
   provider: 'DISABLED' | 'BAILEYS';

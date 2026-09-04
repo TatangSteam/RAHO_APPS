@@ -1415,10 +1415,7 @@ export default function SessionDetailPage() {
         && steps.step4_infusion
         && steps.step7_vitalAfter
         && (
-        <WhatsAppReportCard
-          sessionId={sessionId}
-          canManageConsent={['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user?.role || '')}
-        />
+        <WhatsAppReportCard sessionId={sessionId} />
       )}
 
       {showCompletionReview && typeof document !== 'undefined' && createPortal(

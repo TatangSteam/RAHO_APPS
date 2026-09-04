@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { env } from '@config/env';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess } from '@modules/iam/authorization.service';
@@ -16,6 +15,7 @@ import { prisma } from '@lib/prisma';
 import { encryptWhatsAppValue } from './whatsapp.crypto';
 import { GLOBAL_WHATSAPP_CONNECTION_ID } from './whatsapp-auth-state.repository';
 import { downloadFile } from '@config/minio';
+import { loadSessionPhoto } from './whatsapp-photo.loader';
 
 type ConfiguredBackground = {
   key: SessionReportBackgroundKey;
@@ -60,20 +60,6 @@ const SAFE_DELIVERY_SELECT = {
   lastErrorSanitized: true,
 } satisfies Prisma.WhatsAppDeliverySelect;
 
-async function loadTrustedSessionPhoto(url: string | null): Promise<Buffer | undefined> {
-  if (!url) return undefined;
-  const allowedOrigin = new URL(env.MINIO_PUBLIC_URL).origin;
-  const target = new URL(url);
-  if (target.origin !== allowedOrigin) return undefined;
-
-  const response = await axios.get<ArrayBuffer>(target.toString(), {
-    responseType: 'arraybuffer',
-    timeout: 8_000,
-    maxContentLength: 12 * 1024 * 1024,
-  });
-  return Buffer.from(response.data);
-}
-
 export async function previewSessionReport(
   sessionId: string,
   actorUserId: string,
@@ -87,7 +73,7 @@ export async function previewSessionReport(
     : null;
   let photo: Buffer | undefined;
   try {
-    photo = await loadTrustedSessionPhoto(report.photoUrl);
+    photo = await loadSessionPhoto(report.photoUrl);
   } catch {
     // Preview remains available with the explicit no-photo layout.
   }
@@ -98,10 +84,8 @@ export async function previewSessionReport(
 
   return {
     recipientMasked: normalized ? maskWhatsAppNumber(normalized) : null,
-    consentActive: report.consentActive,
     phoneValid: normalized !== null,
     readyToQueue: env.WHATSAPP_ENABLED
-      && report.consentActive
       && normalized !== null
       && report.operationalReportReady,
     provider: env.WHATSAPP_PROVIDER,
@@ -122,9 +106,6 @@ export async function assertSessionReportCanQueue(sessionId: string, actorUserId
   }
   const report = await buildSessionReportSnapshot(sessionId);
   await assertBranchAccess(actorUserId, report.branchId);
-  if (!report.consentActive) {
-    throw errors.badRequest('WHATSAPP_CONSENT_REQUIRED', 'Consent laporan WhatsApp belum aktif.');
-  }
   const recipient = report.recipientPhone
     ? normalizeIndonesianWhatsAppNumber(report.recipientPhone)
     : null;
@@ -208,42 +189,5 @@ export async function listSessionReportDeliveries(sessionId: string, actorUserId
     where: { treatmentSessionId: sessionId },
     select: SAFE_DELIVERY_SELECT,
     orderBy: { createdAt: 'desc' },
-  });
-}
-
-export async function updateSessionReportConsent(input: {
-  sessionId: string;
-  actorUserId: string;
-  enabled: boolean;
-  source?: string;
-}) {
-  const report = await buildSessionReportSnapshot(input.sessionId);
-  await assertBranchAccess(input.actorUserId, report.branchId);
-  const now = new Date();
-  return prisma.memberCommunicationConsent.upsert({
-    where: { memberId: report.memberId },
-    create: {
-      memberId: report.memberId,
-      whatsappTreatmentReport: input.enabled,
-      consentedAt: input.enabled ? now : null,
-      consentedBy: input.enabled ? input.actorUserId : null,
-      revokedAt: input.enabled ? null : now,
-      revokedBy: input.enabled ? null : input.actorUserId,
-      consentSource: input.source || 'SESSION_WORKFLOW',
-    },
-    update: {
-      whatsappTreatmentReport: input.enabled,
-      consentedAt: input.enabled ? now : undefined,
-      consentedBy: input.enabled ? input.actorUserId : undefined,
-      revokedAt: input.enabled ? null : now,
-      revokedBy: input.enabled ? null : input.actorUserId,
-      consentSource: input.source || 'SESSION_WORKFLOW',
-    },
-    select: {
-      whatsappTreatmentReport: true,
-      consentedAt: true,
-      revokedAt: true,
-      consentSource: true,
-    },
   });
 }

@@ -18,4 +18,12 @@ describe('WhatsApp report readiness contract', () => {
     expect(page).toContain('steps.step7_vitalAfter');
     expect(page).not.toContain('sessionInfo.isCompleted && !isCompletionCancelled && (\n        <WhatsAppReportCard');
   });
+
+  it('does not require a manual WhatsApp consent action', () => {
+    const component = readFileSync(resolve(__dirname, 'WhatsAppReportCard.tsx'), 'utf8');
+    expect(component).toContain('Nomor WhatsApp valid');
+    expect(component).not.toContain('Catat consent');
+    expect(component).not.toContain('consentActive');
+    expect(component).not.toContain('updateWhatsAppConsent');
+  });
 });

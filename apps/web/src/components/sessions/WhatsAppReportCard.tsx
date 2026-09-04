@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import NextImage from 'next/image';
-import { CheckCircle2, Eye, Image as ImageIcon, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Eye, Image as ImageIcon, MessageCircle, RefreshCw } from 'lucide-react';
 import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
 import { sessionApi, type WhatsAppReportDelivery, type WhatsAppReportPreview } from '@/lib/sessionApi';
@@ -11,13 +11,7 @@ function idempotencyKey(sessionId: string) {
   return `SESSION_REPORT:MANUAL:${sessionId}:${crypto.randomUUID()}`;
 }
 
-export default function WhatsAppReportCard({
-  sessionId,
-  canManageConsent,
-}: {
-  sessionId: string;
-  canManageConsent: boolean;
-}) {
+export default function WhatsAppReportCard({ sessionId }: { sessionId: string }) {
   const [preview, setPreview] = useState<WhatsAppReportPreview | null>(null);
   const [deliveries, setDeliveries] = useState<WhatsAppReportDelivery[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,20 +35,6 @@ export default function WhatsAppReportCard({
     } catch (error) {
       assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Preview laporan WhatsApp gagal dimuat');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const changeConsent = async (enabled: boolean) => {
-    try {
-      setLoading(true);
-      await sessionApi.updateWhatsAppConsent(sessionId, enabled);
-      await loadPreview();
-      showToast.success(enabled ? 'Consent WhatsApp berhasil dicatat' : 'Consent WhatsApp telah dicabut');
-    } catch (error) {
-      assertCaughtError(error);
-      showToast.error(error.response?.data?.error?.message || 'Consent WhatsApp gagal diperbarui');
     } finally {
       setLoading(false);
     }
@@ -109,9 +89,11 @@ export default function WhatsAppReportCard({
           <div>
             <div style={{ padding: 12, borderRadius: 10, background: 'var(--surface-input)', fontSize: 13 }}>
               <strong>Tujuan: {preview.recipientMasked || 'Nomor belum valid'}</strong>
-              <p style={{ margin: '6px 0 0', color: preview.consentActive ? '#16a34a' : '#f59e0b' }}>
-                <ShieldCheck size={15} style={{ display: 'inline', marginRight: 5 }} />
-                {preview.consentActive ? 'Consent WhatsApp aktif' : 'Consent WhatsApp belum aktif'}
+              <p style={{ margin: '6px 0 0', color: preview.phoneValid ? '#16a34a' : '#f59e0b' }}>
+                {preview.phoneValid
+                  ? <CheckCircle2 size={15} style={{ display: 'inline', marginRight: 5 }} />
+                  : <AlertCircle size={15} style={{ display: 'inline', marginRight: 5 }} />}
+                {preview.phoneValid ? 'Nomor WhatsApp valid' : 'Nomor WhatsApp belum valid'}
               </p>
               <p style={{ margin: '6px 0 0', color: 'var(--text-muted)' }}>
                 Evaluasi dokter tidak wajib untuk pengiriman.
@@ -122,18 +104,13 @@ export default function WhatsAppReportCard({
               {preview.caption}
             </pre>
             <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 14 }}>
-              {canManageConsent && !preview.consentActive && (
-                <button type="button" className="btn btn-secondary" onClick={() => void changeConsent(true)} disabled={loading}>
-                  <ShieldCheck size={16} /> Catat consent
-                </button>
-              )}
               <button type="button" className="btn btn-primary" onClick={() => void queueReport()} disabled={sending || !preview.readyToQueue}>
                 <MessageCircle size={16} /> {sending ? 'Mengantrekan...' : 'Masukkan antrean'}
               </button>
             </div>
             {!preview.readyToQueue && (
               <small style={{ display: 'block', marginTop: 9, color: 'var(--text-muted)' }}>
-                Pengiriman tersedia setelah nomor, consent, dan konfigurasi WhatsApp siap.
+                Pengiriman tersedia setelah nomor, data sesi, dan konfigurasi WhatsApp siap.
               </small>
             )}
           </div>

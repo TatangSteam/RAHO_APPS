@@ -1,6 +1,6 @@
 # Development Flow Integrasi WhatsApp Baileys untuk Penyelesaian Sesi Terapi
 
-Status: dalam pengembangan; koneksi, pairing, preview, consent, antrean, dan worker tersedia
+Status: dalam pengembangan; koneksi, pairing, preview, antrean, dan worker tersedia
 Tanggal: 10 Agustus 2026
 Target: laporan sesi terapi dapat dikirim secara opsional melalui WhatsApp setelah sesi berhasil diselesaikan
 Integrasi awal: Baileys (WhatsApp Web)
@@ -11,7 +11,7 @@ Mulai dikembangkan pada 26 Agustus 2026.
 
 Sudah tersedia pada fondasi awal:
 
-- model consent komunikasi dan outbox delivery melalui migration;
+- model historis consent komunikasi dan outbox delivery melalui migration;
 - feature flag WhatsApp dengan kondisi awal nonaktif;
 - normalisasi serta masking nomor Indonesia;
 - snapshot laporan dari foto, infus, tanda vital, dan evaluasi dokter;
@@ -21,13 +21,13 @@ Sudah tersedia pada fondasi awal:
   `HEALTH_GREEN`, `PREMIUM_GOLD`, atau `CLEAN_LIGHT`;
 - endpoint preview read-only pada
   `GET /treatment-sessions/:sessionId/whatsapp-report/preview`.
-- UI laporan pada sesi yang sudah selesai untuk memilih background, melihat
-  gambar/caption, mencatat consent, dan melihat status antrean;
-- endpoint consent, manual queue idempotent, dan histori delivery sudah
-  tersedia tanpa mengekspos nomor atau payload medis terenkripsi.
+- UI laporan pada sesi yang sudah selesai untuk melihat gambar/caption dan
+  status antrean;
+- manual queue idempotent dan histori delivery sudah tersedia tanpa
+  mengekspos nomor atau payload medis terenkripsi.
 - dependency Baileys legacy stabil dipin pada `6.7.24`, provider gambar sudah
   diisolasi melalui interface, dan core worker sudah memiliki claim lease,
-  pemeriksaan ulang consent, retry/backoff, dead-letter, serta penyimpanan
+  retry/backoff, dead-letter, serta penyimpanan
   provider message ID.
 
 Belum diaktifkan untuk pengiriman production:
@@ -49,7 +49,7 @@ Menyediakan pengiriman laporan sesi terapi melalui WhatsApp dengan ketentuan:
 - laporan dapat dikirim manual setelah sesi selesai;
 - pengiriman ulang tidak membuat pesan ganda akibat klik ganda atau retry worker;
 - isi pesan berasal dari data sesi yang sudah tersimpan;
-- persetujuan pasien, akses pengguna, dan audit data medis tetap terjaga.
+- persetujuan penggunaan foto, akses pengguna, dan audit data medis tetap terjaga.
 
 ## 2. Kondisi proyek saat ini
 
@@ -70,7 +70,8 @@ Fondasi yang sudah tersedia:
 
 Gap yang perlu ditutup:
 
-- belum ada persetujuan khusus pengiriman laporan medis melalui WhatsApp;
+- pengiriman laporan WhatsApp tidak memerlukan consent komunikasi terpisah
+  berdasarkan keputusan bisnis; persetujuan penggunaan foto tetap dihormati;
 - belum ada normalisasi dan validasi nomor WhatsApp;
 - belum ada template gambar/caption laporan sesi;
 - belum ada penyimpanan kredensial Bail
@@ -147,7 +148,7 @@ dialog konfirmasi:
 |                                                       |
 | [x] Kirim laporan sesi melalui WhatsApp               |
 |     Tujuan: 62812*****890                              |
-|     Persetujuan pasien: Tersedia                       |
+|     Nomor WhatsApp: Valid                              |
 |                                                       |
 | [Pratinjau laporan]  [Batal]  [Selesaikan sesi]        |
 +-------------------------------------------------------+
@@ -157,15 +158,14 @@ Perilaku opsi:
 
 | Kondisi | Perilaku UI |
 |---|---|
-| Nomor valid dan consent tersedia | Checkbox dapat dipilih |
-| Consent tersedia dan preferensi kirim otomatis aktif | Checkbox terpilih secara default |
+| Nomor valid dan data sesi lengkap | Checkbox dapat dipilih |
+| Preferensi kirim otomatis aktif | Checkbox terpilih secara default |
 | Nomor kosong/tidak valid | Checkbox disabled dan tampilkan alasan |
-| Consent belum tersedia | Checkbox disabled; arahkan ke pencatatan consent |
 | Baileys belum terhubung | Checkbox tetap dapat dipilih bila antrean diizinkan, dengan informasi akan dikirim setelah koneksi pulih |
 | Sesi belum lengkap | Tombol completion tetap mengikuti validasi sesi yang sudah ada |
 
-Checkbox tidak boleh otomatis aktif hanya karena pasien memiliki nomor telepon.
-Default aktif hanya jika consent WhatsApp sudah tercatat.
+Pengiriman tidak lagi bergantung pada consent WhatsApp manual. Persetujuan foto
+tetap menentukan apakah foto sesi boleh dimasukkan ke gambar laporan.
 
 ### 4.2 Respons setelah completion
 
@@ -216,10 +216,10 @@ lagi.
 
 ## 5. Model data
 
-### 5.1 Consent WhatsApp member
+### 5.1 Data consent komunikasi historis
 
-Tambahkan field berikut pada `Member` atau model consent khusus bila riwayat
-legal harus dipertahankan:
+Model berikut tetap dipertahankan untuk kompatibilitas dan histori, tetapi
+tidak lagi menjadi gerbang pengiriman laporan WhatsApp:
 
 ```prisma
 model MemberCommunicationConsent {
@@ -238,8 +238,9 @@ model MemberCommunicationConsent {
 }
 ```
 
-Model terpisah lebih direkomendasikan daripada menambah boolean sederhana,
-karena dapat menyimpan waktu, pemberi consent, sumber, dan pencabutan consent.
+Tidak ada endpoint pencatatan consent pada flow laporan sesi baru. Field
+`Member.isConsentToPhoto` tetap digunakan secara terpisah untuk menentukan
+apakah foto sesi boleh dimasukkan.
 
 ### 5.2 Koneksi WhatsApp
 
@@ -372,7 +373,6 @@ Validasi ketika `sendWhatsAppReport=true`:
 - sesi dapat diakses aktor;
 - aktor memiliki permission penyelesaian sesi dan permintaan laporan;
 - member memiliki nomor yang dapat dinormalisasi;
-- consent WhatsApp aktif;
 - template aktif;
 - koneksi untuk cabang tersedia atau sistem mengizinkan queue while offline.
 

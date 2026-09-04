@@ -326,11 +326,6 @@ export const whatsappReportRequestSchema = z.object({
   background: z.enum(['RAHO_RED', 'HEALTH_GREEN', 'PREMIUM_GOLD', 'CLEAN_LIGHT']).optional(),
 });
 
-export const whatsappReportConsentSchema = z.object({
-  enabled: z.boolean(),
-  source: z.string().trim().min(1).max(100).optional(),
-});
-
 const workflowMetricsSchema = z.object({
   startedAt: z.string().datetime(),
   activeSeconds: z.number().int().nonnegative().max(86400),

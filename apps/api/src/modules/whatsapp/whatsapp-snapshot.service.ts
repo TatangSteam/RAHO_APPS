@@ -21,7 +21,6 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
   recipientPhone: string | null;
   memberId: string;
   branchId: string;
-  consentActive: boolean;
   photoUrl: string | null;
   operationalReportReady: boolean;
   doctorEvaluationIncluded: boolean;
@@ -41,7 +40,6 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
             select: {
               id: true,
               isConsentToPhoto: true,
-              communicationConsent: { select: { whatsappTreatmentReport: true, revokedAt: true } },
               user: { select: { profile: { select: { fullName: true, phone: true } } } },
             },
           },
@@ -75,8 +73,6 @@ export async function buildSessionReportSnapshot(sessionId: string): Promise<{
     memberId: member.id,
     branchId: session.branchId,
     recipientPhone: member.user.profile?.phone || null,
-    consentActive: member.communicationConsent?.whatsappTreatmentReport === true
-      && member.communicationConsent.revokedAt === null,
     photoUrl: photoAllowed ? session.photo?.fileUrl || null : null,
     operationalReportReady: Boolean(session.infusion) && hasVitalBefore && hasVitalAfter,
     doctorEvaluationIncluded,

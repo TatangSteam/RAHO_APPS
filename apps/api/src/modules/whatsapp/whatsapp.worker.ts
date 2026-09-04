@@ -6,9 +6,8 @@ import { buildSessionReportCaption } from './whatsapp-template.service';
 import type { SessionReportSnapshot } from './whatsapp-report.types';
 import type { SessionReportBackgroundKey } from './whatsapp-backgrounds';
 import type { WhatsAppProvider } from './whatsapp-provider';
-import axios from 'axios';
-import { env } from '@config/env';
 import { downloadFile } from '@config/minio';
+import { loadSessionPhoto } from './whatsapp-photo.loader';
 
 interface EncryptedDeliveryPayload {
   snapshot: SessionReportSnapshot;
@@ -25,18 +24,6 @@ function retryDelay(attempts: number): number {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : 'Unknown WhatsApp delivery error';
-}
-
-async function loadPhoto(url?: string | null): Promise<Buffer | undefined> {
-  if (!url) return undefined;
-  const target = new URL(url);
-  if (target.origin !== new URL(env.MINIO_PUBLIC_URL).origin) return undefined;
-  const response = await axios.get<ArrayBuffer>(target.toString(), {
-    responseType: 'arraybuffer',
-    timeout: 8_000,
-    maxContentLength: 12 * 1024 * 1024,
-  });
-  return Buffer.from(response.data);
 }
 
 export class WhatsAppDeliveryWorker {
@@ -73,32 +60,12 @@ export class WhatsAppDeliveryWorker {
 
     const delivery = await prisma.whatsAppDelivery.findUniqueOrThrow({
       where: { id: candidate.id },
-      include: {
-        member: { select: { communicationConsent: true } },
-      },
     });
-
-    if (
-      delivery.member.communicationConsent?.whatsappTreatmentReport !== true
-      || delivery.member.communicationConsent.revokedAt !== null
-    ) {
-      await prisma.whatsAppDelivery.update({
-        where: { id: delivery.id },
-        data: {
-          status: WhatsAppDeliveryStatus.CANCELLED,
-          lockedBy: null,
-          leaseUntil: null,
-          lastErrorCode: 'CONSENT_REVOKED',
-          lastErrorSanitized: 'Consent WhatsApp tidak aktif saat delivery diproses.',
-        },
-      });
-      return true;
-    }
 
     try {
       const payload = JSON.parse(decryptWhatsAppValue(delivery.payloadEncrypted)) as EncryptedDeliveryPayload;
       const recipient = decryptWhatsAppValue(delivery.recipientEncrypted);
-      const photo = await loadPhoto(payload.photoUrl);
+      const photo = await loadSessionPhoto(payload.photoUrl);
       const customBackground = payload.backgroundObjectKey
         ? await downloadFile(payload.backgroundObjectKey, 5 * 1024 * 1024)
         : undefined;

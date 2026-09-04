@@ -14,7 +14,6 @@ import {
   cancelSessionCompletionSchema,
   saveSessionProgressSchema,
   whatsappReportRequestSchema,
-  whatsappReportConsentSchema,
   type CreateSessionInput,
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
@@ -1052,22 +1051,6 @@ export class SessionsController {
         req.params.sessionId,
         req.user!.userId,
       );
-      return sendSuccess(res, result);
-    } catch (err) {
-      if (err.status) return sendError(res, err.status, err.code, err.message);
-      next(err);
-    }
-  }
-
-  async updateWhatsAppReportConsent(req: Request, res: Response, next: NextFunction) {
-    try {
-      const input = whatsappReportConsentSchema.parse(req.body ?? {});
-      const result = await sessionsService.updateWhatsAppReportConsent({
-        sessionId: req.params.sessionId,
-        userId: req.user!.userId,
-        enabled: input.enabled,
-        source: input.source,
-      });
       return sendSuccess(res, result);
     } catch (err) {
       if (err.status) return sendError(res, err.status, err.code, err.message);
