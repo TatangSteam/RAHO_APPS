@@ -180,7 +180,6 @@ export class PackageEditService {
           memberId,
           replacementStatus,
           editableStatuses,
-          allowRemovingUsedPackages: hasPrivilegedEditAccess && replacementStatus === PackageStatus.ACTIVE,
         }),
       );
     } catch (error) {
@@ -224,7 +223,6 @@ export class PackageEditService {
     memberId: string;
     replacementStatus: PackageStatus;
     editableStatuses: PackageStatus[];
-    allowRemovingUsedPackages: boolean;
   }) {
     const {
       db,
@@ -236,7 +234,6 @@ export class PackageEditService {
       memberId,
       replacementStatus,
       editableStatuses,
-      allowRemovingUsedPackages,
     } = params;
 
     // Serialize edits for the same purchase. The UI already guards against a
@@ -354,11 +351,11 @@ export class PackageEditService {
           : uniqueTypeReplacementIndex;
 
       if (resolvedMatchIndex === -1) {
-        if (currentPackage.usedSessions > 0 && !allowRemovingUsedPackages) {
+        if (currentPackage.usedSessions > 0) {
           throw {
             status: 422,
             code: 'USED_PACKAGE_CANNOT_BE_REMOVED',
-            message: `Paket ${currentPackage.packageCode} sudah memiliki ${currentPackage.usedSessions} sesi terpakai, sehingga tidak bisa dihapus atau diganti tipe paketnya. Tambah jumlah sesi atau edit harga/catatan saja.`,
+            message: `Paket ${currentPackage.packageCode} sudah memiliki ${currentPackage.usedSessions} sesi terpakai. Sesi terpakai harus tetap dipertahankan; jumlah sesi boleh ditambah, tetapi paket tidak dapat dihapus atau diganti tipe.`,
           };
         }
 

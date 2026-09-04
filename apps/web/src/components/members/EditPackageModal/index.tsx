@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
+import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType, MemberPackage } from '@/types/package';
 import { usePackageSelection } from '../AssignPackageModal/usePackageSelection';
 import BasicPackageSection from '../AssignPackageModal/BasicPackageSection';
 import BoosterPackageSection from '../AssignPackageModal/BoosterPackageSection';
@@ -38,6 +38,7 @@ interface EditPackageModalProps {
   show: boolean;
   pricings: PackagePricing[];
   editData: EditData;
+  existingPackages: MemberPackage[];
   submitting: boolean;
   onClose: () => void;
   onEditDataChange: (data: EditData) => void;
@@ -48,6 +49,7 @@ export default function EditPackageModal({
   show,
   pricings,
   editData,
+  existingPackages,
   submitting,
   onClose,
   onEditDataChange,
@@ -114,6 +116,29 @@ export default function EditPackageModal({
           }}>
             💡 <strong>Info:</strong> Anda dapat mengubah paket, jumlah sesi, booster, dan diskon. Transaksi Add-On baru dibuat dari tab Air Nano &amp; Add-On.
           </div>
+
+          {existingPackages.some((pkg) => pkg.usedSessions > 0) && (
+            <div style={{
+              background: 'rgba(34, 197, 94, 0.1)',
+              border: '1px solid rgba(34, 197, 94, 0.35)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              fontSize: '13px',
+              color: 'var(--text-primary)'
+            }}>
+              <strong>Sesi terpakai tetap dipertahankan.</strong> Jumlah paket/sesi boleh ditambah,
+              tetapi paket yang sudah dipakai tidak dapat dihapus atau diganti tipe.
+              <div style={{ display: 'grid', gap: 4, marginTop: 8 }}>
+                {existingPackages.filter((pkg) => pkg.usedSessions > 0).map((pkg) => (
+                  <span key={pkg.packageId}>
+                    {pkg.packageName || pkg.packageCode}: <strong>{pkg.usedSessions} terpakai</strong>
+                    {' '}· {pkg.remainingSessions} tersisa dari {pkg.totalSessions}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* PAKET BASIC */}
           <BasicPackageSection

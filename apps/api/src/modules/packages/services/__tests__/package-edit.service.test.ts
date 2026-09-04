@@ -188,6 +188,11 @@ describe('PackageEditService', () => {
         }),
       })
     );
+    const packageUpdate = mockPrisma.memberPackage.update.mock.calls.find(
+      ([input]) => input.where?.id === activePackage.id,
+    )?.[0];
+    expect(packageUpdate?.data).not.toHaveProperty('usedSessions');
+    expect(result.packages[0]?.usedSessions).toBe(activePackage.usedSessions);
     expect(mockPrisma.memberPackage.deleteMany).not.toHaveBeenCalled();
     expect(mockPrisma.memberPackage.create).not.toHaveBeenCalled();
     expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
@@ -301,7 +306,7 @@ describe('PackageEditService', () => {
     expect(result.packages).toEqual([updatedUsedPackage]);
   });
 
-  it('soft-cancels a used package removed by a manager from a paid active bundle', async () => {
+  it('rejects removing a used package from a paid active bundle', async () => {
     const service = new PackageEditService();
     const activeBasic = {
       id: 'pkg-basic-used',
@@ -356,11 +361,6 @@ describe('PackageEditService', () => {
       totalSessions: 1,
       price: 1000000,
     };
-    const updatedBooster = {
-      ...activeBooster,
-      purchaseGroupId: 'group-paid',
-    };
-
     mockPrisma.memberPackage.findUnique.mockResolvedValue(null);
     mockPrisma.memberPackage.findMany
       .mockResolvedValueOnce([activeBasic, activeBooster])
@@ -370,13 +370,12 @@ describe('PackageEditService', () => {
       ])
       .mockResolvedValueOnce([activeBasic, activeBooster]);
     mockPrisma.packagePricing.findMany.mockResolvedValue([boosterPricing]);
-    mockPrisma.memberPackage.update.mockResolvedValue(updatedBooster);
     mockPrisma.memberPackage.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.memberAddOn.findMany.mockResolvedValue([]);
     mockPrisma.invoice.findFirst.mockResolvedValue(null);
     (logAudit as jest.Mock).mockResolvedValue(undefined);
 
-    const result = await service.editPackage(
+    await expect(service.editPackage(
       'group-paid',
       {
         packages: [{
@@ -389,24 +388,13 @@ describe('PackageEditService', () => {
       'manager-1',
       null,
       'ADMIN_MANAGER',
-    );
-
-    expect(mockPrisma.memberPackage.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [activeBasic.id] } },
-      data: { status: PackageStatus.CANCELLED },
+    )).rejects.toMatchObject({
+      status: 422,
+      code: 'USED_PACKAGE_CANNOT_BE_REMOVED',
     });
-    expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: activeBooster.id },
-        data: expect.objectContaining({
-          boosterType: boosterPricing.boosterType,
-          serviceType: boosterPricing.serviceType,
-          totalSessions: 17,
-          purchaseGroupId: 'group-paid',
-        }),
-      }),
-    );
-    expect(result.packages).toEqual([updatedBooster]);
+
+    expect(mockPrisma.memberPackage.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.memberPackage.update).not.toHaveBeenCalled();
   });
 
   it('does not map a FREE 1X row onto a selected 15X basic pricing', async () => {

@@ -293,6 +293,7 @@ export default function MemberDetailPage() {
     notes: ''
   });
   const [editingPackageId, setEditingPackageId] = useState('');
+  const [editingPackages, setEditingPackages] = useState<MemberPackage[]>([]);
   const [showBasicVoucherEditModal, setShowBasicVoucherEditModal] = useState(false);
 
   // Refund detail modal state
@@ -915,6 +916,7 @@ export default function MemberDetailPage() {
         notes: ''
       });
       setEditingPackageId('');
+      setEditingPackages([]);
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error) {
       assertCaughtError(error);
@@ -1120,8 +1122,9 @@ export default function MemberDetailPage() {
                     // Subtract percent discount from total to get amount-only discount
                     discountAmountOnly = discount - percentDiscountValue;
                   }
-                  
+
                   setEditingPackageId(purchaseGroupId);
+                  setEditingPackages(packages);
                   setEditData({
                     selectedPackages,
                     selectedAddOns,
@@ -1338,6 +1341,7 @@ export default function MemberDetailPage() {
         show={showEditModal}
         pricings={pricings}
         editData={editData}
+        existingPackages={editingPackages}
         submitting={submitting}
         onClose={() => {
           setShowEditModal(false);
@@ -1350,6 +1354,7 @@ export default function MemberDetailPage() {
             notes: ''
           });
           setEditingPackageId('');
+          setEditingPackages([]);
         }}
         onEditDataChange={handleEditDataChange}
         onSubmit={handleEditPackage}
