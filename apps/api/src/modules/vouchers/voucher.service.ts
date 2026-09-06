@@ -14,6 +14,7 @@ import { AppError, errors } from '@middleware/errorHandler';
 import { logAudit } from '@utils/auditLog';
 import type {
   ClaimVoucherInput,
+  CreateVoucherCampaignInput,
   CreateVoucherLocationInput,
   CreateVoucherOperatorInput,
   IssueVoucherInput,
@@ -64,6 +65,11 @@ function parseDateOnly(value: string, field: string): Date {
     throw errors.badRequest('VOUCHER_INVALID_DATE', `${field} tidak valid.`);
   }
   return parsed;
+}
+
+function parseCampaignDate(value: string | null | undefined, endOfDay = false): Date | null {
+  if (!value) return null;
+  return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`);
 }
 
 function sameDate(value: Date | null, expected: string): boolean {
@@ -211,6 +217,85 @@ export async function getVoucherDashboard(userId: string, role: Role) {
       locations: operator.voucherOperatorLocations.map((assignment) => assignment.location),
     })),
   };
+}
+
+export async function createVoucherCampaign(
+  actorId: string,
+  actorRole: Role,
+  input: CreateVoucherCampaignInput,
+) {
+  assertSuperAdmin(actorRole);
+  const duplicate = await prisma.voucherCampaign.findFirst({
+    where: {
+      OR: [
+        { code: { equals: input.code, mode: 'insensitive' } },
+        { title: { equals: input.title, mode: 'insensitive' } },
+      ],
+    },
+    select: { code: true, title: true },
+  });
+  if (duplicate) {
+    throw errors.conflict(
+      'VOUCHER_CAMPAIGN_DUPLICATE',
+      duplicate.code.toUpperCase() === input.code.toUpperCase()
+        ? 'Kode campaign sudah digunakan.'
+        : 'Judul campaign sudah digunakan.',
+    );
+  }
+
+  try {
+    const campaign = await prisma.voucherCampaign.create({
+      data: {
+        code: input.code,
+        version: 1,
+        title: input.title,
+        description: input.description,
+        quota: input.quota,
+        basicSessions: input.basicSessions,
+        boosterSessions: input.boosterSessions,
+        boosterType: input.boosterSessions > 0 ? input.boosterType || null : null,
+        unitPrice: input.unitPrice ?? null,
+        totalPrice: input.totalPrice ?? null,
+        currency: 'IDR',
+        issueStartAt: parseCampaignDate(input.issueStartAt),
+        issueEndAt: parseCampaignDate(input.issueEndAt, true),
+        claimStartAt: parseCampaignDate(input.claimStartAt),
+        claimEndAt: parseCampaignDate(input.claimEndAt, true),
+        benefitValidityDays: input.benefitValidityDays ?? null,
+        termsSnapshot: input.termsSnapshot || null,
+        locationPolicy: input.locationPolicy,
+        codeMode: input.codeMode,
+        status: input.status,
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+    });
+    await logAudit({
+      userId: actorId,
+      action: AuditAction.CREATE,
+      module: 'VOUCHER',
+      resource: 'VoucherCampaign',
+      resourceId: campaign.id,
+      entityCode: campaign.code,
+      description: `Super Admin membuat campaign voucher ${campaign.code}.`,
+      meta: {
+        status: campaign.status,
+        quota: campaign.quota,
+        basicSessions: campaign.basicSessions,
+        boosterSessions: campaign.boosterSessions,
+      },
+    });
+    return {
+      ...campaign,
+      unitPrice: campaign.unitPrice?.toNumber() ?? null,
+      totalPrice: campaign.totalPrice?.toNumber() ?? null,
+    };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw errors.conflict('VOUCHER_CAMPAIGN_DUPLICATE', 'Kode campaign sudah digunakan.');
+    }
+    throw error;
+  }
 }
 
 export async function createVoucherClaimLocation(

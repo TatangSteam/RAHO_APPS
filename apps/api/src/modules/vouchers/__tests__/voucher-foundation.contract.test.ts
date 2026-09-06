@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { claimVoucherSchema, createVoucherLocationSchema, issueVoucherSchema } from '../voucher.schema';
+import { claimVoucherSchema, createVoucherCampaignSchema, createVoucherLocationSchema, issueVoucherSchema } from '../voucher.schema';
 import { decryptVoucherCode, encryptVoucherCode, hashVoucherIdentity } from '../voucher.crypto';
 import { createClaimReceiptPdf, normalizeVoucherCode } from '../voucher.service';
 
@@ -93,6 +93,34 @@ describe('Voucher Partnership foundation', () => {
     }).success).toBe(false);
   });
 
+  it('validates freely configurable campaign benefits and periods', () => {
+    expect(createVoucherCampaignSchema.safeParse({
+      code: 'PROMO-20B-5BST',
+      title: 'Campaign Voucher Baru',
+      description: 'Dibuat oleh Super Admin.',
+      quota: 500,
+      basicSessions: 20,
+      boosterSessions: 5,
+      boosterType: 'NO',
+      totalPrice: 25_000_000,
+      issueStartAt: '2026-09-01',
+      issueEndAt: '2026-12-31',
+      claimStartAt: '2026-09-01',
+      claimEndAt: '2027-01-31',
+      locationPolicy: 'ALL_ACTIVE',
+      codeMode: 'AUTO',
+      status: 'ACTIVE',
+    }).success).toBe(true);
+    expect(createVoucherCampaignSchema.safeParse({
+      code: 'INVALID',
+      title: 'Tanpa manfaat',
+      description: 'Basic dan booster sama-sama nol.',
+      quota: 10,
+      basicSessions: 0,
+      boosterSessions: 0,
+    }).success).toBe(false);
+  });
+
   it('keeps raw voucher codes and NIK values out of voucher persistence', () => {
     const schema = fs.readFileSync(path.join(apiRoot, 'prisma/schema.prisma'), 'utf8');
     const voucherModel = schema.match(/model CampaignVoucher \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -165,9 +193,10 @@ describe('Voucher Partnership foundation', () => {
     expect(page).toContain('Akun Pengelola');
     expect(page).toContain('Export kode untuk print (CSV)');
     expect(page).toContain('Generate sisa');
-    expect(page).toContain('Tambah voucher dummy');
-    expect(page).toContain('Voucher dummy siap diuji');
-    expect(page).toContain('Salin data dummy');
+    expect(page).toContain('Buat Campaign Baru');
+    expect(page).toContain('Buat Campaign Voucher Baru');
+    expect(page).toContain('Simpan Campaign');
+    expect(page).not.toContain('Tambah voucher dummy');
     expect(page).toContain('AVAILABLE');
     expect(page).toContain('Klaim ini tidak membuat member, paket, atau sesi terapi.');
     expect(page).toContain('Unduh bukti tanda terima PDF');
@@ -186,6 +215,7 @@ describe('Voucher Partnership foundation', () => {
     expect(routes).toContain("router.get('/claims/:voucherId/receipt'");
     expect(routes).toContain('VOUCHER_ISSUER_ROLES');
     expect(routes).toContain("router.post('/locations', authorize([Role.SUPER_ADMIN])");
+    expect(routes).toContain("router.post('/campaigns', authorize([Role.SUPER_ADMIN])");
     expect(routes).toContain("router.delete('/locations/:locationId', authorize([Role.SUPER_ADMIN])");
     expect(service).toContain('listVoucherClaims');
     expect(service).toContain('getVoucherClaimReceipt');
@@ -193,6 +223,7 @@ describe('Voucher Partnership foundation', () => {
     expect(service).toContain('Admin Manager wajib memilih lokasi klaim yang dikelola');
     expect(service).toContain("action: 'EXPORT'");
     expect(service).toContain('createVoucherClaimLocation');
+    expect(service).toContain('createVoucherCampaign');
     expect(service).toContain('archiveVoucherClaimLocation');
     expect(service).toContain("deletionMode: 'SOFT_DELETE'");
   });

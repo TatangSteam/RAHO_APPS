@@ -1,24 +1,26 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { MemberPackage } from '@/types/package';
+import type { MemberPackage, PackageType } from '@/types/package';
 import { Button } from '@/components/ui/Button';
 import { PackageActionModal } from './PackageActionModal';
 import styles from './PackageActionModal.module.css';
 
-interface BasicVoucherEditModalProps {
+interface VoucherBalanceEditModalProps {
   show: boolean;
+  packageType: PackageType;
   packages: MemberPackage[];
   onClose: () => void;
   onSubmit: (packageId: string, remainingSessions: number, reason: string) => Promise<void>;
 }
 
-export default function BasicVoucherEditModal({
+export default function VoucherBalanceEditModal({
   show,
+  packageType,
   packages,
   onClose,
   onSubmit,
-}: BasicVoucherEditModalProps) {
+}: VoucherBalanceEditModalProps) {
   const [selectedPackageId, setSelectedPackageId] = useState('');
   const [remainingSessions, setRemainingSessions] = useState('0');
   const [reason, setReason] = useState('');
@@ -65,7 +67,7 @@ export default function BasicVoucherEditModal({
       const apiMessage = (
         error as { response?: { data?: { error?: { message?: string } } }; message?: string }
       ).response?.data?.error?.message;
-      setErrorMessage(apiMessage || (error as Error).message || 'Gagal mengubah voucher BASIC.');
+      setErrorMessage(apiMessage || (error as Error).message || `Gagal mengubah voucher ${packageType}.`);
     } finally {
       setSubmitting(false);
     }
@@ -76,7 +78,7 @@ export default function BasicVoucherEditModal({
   return (
     <PackageActionModal
       open={show}
-      title="Edit Voucher BASIC"
+      title={`Edit Voucher ${packageType}`}
       onClose={submitting ? () => undefined : onClose}
       footer={(
         <>
@@ -96,21 +98,21 @@ export default function BasicVoucherEditModal({
     >
       <div className={styles.infoBox}>
         <p>
-          Pilih paket BASIC yang ingin disesuaikan. Sesi yang sudah terpakai tetap tersimpan dan
-          harga atau invoice tidak berubah.
+          Pilih paket {packageType} yang ingin disesuaikan. Sesi yang sudah terpakai tetap
+          tersimpan dan harga atau invoice tidak berubah.
         </p>
       </div>
 
       {packages.length === 0 ? (
         <div className={styles.warningBox}>
-          <p>Tidak ada paket BASIC aktif yang dapat diubah.</p>
+          <p>Tidak ada paket {packageType} aktif yang dapat diubah.</p>
         </div>
       ) : (
         <>
           <div className={styles.formGroup}>
-            <label htmlFor="basic-voucher-package">Paket BASIC</label>
+            <label htmlFor={`${packageType.toLowerCase()}-voucher-package`}>Paket {packageType}</label>
             <select
-              id="basic-voucher-package"
+              id={`${packageType.toLowerCase()}-voucher-package`}
               value={selectedPackageId}
               onChange={(event) => selectPackage(event.target.value)}
               className={styles.input}
@@ -134,11 +136,11 @@ export default function BasicVoucherEditModal({
           )}
 
           <div className={styles.formGroup}>
-            <label htmlFor="basic-voucher-remaining">
+            <label htmlFor={`${packageType.toLowerCase()}-voucher-remaining`}>
               Sisa voucher baru <span className={styles.required}>*</span>
             </label>
             <input
-              id="basic-voucher-remaining"
+              id={`${packageType.toLowerCase()}-voucher-remaining`}
               type="number"
               min="0"
               step="1"
@@ -151,11 +153,11 @@ export default function BasicVoucherEditModal({
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="basic-voucher-reason">
+            <label htmlFor={`${packageType.toLowerCase()}-voucher-reason`}>
               Alasan perubahan <span className={styles.required}>*</span>
             </label>
             <textarea
-              id="basic-voucher-reason"
+              id={`${packageType.toLowerCase()}-voucher-reason`}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="Contoh: koreksi saldo voucher sesuai bukti transaksi"

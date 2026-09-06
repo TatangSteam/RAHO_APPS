@@ -31,7 +31,7 @@ import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
-import BasicVoucherEditModal from '@/components/members/BasicVoucherEditModal';
+import VoucherBalanceEditModal from '@/components/members/VoucherBalanceEditModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
@@ -295,6 +295,7 @@ export default function MemberDetailPage() {
   const [editingPackageId, setEditingPackageId] = useState('');
   const [editingPackages, setEditingPackages] = useState<MemberPackage[]>([]);
   const [showBasicVoucherEditModal, setShowBasicVoucherEditModal] = useState(false);
+  const [showBoosterVoucherEditModal, setShowBoosterVoucherEditModal] = useState(false);
 
   // Refund detail modal state
   const [showRefundDetailModal, setShowRefundDetailModal] = useState(false);
@@ -857,14 +858,14 @@ export default function MemberDetailPage() {
     setEditData(data);
   };
 
-  const handleAdjustBasicVoucher = async (
+  const handleAdjustVoucherBalance = async (
     packageId: string,
     remainingSessions: number,
     reason: string,
   ) => {
-    await packagesApi.adjustBasicVoucher(packageId, { remainingSessions, reason });
+    await packagesApi.adjustVoucherBalance(packageId, { remainingSessions, reason });
     await loadPackages();
-    showToast.success('Voucher BASIC berhasil diperbarui');
+    showToast.success('Saldo voucher berhasil diperbarui');
   };
 
   const editSubmissionInFlightRef = useRef(false);
@@ -990,8 +991,9 @@ export default function MemberDetailPage() {
       <MemberStatusCards
         member={member}
         packages={packages}
-        canEditBasicVoucher={canPrivilegedEditPackage}
+        canEditVoucher={canPrivilegedEditPackage}
         onEditBasicVoucher={() => setShowBasicVoucherEditModal(true)}
+        onEditBoosterVoucher={() => setShowBoosterVoucherEditModal(true)}
       />
 
       {/* Tabs */}
@@ -1360,11 +1362,20 @@ export default function MemberDetailPage() {
         onSubmit={handleEditPackage}
       />
 
-      <BasicVoucherEditModal
+      <VoucherBalanceEditModal
         show={showBasicVoucherEditModal}
+        packageType="BASIC"
         packages={getActiveMemberPackagesByType(packages, 'BASIC')}
         onClose={() => setShowBasicVoucherEditModal(false)}
-        onSubmit={handleAdjustBasicVoucher}
+        onSubmit={handleAdjustVoucherBalance}
+      />
+
+      <VoucherBalanceEditModal
+        show={showBoosterVoucherEditModal}
+        packageType="BOOSTER"
+        packages={getActiveMemberPackagesByType(packages, 'BOOSTER')}
+        onClose={() => setShowBoosterVoucherEditModal(false)}
+        onSubmit={handleAdjustVoucherBalance}
       />
 
       {refundDetailData && (

@@ -57,6 +57,21 @@ export function groupMemberPackagesForDisplay(
 }
 
 /**
+ * The edit form needs historical consumed rows to reconstruct the aggregate
+ * quantity shown on the package card. They remain read-only history in the
+ * API, while editable rows continue to own the available balance.
+ */
+export function getPackageEditContext(
+  packages: readonly MemberPackage[],
+  canEditStatus: (status?: string) => boolean,
+): MemberPackage[] {
+  return packages.filter((item) =>
+    canEditStatus(item.status) ||
+    (item.status === 'EXPIRED' && item.usedSessions > 0),
+  );
+}
+
+/**
  * A bundle can contain rows whose payment state is temporarily different.
  * Always submit the row that actually owns the action instead of assuming the
  * first BASIC row represents the whole bundle.

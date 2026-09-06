@@ -14,6 +14,7 @@ router.get('/claims', authorize(VOUCHER_ROLES), controller.listClaims);
 router.get('/claims/:voucherId/receipt', authorize(VOUCHER_ROLES), controller.downloadClaimReceipt);
 router.post('/claim', authorize(VOUCHER_ROLES), controller.claim);
 router.get('/export', authorize([Role.SUPER_ADMIN]), controller.exportCodes);
+router.post('/campaigns', authorize([Role.SUPER_ADMIN]), controller.createCampaign);
 router.post('/campaigns/:campaignId/generate', authorize([Role.SUPER_ADMIN]), controller.generateCodes);
 router.post('/issue', authorize(VOUCHER_ISSUER_ROLES), controller.issue);
 router.post('/locations', authorize([Role.SUPER_ADMIN]), controller.createLocation);

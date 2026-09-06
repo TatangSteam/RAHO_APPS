@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { Role } from '@prisma/client';
 import { sendCreated, sendSuccess } from '@utils/response';
-import { claimVoucherSchema, createVoucherLocationSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, listVoucherClaimsSchema, updateVoucherOperatorSchema } from './voucher.schema';
-import { archiveVoucherClaimLocation, claimVoucher, createVoucherClaimLocation, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherClaimReceipt, getVoucherDashboard, issueVoucher, listVoucherClaims, updateVoucherOperator } from './voucher.service';
+import { claimVoucherSchema, createVoucherCampaignSchema, createVoucherLocationSchema, createVoucherOperatorSchema, exportVoucherCodesSchema, generateVoucherCodesSchema, issueVoucherSchema, listVoucherClaimsSchema, updateVoucherOperatorSchema } from './voucher.schema';
+import { archiveVoucherClaimLocation, claimVoucher, createVoucherCampaign, createVoucherClaimLocation, createVoucherOperator, exportVoucherCodes, generateVoucherCodes, getVoucherClaimReceipt, getVoucherDashboard, issueVoucher, listVoucherClaims, updateVoucherOperator } from './voucher.service';
 
 export async function dashboard(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await getVoucherDashboard(req.user.userId, req.user.role as Role)); } catch (error) { next(error); }
@@ -66,6 +66,16 @@ export async function exportCodes(req: Request, res: Response, next: NextFunctio
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
     res.status(200).send(`\uFEFF${result.csv}`);
+  } catch (error) { next(error); }
+}
+
+export async function createCampaign(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendCreated(res, await createVoucherCampaign(
+      req.user.userId,
+      req.user.role as Role,
+      createVoucherCampaignSchema.parse(req.body),
+    ));
   } catch (error) { next(error); }
 }
 

@@ -225,7 +225,7 @@ export const editPackageSchema = z.object({
   { message: 'Minimal 1 paket atau add-on harus dipilih' }
 );
 
-export const adjustBasicVoucherSchema = z.object({
+export const adjustVoucherBalanceSchema = z.object({
   remainingSessions: z.coerce
     .number()
     .int('Sisa voucher harus berupa bilangan bulat')
@@ -244,4 +244,4 @@ export type UpdatePackagePricingInput = z.infer<typeof updatePackagePricingSchem
 export type RefundPackageInput = z.infer<typeof refundPackageSchema>;
 export type CancelPackageInput = z.infer<typeof cancelPackageSchema>;
 export type EditPackageInput = z.infer<typeof editPackageSchema>;
-export type AdjustBasicVoucherInput = z.infer<typeof adjustBasicVoucherSchema>;
+export type AdjustVoucherBalanceInput = z.infer<typeof adjustVoucherBalanceSchema>;

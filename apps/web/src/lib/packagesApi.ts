@@ -180,7 +180,7 @@ export const packagesApi = {
     return response.data.data || response.data;
   },
 
-  adjustBasicVoucher: async (
+  adjustVoucherBalance: async (
     packageId: string,
     data: { remainingSessions: number; reason: string },
   ) => {

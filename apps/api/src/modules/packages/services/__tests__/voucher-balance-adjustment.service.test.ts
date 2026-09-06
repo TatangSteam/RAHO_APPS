@@ -67,7 +67,7 @@ describe('VoucherBalanceAdjustmentService', () => {
   it('preserves used sessions and replaces only the remaining BASIC balance', async () => {
     const service = new VoucherBalanceAdjustmentService();
 
-    const result = await service.adjustBasicVoucher(
+    const result = await service.adjustVoucherBalance(
       'package-1',
       { remainingSessions: 5, reason: 'Koreksi saldo voucher' },
       'admin-1',
@@ -104,7 +104,7 @@ describe('VoucherBalanceAdjustmentService', () => {
     mockPrisma.memberPackage.update.mockResolvedValue({ ...basePackage, totalSessions: 4 });
     const service = new VoucherBalanceAdjustmentService();
 
-    await service.adjustBasicVoucher(
+    await service.adjustVoucherBalance(
       'package-1',
       { remainingSessions: 2, reason: 'Koreksi saldo voucher' },
       'admin-1',
@@ -124,7 +124,7 @@ describe('VoucherBalanceAdjustmentService', () => {
   it('rejects roles outside Super Admin and Admin Manager', async () => {
     const service = new VoucherBalanceAdjustmentService();
 
-    await expect(service.adjustBasicVoucher(
+    await expect(service.adjustVoucherBalance(
       'package-1',
       { remainingSessions: 5, reason: 'Koreksi saldo voucher' },
       'staff-1',
@@ -140,7 +140,7 @@ describe('VoucherBalanceAdjustmentService', () => {
     });
     const service = new VoucherBalanceAdjustmentService();
 
-    await expect(service.adjustBasicVoucher(
+    await expect(service.adjustVoucherBalance(
       'package-1',
       { remainingSessions: 5, reason: 'Koreksi saldo voucher' },
       'manager-1',
@@ -148,5 +148,42 @@ describe('VoucherBalanceAdjustmentService', () => {
     )).rejects.toMatchObject({ status: 403 });
 
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('preserves used sessions and replaces only the remaining BOOSTER balance', async () => {
+    const boosterPackage = {
+      ...basePackage,
+      id: 'booster-1',
+      packageCode: 'PKG-BOOSTER-001',
+      packageType: PackageType.BOOSTER,
+      totalSessions: 17,
+      usedSessions: 7,
+    };
+    mockPrisma.memberPackage.findUnique
+      .mockReset()
+      .mockResolvedValueOnce({ branchId: 'branch-1' })
+      .mockResolvedValueOnce(boosterPackage);
+    mockPrisma.memberPackage.update.mockResolvedValue({
+      ...boosterPackage,
+      totalSessions: 19,
+    });
+    const service = new VoucherBalanceAdjustmentService();
+
+    const result = await service.adjustVoucherBalance(
+      'booster-1',
+      { remainingSessions: 12, reason: 'Koreksi saldo booster' },
+      'admin-1',
+      'SUPER_ADMIN',
+    );
+
+    expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith({
+      where: { id: 'booster-1' },
+      data: { totalSessions: 19 },
+    });
+    expect(result).toMatchObject({ usedSessions: 7, remainingSessions: 12, totalSessions: 19 });
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({
+      description: 'Menyesuaikan sisa voucher BOOSTER menjadi 12 sesi',
+      meta: expect.objectContaining({ action: 'ADJUST_BOOSTER_VOUCHER_BALANCE' }),
+    }));
   });
 });

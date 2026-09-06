@@ -26,11 +26,6 @@ import { assertCaughtError } from '@/lib/caughtError';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { usePathname } from 'next/navigation';
-import {
-  createDummyVoucherIdentity,
-  formatDummyVoucherClipboard,
-  type DummyVoucherIdentity,
-} from '@/lib/voucherDummy';
 
 type Campaign = {
   id: string;
@@ -46,6 +41,8 @@ type Campaign = {
   remainingToGenerate: number;
   basicSessions: number;
   boosterSessions: number;
+  boosterType?: string | null;
+  unitPrice: number | null;
   totalPrice: number | null;
   status: string;
 };
@@ -83,9 +80,25 @@ type ClaimHistoryResponse = {
   items: Voucher[];
   pagination: { page: number; perPage: number; total: number; totalPages: number };
 };
-type DummyVoucherResult = DummyVoucherIdentity & {
-  campaignCode: string;
+type CampaignForm = {
   code: string;
+  title: string;
+  description: string;
+  quota: string;
+  basicSessions: string;
+  boosterSessions: string;
+  boosterType: string;
+  unitPrice: string;
+  totalPrice: string;
+  issueStartAt: string;
+  issueEndAt: string;
+  claimStartAt: string;
+  claimEndAt: string;
+  benefitValidityDays: string;
+  termsSnapshot: string;
+  locationPolicy: 'ALL_ACTIVE' | 'SPECIFIC';
+  codeMode: 'AUTO' | 'MANUAL';
+  status: 'DRAFT' | 'ACTIVE' | 'PAUSED';
 };
 
 type VoucherView = 'claim' | 'history' | 'registry' | 'campaigns' | 'locations' | 'operators';
@@ -95,6 +108,27 @@ const LOCATION_GROUPS: Array<{ value: LocationGroup; label: string }> = [
   { value: 'RAHO_PREMIER', label: 'RAHO Premier' },
   { value: 'PARTNER', label: 'Partner' },
 ];
+
+const EMPTY_CAMPAIGN_FORM: CampaignForm = {
+  code: '',
+  title: '',
+  description: '',
+  quota: '1',
+  basicSessions: '0',
+  boosterSessions: '0',
+  boosterType: '',
+  unitPrice: '',
+  totalPrice: '',
+  issueStartAt: '',
+  issueEndAt: '',
+  claimStartAt: '',
+  claimEndAt: '',
+  benefitValidityDays: '',
+  termsSnapshot: '',
+  locationPolicy: 'ALL_ACTIVE',
+  codeMode: 'AUTO',
+  status: 'DRAFT',
+};
 
 function getVoucherView(pathname: string): VoucherView {
   if (pathname.endsWith('/history')) return 'history';
@@ -158,7 +192,8 @@ export default function VoucherPartnershipPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
-  const [dummyVoucher, setDummyVoucher] = useState<DummyVoucherResult | null>(null);
+  const [showCampaignForm, setShowCampaignForm] = useState(false);
+  const [campaignForm, setCampaignForm] = useState<CampaignForm>(EMPTY_CAMPAIGN_FORM);
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
   const [issueForm, setIssueForm] = useState({ campaignId: '', code: '', recipientName: '', nik: '', dateOfBirth: '', allowedLocationId: '' });
   const [claimForm, setClaimForm] = useState({ code: '', recipientName: '', nik: '', dateOfBirth: '', locationId: '' });
@@ -395,10 +430,11 @@ export default function VoucherPartnershipPage() {
 
   async function generateCodes(campaign: Campaign) {
     if (campaign.remainingToGenerate <= 0) return;
+    const count = Math.min(campaign.remainingToGenerate, 200);
     try {
       setBusy(`generate-${campaign.id}`);
-      await api.post(`/vouchers/campaigns/${campaign.id}/generate`, { count: campaign.remainingToGenerate });
-      showToast.success(`${campaign.remainingToGenerate} kode ${campaign.code} berhasil dibuat dan siap diexport.`);
+      await api.post(`/vouchers/campaigns/${campaign.id}/generate`, { count });
+      showToast.success(`${count} kode ${campaign.code} berhasil dibuat dan siap diexport.`);
       setRegistryFilter({ campaignId: campaign.id, status: 'AVAILABLE' });
       await load();
     } catch (error) {
@@ -406,40 +442,32 @@ export default function VoucherPartnershipPage() {
     } finally { setBusy(null); }
   }
 
-  async function createDummyVoucher(campaign: Campaign) {
-    if (campaign.status !== 'ACTIVE' || campaign.remainingQuota <= 0) return;
-    if (!window.confirm(`Terbitkan satu voucher dummy untuk campaign ${campaign.code}? Voucher ini memakai satu kuota dan akan tercatat sebagai data testing.`)) return;
-
-    const identity = createDummyVoucherIdentity(campaign.code);
+  async function submitCampaign(event: FormEvent) {
+    event.preventDefault();
     try {
-      setBusy(`dummy-${campaign.id}`);
-      const response = await api.post<{ data: Voucher & { code: string } }>('/vouchers/issue', {
-        campaignId: campaign.id,
-        ...identity,
-        allowedLocationId: null,
+      setBusy('campaign-create');
+      await api.post('/vouchers/campaigns', {
+        ...campaignForm,
+        quota: Number(campaignForm.quota),
+        basicSessions: Number(campaignForm.basicSessions),
+        boosterSessions: Number(campaignForm.boosterSessions),
+        boosterType: campaignForm.boosterType.trim() || null,
+        unitPrice: campaignForm.unitPrice.trim() ? Number(campaignForm.unitPrice) : null,
+        totalPrice: campaignForm.totalPrice.trim() ? Number(campaignForm.totalPrice) : null,
+        issueStartAt: campaignForm.issueStartAt || null,
+        issueEndAt: campaignForm.issueEndAt || null,
+        claimStartAt: campaignForm.claimStartAt || null,
+        claimEndAt: campaignForm.claimEndAt || null,
+        benefitValidityDays: campaignForm.benefitValidityDays.trim() ? Number(campaignForm.benefitValidityDays) : null,
+        termsSnapshot: campaignForm.termsSnapshot.trim() || null,
       });
-      setDummyVoucher({
-        ...identity,
-        campaignCode: campaign.code,
-        code: response.data.data.code,
-      });
-      showToast.success(`Voucher dummy ${campaign.code} berhasil diterbitkan.`);
+      showToast.success(`Campaign ${campaignForm.code} berhasil dibuat.`);
+      setCampaignForm(EMPTY_CAMPAIGN_FORM);
+      setShowCampaignForm(false);
       await load();
     } catch (error) {
       showToast.error(errorMessage(error));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function copyDummyVoucher() {
-    if (!dummyVoucher) return;
-    try {
-      await navigator.clipboard.writeText(formatDummyVoucherClipboard(dummyVoucher));
-      showToast.success('Data voucher dummy berhasil disalin.');
-    } catch {
-      showToast.error('Data voucher dummy gagal disalin.');
-    }
+    } finally { setBusy(null); }
   }
 
   function renderVoucherTable(vouchers: Voucher[], emptyMessage: string, showReceipt = false) {
@@ -486,7 +514,14 @@ export default function VoucherPartnershipPage() {
           <h1 style={{ fontSize: 27, fontWeight: 850, display: 'flex', alignItems: 'center', gap: 10 }}><TicketPercent color="#f59e0b" /> {pageCopy[view].title}</h1>
           <p style={{ color: 'var(--text-secondary)', marginTop: 6 }}>{pageCopy[view].description}</p>
         </div>
-        <button type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => void load()}><RefreshCw size={16} /> Perbarui</button>
+        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+          {view === 'campaigns' && isSuperAdmin && (
+            <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => setShowCampaignForm((current) => !current)}>
+              <Plus size={16} /> {showCampaignForm ? 'Tutup form' : 'Buat Campaign Baru'}
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => void load()}><RefreshCw size={16} /> Perbarui</button>
+        </div>
       </header>
 
       {view === 'claim' && isSuperAdmin && (
@@ -562,29 +597,47 @@ export default function VoucherPartnershipPage() {
       </section>}
 
       {view === 'campaigns' && <div style={{ display: 'grid', gap: 14 }}>
-        {dummyVoucher && <section className="card" style={{ padding: 18, borderColor: 'rgba(34,197,94,.55)', background: 'rgba(34,197,94,.07)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#22c55e' }}>Voucher dummy siap diuji</h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Salin data berikut lalu gunakan pada menu Klaim Voucher. Kode lengkap hanya ditampilkan pada sesi ini.</p>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => void copyDummyVoucher()}><Copy size={16} /> Salin data dummy</button>
-              <Link className="btn btn-primary" href="/extra/vouchers"><BadgeCheck size={16} /> Buka Klaim Voucher</Link>
-            </div>
+        {showCampaignForm && <form className="card" style={{ padding: 21, display: 'grid', gap: 14, borderColor: 'rgba(245,158,11,.45)' }} onSubmit={submitCampaign}>
+          <div>
+            <h2 style={{ fontSize: 19, fontWeight: 800, display: 'flex', gap: 8, alignItems: 'center' }}><Plus size={20} color="#f59e0b" /> Buat Campaign Voucher Baru</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Atur sendiri kuota, manfaat, harga, periode, dan status campaign. Campaign lama tidak akan berubah.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 14, fontSize: 13 }}>
-            <div><small style={{ color: 'var(--text-secondary)' }}>Campaign</small><strong style={{ display: 'block', marginTop: 3 }}>{dummyVoucher.campaignCode}</strong></div>
-            <div><small style={{ color: 'var(--text-secondary)' }}>Kode</small><strong style={{ display: 'block', marginTop: 3, overflowWrap: 'anywhere' }}>{dummyVoucher.code}</strong></div>
-            <div><small style={{ color: 'var(--text-secondary)' }}>Nama</small><strong style={{ display: 'block', marginTop: 3 }}>{dummyVoucher.recipientName}</strong></div>
-            <div><small style={{ color: 'var(--text-secondary)' }}>NIK / tanggal lahir</small><strong style={{ display: 'block', marginTop: 3 }}>{dummyVoucher.nik} / {dummyVoucher.dateOfBirth}</strong></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>
+            <label style={labelStyle}>Kode campaign<input required minLength={3} maxLength={40} pattern="[A-Z0-9]+(?:-[A-Z0-9]+)*" style={fieldStyle} value={campaignForm.code} onChange={(event) => setCampaignForm({ ...campaignForm, code: event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })} placeholder="CONTOH-10B-5BST" /></label>
+            <label style={labelStyle}>Judul campaign<input required minLength={3} maxLength={180} style={fieldStyle} value={campaignForm.title} onChange={(event) => setCampaignForm({ ...campaignForm, title: event.target.value })} placeholder="Voucher Program Baru" /></label>
           </div>
-        </section>}
-
-        <section className="card" style={{ padding: 16, borderColor: 'rgba(245,158,11,.35)' }}>
-          <strong>Mode testing voucher</strong>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 5 }}>Tombol dummy menerbitkan satu kode dengan identitas testing yang jelas. Voucher tetap memakai kuota campaign dan tercatat pada audit serta registry.</p>
-        </section>
+          <label style={labelStyle}>Deskripsi<textarea required minLength={3} maxLength={1000} rows={3} style={{ ...fieldStyle, resize: 'vertical' }} value={campaignForm.description} onChange={(event) => setCampaignForm({ ...campaignForm, description: event.target.value })} placeholder="Jelaskan manfaat dan tujuan campaign." /></label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+            <label style={labelStyle}>Kuota voucher<input required type="number" min={1} max={100000} style={fieldStyle} value={campaignForm.quota} onChange={(event) => setCampaignForm({ ...campaignForm, quota: event.target.value })} /></label>
+            <label style={labelStyle}>Jumlah sesi BASIC<input required type="number" min={0} max={10000} style={fieldStyle} value={campaignForm.basicSessions} onChange={(event) => setCampaignForm({ ...campaignForm, basicSessions: event.target.value })} /></label>
+            <label style={labelStyle}>Jumlah sesi BOOSTER<input required type="number" min={0} max={10000} style={fieldStyle} value={campaignForm.boosterSessions} onChange={(event) => setCampaignForm({ ...campaignForm, boosterSessions: event.target.value })} /></label>
+            <label style={labelStyle}>Jenis BOOSTER <small style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(opsional)</small><input maxLength={100} disabled={Number(campaignForm.boosterSessions) === 0} style={fieldStyle} value={campaignForm.boosterType} onChange={(event) => setCampaignForm({ ...campaignForm, boosterType: event.target.value })} placeholder="Contoh: NO, H2S" /></label>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
+            <label style={labelStyle}>Harga per sesi (Rp)<input type="number" min={0} step={1000} style={fieldStyle} value={campaignForm.unitPrice} onChange={(event) => setCampaignForm({ ...campaignForm, unitPrice: event.target.value })} placeholder="Opsional" /></label>
+            <label style={labelStyle}>Harga total (Rp)<input type="number" min={0} step={1000} style={fieldStyle} value={campaignForm.totalPrice} onChange={(event) => setCampaignForm({ ...campaignForm, totalPrice: event.target.value })} placeholder="Kosong = belum ditetapkan" /></label>
+            <label style={labelStyle}>Masa manfaat setelah klaim<input type="number" min={1} max={3650} style={fieldStyle} value={campaignForm.benefitValidityDays} onChange={(event) => setCampaignForm({ ...campaignForm, benefitValidityDays: event.target.value })} placeholder="Jumlah hari (opsional)" /></label>
+          </div>
+          <fieldset style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 13 }}>
+            <legend style={{ padding: '0 7px', fontSize: 13, fontWeight: 750 }}>Periode campaign (opsional)</legend>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
+              <label style={labelStyle}>Mulai penerbitan<input type="date" style={fieldStyle} value={campaignForm.issueStartAt} onChange={(event) => setCampaignForm({ ...campaignForm, issueStartAt: event.target.value })} /></label>
+              <label style={labelStyle}>Akhir penerbitan<input type="date" min={campaignForm.issueStartAt || undefined} style={fieldStyle} value={campaignForm.issueEndAt} onChange={(event) => setCampaignForm({ ...campaignForm, issueEndAt: event.target.value })} /></label>
+              <label style={labelStyle}>Mulai klaim<input type="date" style={fieldStyle} value={campaignForm.claimStartAt} onChange={(event) => setCampaignForm({ ...campaignForm, claimStartAt: event.target.value })} /></label>
+              <label style={labelStyle}>Akhir klaim<input type="date" min={campaignForm.claimStartAt || undefined} style={fieldStyle} value={campaignForm.claimEndAt} onChange={(event) => setCampaignForm({ ...campaignForm, claimEndAt: event.target.value })} /></label>
+            </div>
+          </fieldset>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
+            <label style={labelStyle}>Kebijakan lokasi<select style={fieldStyle} value={campaignForm.locationPolicy} onChange={(event) => setCampaignForm({ ...campaignForm, locationPolicy: event.target.value as CampaignForm['locationPolicy'] })}><option value="ALL_ACTIVE">Semua lokasi aktif</option><option value="SPECIFIC">Lokasi ditentukan saat penerbitan</option></select></label>
+            <label style={labelStyle}>Mode kode<select style={fieldStyle} value={campaignForm.codeMode} onChange={(event) => setCampaignForm({ ...campaignForm, codeMode: event.target.value as CampaignForm['codeMode'] })}><option value="AUTO">Dibuat otomatis</option><option value="MANUAL">Input kode manual</option></select></label>
+            <label style={labelStyle}>Status awal<select style={fieldStyle} value={campaignForm.status} onChange={(event) => setCampaignForm({ ...campaignForm, status: event.target.value as CampaignForm['status'] })}><option value="DRAFT">DRAFT — simpan dahulu</option><option value="ACTIVE">ACTIVE — langsung dapat dipakai</option><option value="PAUSED">PAUSED — dijeda</option></select></label>
+          </div>
+          <label style={labelStyle}>Syarat dan ketentuan<textarea maxLength={5000} rows={4} style={{ ...fieldStyle, resize: 'vertical' }} value={campaignForm.termsSnapshot} onChange={(event) => setCampaignForm({ ...campaignForm, termsSnapshot: event.target.value })} placeholder="Opsional. Teks disimpan sebagai snapshot campaign." /></label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => { setCampaignForm(EMPTY_CAMPAIGN_FORM); setShowCampaignForm(false); }}>Batal</button>
+            <button className="btn btn-primary" disabled={busy !== null || (Number(campaignForm.basicSessions) === 0 && Number(campaignForm.boosterSessions) === 0)}>{busy === 'campaign-create' ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />} Simpan Campaign</button>
+          </div>
+        </form>}
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(285px,1fr))', gap: 12 }}>
         {dashboard.campaigns.map((campaign) => (
@@ -593,21 +646,10 @@ export default function VoucherPartnershipPage() {
             <h2 style={{ fontWeight: 800, marginTop: 9, lineHeight: 1.35 }}>{campaign.title}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 8, minHeight: 55 }}>{campaign.description}</p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 13, marginTop: 13 }}><span>{campaign.basicSessions}× BASIC</span><span>{campaign.boosterSessions}× BOOSTER</span><strong>{formatCurrency(campaign.totalPrice)}</strong></div>
-            <div style={{ marginTop: 13 }}><div style={{ height: 7, background: 'var(--bg-secondary)', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(100, campaign.generatedCount / campaign.quota * 100)}%`, background: '#f59e0b' }} /></div><small style={{ color: 'var(--text-secondary)' }}>{campaign.generatedCount}/{campaign.quota} kode dibuat · {campaign.availableCount} AVAILABLE · {campaign.issuedCount} diterbitkan</small>{campaign.remainingToGenerate > 0 && <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: 10 }} disabled={busy !== null} onClick={() => void generateCodes(campaign)}>{busy === `generate-${campaign.id}` ? <Loader2 size={16} className="animate-spin" /> : <TicketPercent size={16} />} Generate sisa {campaign.remainingToGenerate} kode</button>}</div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ width: '100%', marginTop: 10 }}
-              disabled={busy !== null || campaign.status !== 'ACTIVE' || campaign.remainingQuota <= 0}
-              onClick={() => void createDummyVoucher(campaign)}
-            >
-              {busy === `dummy-${campaign.id}`
-                ? <Loader2 size={16} className="animate-spin" />
-                : <Plus size={16} />}
-              Tambah voucher dummy
-            </button>
+            <div style={{ marginTop: 13 }}><div style={{ height: 7, background: 'var(--bg-secondary)', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(100, campaign.generatedCount / campaign.quota * 100)}%`, background: '#f59e0b' }} /></div><small style={{ color: 'var(--text-secondary)' }}>{campaign.generatedCount}/{campaign.quota} kode dibuat · {campaign.availableCount} AVAILABLE · {campaign.issuedCount} diterbitkan</small>{campaign.remainingToGenerate > 0 && <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: 10 }} disabled={busy !== null || campaign.status === 'CLOSED'} onClick={() => void generateCodes(campaign)}>{busy === `generate-${campaign.id}` ? <Loader2 size={16} className="animate-spin" /> : <TicketPercent size={16} />} Generate {Math.min(campaign.remainingToGenerate, 200)} kode berikutnya</button>}</div>
           </article>
         ))}
+        {dashboard.campaigns.length === 0 && <div className="card" style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>Belum ada campaign. Klik <strong>Buat Campaign Baru</strong> untuk memulai.</div>}
         </section>
       </div>}
 

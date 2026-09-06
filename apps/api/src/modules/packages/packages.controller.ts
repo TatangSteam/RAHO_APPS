@@ -9,7 +9,7 @@ import {
   refundPackageSchema,
   cancelPackageSchema,
   editPackageSchema,
-  adjustBasicVoucherSchema,
+  adjustVoucherBalanceSchema,
 } from './packages.schema';
 import { sendSuccess, sendCreated } from '../../utils/response';
 import { env } from '../../config/env';
@@ -438,10 +438,10 @@ export class PackagesController {
     }
   }
 
-  async adjustBasicVoucher(req: Request, res: Response, next: NextFunction) {
+  async adjustVoucherBalance(req: Request, res: Response, next: NextFunction) {
     try {
       const { packageId } = req.params;
-      const data = adjustBasicVoucherSchema.parse(req.body);
+      const data = adjustVoucherBalanceSchema.parse(req.body);
       const userId = req.user?.userId;
       const userRole = req.user?.role;
 
@@ -449,7 +449,7 @@ export class PackagesController {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      const result = await packagesService.adjustBasicVoucher(packageId, data, userId, userRole);
+      const result = await packagesService.adjustVoucherBalance(packageId, data, userId, userRole);
       return sendSuccess(res, result);
     } catch (error) {
       next(error);

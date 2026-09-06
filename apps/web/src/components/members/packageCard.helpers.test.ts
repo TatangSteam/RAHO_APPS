@@ -2,6 +2,7 @@ import type { MemberPackage } from '@/types/package';
 import {
   findActiveInstallmentTarget,
   findPendingPaymentTarget,
+  getPackageEditContext,
   groupMemberPackagesForDisplay,
 } from './packageCard.helpers';
 
@@ -117,5 +118,44 @@ describe('payment verification target', () => {
     });
 
     expect(findPendingPaymentTarget([pendingAddOn, pendingPackage])).toBe(pendingPackage);
+  });
+});
+
+describe('package edit context', () => {
+  it('includes consumed historical rows so booster quantity stays synchronized', () => {
+    const activeBalance = memberPackage({
+      packageId: 'booster-active',
+      packageType: 'BOOSTER',
+      totalSessions: 10,
+      remainingSessions: 10,
+      purchaseQuantity: 10,
+    });
+    const consumedHistory = memberPackage({
+      packageId: 'booster-used',
+      packageType: 'BOOSTER',
+      status: 'EXPIRED',
+      totalSessions: 7,
+      usedSessions: 7,
+      remainingSessions: 0,
+      purchaseQuantity: 7,
+    });
+    const unusedHistory = memberPackage({
+      packageId: 'booster-unused-history',
+      packageType: 'BOOSTER',
+      status: 'EXPIRED',
+      usedSessions: 0,
+      remainingSessions: 0,
+    });
+
+    const context = getPackageEditContext(
+      [activeBalance, consumedHistory, unusedHistory],
+      (status) => status === 'ACTIVE',
+    );
+
+    expect(context.map((item) => item.packageId)).toEqual([
+      'booster-active',
+      'booster-used',
+    ]);
+    expect(context.reduce((total, item) => total + (item.purchaseQuantity || 1), 0)).toBe(17);
   });
 });

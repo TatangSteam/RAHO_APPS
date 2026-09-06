@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { CampaignVoucherStatus } from '@prisma/client';
+import {
+  CampaignVoucherStatus,
+  VoucherCampaignStatus,
+  VoucherCodeMode,
+  VoucherLocationPolicy,
+} from '@prisma/client';
 
 const nikSchema = z.string().trim().regex(/^\d{16}$/, 'NIK harus tepat 16 digit.');
 const dateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal harus berformat YYYY-MM-DD.');
@@ -23,6 +28,41 @@ function jakartaToday(): string {
 const birthDateSchema = dateSchema
   .refine(isValidDateOnly, 'Tanggal lahir tidak valid.')
   .refine((value) => value <= jakartaToday(), 'Tanggal lahir tidak boleh di masa depan.');
+
+const campaignDateSchema = dateSchema.refine(isValidDateOnly, 'Tanggal campaign tidak valid.');
+
+export const createVoucherCampaignSchema = z.object({
+  code: z.string().trim().min(3).max(40)
+    .transform((value) => value.toUpperCase())
+    .refine((value) => /^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(value), 'Kode hanya boleh berisi huruf, angka, dan strip.'),
+  title: z.string().trim().min(3).max(180),
+  description: z.string().trim().min(3).max(1_000),
+  quota: z.number().int().min(1).max(100_000),
+  basicSessions: z.number().int().min(0).max(10_000),
+  boosterSessions: z.number().int().min(0).max(10_000),
+  boosterType: z.string().trim().max(100).nullable().optional(),
+  unitPrice: z.number().finite().min(0).max(1_000_000_000_000).nullable().optional(),
+  totalPrice: z.number().finite().min(0).max(1_000_000_000_000).nullable().optional(),
+  issueStartAt: campaignDateSchema.nullable().optional(),
+  issueEndAt: campaignDateSchema.nullable().optional(),
+  claimStartAt: campaignDateSchema.nullable().optional(),
+  claimEndAt: campaignDateSchema.nullable().optional(),
+  benefitValidityDays: z.number().int().min(1).max(3_650).nullable().optional(),
+  termsSnapshot: z.string().trim().max(5_000).nullable().optional(),
+  locationPolicy: z.nativeEnum(VoucherLocationPolicy).default(VoucherLocationPolicy.ALL_ACTIVE),
+  codeMode: z.nativeEnum(VoucherCodeMode).default(VoucherCodeMode.AUTO),
+  status: z.nativeEnum(VoucherCampaignStatus).default(VoucherCampaignStatus.DRAFT),
+}).superRefine((value, context) => {
+  if (value.basicSessions === 0 && value.boosterSessions === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['basicSessions'], message: 'Minimal satu manfaat BASIC atau BOOSTER wajib diisi.' });
+  }
+  if (value.issueStartAt && value.issueEndAt && value.issueEndAt < value.issueStartAt) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['issueEndAt'], message: 'Tanggal akhir penerbitan tidak boleh sebelum tanggal mulai.' });
+  }
+  if (value.claimStartAt && value.claimEndAt && value.claimEndAt < value.claimStartAt) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['claimEndAt'], message: 'Tanggal akhir klaim tidak boleh sebelum tanggal mulai.' });
+  }
+});
 
 export const issueVoucherSchema = z.object({
   campaignId: z.string().min(1),
@@ -86,6 +126,7 @@ export const listVoucherClaimsSchema = z.object({
 });
 
 export type IssueVoucherInput = z.infer<typeof issueVoucherSchema>;
+export type CreateVoucherCampaignInput = z.infer<typeof createVoucherCampaignSchema>;
 export type ClaimVoucherInput = z.infer<typeof claimVoucherSchema>;
 export type CreateVoucherOperatorInput = z.infer<typeof createVoucherOperatorSchema>;
 export type UpdateVoucherOperatorInput = z.infer<typeof updateVoucherOperatorSchema>;

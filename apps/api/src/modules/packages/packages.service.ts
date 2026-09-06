@@ -1,4 +1,4 @@
-import type { AdjustBasicVoucherInput, AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
+import type { AdjustVoucherBalanceInput, AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
 import { PackageAssignmentService } from './services/package-assignment.service';
 import { PaymentVerificationService } from './services/payment-verification.service';
 import { PackageRetrievalService } from './services/package-retrieval.service';
@@ -178,13 +178,13 @@ export class PackagesService {
     return await this.editService.editPackage(packageId, data, userId, branchId, userRole);
   }
 
-  async adjustBasicVoucher(
+  async adjustVoucherBalance(
     packageId: string,
-    data: AdjustBasicVoucherInput,
+    data: AdjustVoucherBalanceInput,
     userId: string,
     userRole?: string,
   ) {
-    return await this.voucherBalanceAdjustmentService.adjustBasicVoucher(
+    return await this.voucherBalanceAdjustmentService.adjustVoucherBalance(
       packageId,
       data,
       userId,

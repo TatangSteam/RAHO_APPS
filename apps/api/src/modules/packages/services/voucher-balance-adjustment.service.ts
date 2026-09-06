@@ -5,7 +5,7 @@ import { assertBranchAccess, assertPermission } from '@modules/iam/authorization
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { calculatePerSessionRevenue } from '@modules/revenue/revenue.helpers';
 import { logAudit } from '@utils/auditLog';
-import type { AdjustBasicVoucherInput } from '../packages.schema';
+import type { AdjustVoucherBalanceInput } from '../packages.schema';
 
 const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
 
@@ -14,21 +14,21 @@ export function getAdjustedTotalSessions(usedSessions: number, remainingSessions
 }
 
 export class VoucherBalanceAdjustmentService {
-  async adjustBasicVoucher(
+  async adjustVoucherBalance(
     packageId: string,
-    data: AdjustBasicVoucherInput,
+    data: AdjustVoucherBalanceInput,
     userId: string,
     userRole?: string,
   ) {
     if (!ALLOWED_ROLES.has(userRole || '')) {
-      throw errors.forbidden('Hanya Super Admin atau Admin Manager yang dapat mengubah voucher BASIC.');
+      throw errors.forbidden('Hanya Super Admin atau Admin Manager yang dapat mengubah saldo voucher.');
     }
 
     const packageAccess = await prisma.memberPackage.findUnique({
       where: { id: packageId },
       select: { branchId: true, socialProgramRequestId: true },
     });
-    if (!packageAccess) throw errors.notFound('Paket BASIC tidak ditemukan.');
+    if (!packageAccess) throw errors.notFound('Paket tidak ditemukan.');
     if (packageAccess.socialProgramRequestId) {
       throw errors.conflict('SOCIAL_PROGRAM_PACKAGE_LOCKED', 'Voucher Program Sosial dikunci sesuai hasil approval.');
     }
@@ -53,12 +53,12 @@ export class VoucherBalanceAdjustmentService {
         },
       });
 
-      if (!memberPackage) throw errors.notFound('Paket BASIC tidak ditemukan.');
-      if (memberPackage.packageType !== PackageType.BASIC) {
-        throw errors.badRequest('PACKAGE_NOT_BASIC', 'Penyesuaian ini hanya berlaku untuk voucher BASIC.');
+      if (!memberPackage) throw errors.notFound('Paket tidak ditemukan.');
+      if (![PackageType.BASIC, PackageType.BOOSTER].includes(memberPackage.packageType)) {
+        throw errors.badRequest('PACKAGE_TYPE_NOT_ADJUSTABLE', 'Penyesuaian hanya berlaku untuk voucher BASIC atau BOOSTER.');
       }
       if (memberPackage.status !== PackageStatus.ACTIVE) {
-        throw errors.badRequest('PACKAGE_NOT_ACTIVE', 'Hanya voucher dari paket BASIC aktif yang dapat diubah.');
+        throw errors.badRequest('PACKAGE_NOT_ACTIVE', 'Hanya voucher dari paket aktif yang dapat diubah.');
       }
 
       const newTotalSessions = getAdjustedTotalSessions(
@@ -135,11 +135,11 @@ export class VoucherBalanceAdjustmentService {
       resource: 'MemberPackage',
       resourceId: result.package.id,
       entityCode: result.package.packageCode,
-      description: `Menyesuaikan sisa voucher BASIC menjadi ${result.after.remainingSessions} sesi`,
+      description: `Menyesuaikan sisa voucher ${result.package.packageType} menjadi ${result.after.remainingSessions} sesi`,
       beforeData: result.before,
       afterData: result.after,
       meta: {
-        action: 'ADJUST_BASIC_VOUCHER_BALANCE',
+        action: `ADJUST_${result.package.packageType}_VOUCHER_BALANCE`,
         reason: data.reason,
       },
     });

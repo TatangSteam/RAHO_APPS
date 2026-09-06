@@ -9,6 +9,7 @@ import { getAggregatePackageStatus } from './memberStatusPresentation';
 import {
   findActiveInstallmentTarget,
   findPendingPaymentTarget,
+  getPackageEditContext,
   groupMemberPackagesForDisplay,
 } from './packageCard.helpers';
 import styles from './MemberPackagesTab.module.css';
@@ -376,6 +377,10 @@ export default function PackageCard({
     const anyActiveInstallment = Boolean(activeInstallmentTarget);
     const editablePackages = ([...basics, ...boosters].filter(Boolean) as MemberPackage[])
       .filter((item) => canEditPackageStatus(item.status));
+    const packageEditContext = getPackageEditContext(
+      [...basics, ...boosters].filter(Boolean) as MemberPackage[],
+      canEditPackageStatus,
+    );
     const canEditGroup = editablePackages.length > 0;
     
     // Calculate total prices for all packages and add-ons
@@ -641,7 +646,7 @@ export default function PackageCard({
                       const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
                       onEditPackage(
                         pkg.purchaseGroupId || '',
-                        editablePackages,
+                        packageEditContext,
                         groupAddOns,
                         totalDiscount,
                         discountPercent,
@@ -705,7 +710,7 @@ export default function PackageCard({
                       const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
                       onEditPackage(
                         pkg.purchaseGroupId || '',
-                        editablePackages,
+                        packageEditContext,
                         groupAddOns,
                         totalDiscount,
                         discountPercent,

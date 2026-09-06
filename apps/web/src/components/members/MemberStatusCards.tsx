@@ -6,8 +6,9 @@ import { getMemberVoucherTotals } from './memberStatusPresentation';
 interface MemberStatusCardsProps {
   member: MemberDetail;
   packages: PackageDisplay[];
-  canEditBasicVoucher?: boolean;
+  canEditVoucher?: boolean;
   onEditBasicVoucher?: () => void;
+  onEditBoosterVoucher?: () => void;
 }
 
 const toneClasses = {
@@ -53,8 +54,9 @@ function StatusItem({
 export default function MemberStatusCards({
   member,
   packages,
-  canEditBasicVoucher = false,
+  canEditVoucher = false,
   onEditBasicVoucher,
+  onEditBoosterVoucher,
 }: MemberStatusCardsProps) {
   const voucherTotals = getMemberVoucherTotals(packages);
   const isActive = member.isActive && !member.isDeceased;
@@ -80,7 +82,7 @@ export default function MemberStatusCards({
         helper="Sisa aktif"
         icon={<Package size={19} />}
         tone="blue"
-        action={canEditBasicVoucher && onEditBasicVoucher ? (
+        action={canEditVoucher && onEditBasicVoucher ? (
           <button
             type="button"
             onClick={onEditBasicVoucher}
@@ -92,7 +94,24 @@ export default function MemberStatusCards({
           </button>
         ) : undefined}
       />
-      <StatusItem label="Voucher BOOSTER" value={voucherTotals.booster} helper="Sisa aktif" icon={<Rocket size={19} />} tone="purple" />
+      <StatusItem
+        label="Voucher BOOSTER"
+        value={voucherTotals.booster}
+        helper="Sisa aktif"
+        icon={<Rocket size={19} />}
+        tone="purple"
+        action={canEditVoucher && onEditBoosterVoucher ? (
+          <button
+            type="button"
+            onClick={onEditBoosterVoucher}
+            aria-label="Edit voucher BOOSTER"
+            title="Edit voucher BOOSTER"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-purple-200 text-purple-600 transition hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-500/10"
+          >
+            <Pencil size={15} />
+          </button>
+        ) : undefined}
+      />
       <StatusItem
         label="Rank member"
         value={member.memberRank ? `Rank ${member.memberRank}` : '-'}
