@@ -101,6 +101,9 @@ export default function SessionDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
+  const isReadOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
+  const canWriteSession = !isReadOnlyAdminManager;
   const sessionId = params.sessionId as string;
   const requestedReturnTo = searchParams.get('returnTo');
   const returnTo =
@@ -240,6 +243,7 @@ export default function SessionDetailPage() {
   }, []);
 
   const saveWorkflowProgress = useCallback(async (force = false): Promise<boolean> => {
+    if (!canWriteSession) return true;
     if (!session || session.session.isCompleted) return true;
     if (workflowSaveInFlightRef.current) return false;
     if (!force && !workflowDirtyRef.current) return true;
@@ -286,7 +290,7 @@ export default function SessionDetailPage() {
     } finally {
       workflowSaveInFlightRef.current = false;
     }
-  }, [activeStep, session, sessionId]);
+  }, [activeStep, canWriteSession, session, sessionId]);
 
   const handleStepComplete = useCallback(async () => {
     for (let attempt = 0; workflowSaveInFlightRef.current && attempt < 50; attempt += 1) {
@@ -727,11 +731,13 @@ export default function SessionDetailPage() {
   if (!session) return null;
 
   const { session: sessionInfo, steps } = session;
-  const canEditSessionBoosterPackage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canEditSessionBoosterPackage = canWriteSession && (
+    user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER'
+  );
   const sessionEditFieldDisabled = savingBoosterPackage || loadingBoosterPackages;
-  const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
-  const userCanFinalize = canFinalizeSession(user?.role);
-  const userCanActivateMaterials = canActivateSessionMaterials(user?.role, user?.userId, sessionInfo);
+  const canCancelCompletion = canWriteSession && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
+  const userCanFinalize = canWriteSession && canFinalizeSession(user?.role);
+  const userCanActivateMaterials = canWriteSession && canActivateSessionMaterials(user?.role, user?.userId, sessionInfo);
   const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
   const correctionDeadline = sessionInfo.completedAt
     ? new Date(sessionInfo.completedAt).getTime() + (4 * 60 * 60 * 1000)
@@ -743,7 +749,8 @@ export default function SessionDetailPage() {
   const correctionMinutes = correctionTotalMinutes % 60;
   const postCompletionEditableSteps = new Set([1, 3, 7, 8, 9]);
   const canEditStepNow = (step: number) => (
-    canEditSessionStep(user?.role, step)
+    canWriteSession
+    && canEditSessionStep(user?.role, step)
     && correctionWindowOpen
     && (!sessionInfo.isCompleted || postCompletionEditableSteps.has(step))
   );

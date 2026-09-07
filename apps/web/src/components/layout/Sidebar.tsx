@@ -862,7 +862,7 @@ export function Sidebar({
           const visibleItems = group.items.filter((item) => (
             item.roles.includes(role) &&
             (!focusedMenu || focusedMenu.has(item.href)) &&
-            (!isMemberViewOnlyAdminManager || item.href === '/members')
+            (!isMemberViewOnlyAdminManager || ['/members', '/sessions'].includes(item.href))
           ));
           if (visibleItems.length === 0) return null;
 

@@ -61,6 +61,8 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
       !(
         pathname === '/members' ||
         pathname.startsWith('/members/') ||
+        pathname === '/sessions' ||
+        pathname.startsWith('/sessions/') ||
         pathname === '/profile' ||
         pathname.startsWith('/profile/')
       )

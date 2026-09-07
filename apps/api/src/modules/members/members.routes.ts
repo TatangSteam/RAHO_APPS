@@ -22,6 +22,7 @@ const ALLSTAFF = [
 
 const ALLSTAFF_EXCEPT_ADMIN_MANAGER = ALLSTAFF.filter((role) => role !== Role.ADMIN_MANAGER);
 const MEMBER_MUTATORS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.SUPER_ADMIN];
+const MEMBER_DOCUMENT_UPLOADERS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
 const MEMBER_PROFILE_MUTATORS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
 const MEMBER_DELETERS = [Role.SUPER_ADMIN];
 const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
@@ -404,11 +405,12 @@ router.post(
 // ============================================================
 
 // POST /api/v1/members/:memberId/documents - Upload member documents (PSP or Profile Photo)
-// Accessible by ADMIN_LAYANAN, ADMIN_CABANG, SUPER_ADMIN
+// Accessible by operational admins and ADMIN_MANAGER with FULL access to the
+// member's branch. Per-branch manager scope is enforced in the controller.
 router.post(
   '/:memberId/documents',
   authenticate,
-  authorize(MEMBER_MUTATORS),
+  authorize(MEMBER_DOCUMENT_UPLOADERS),
   assertBranchAccess,
   uploadMemberDocuments.single('file'),
   controller.uploadMemberDocuments.bind(controller)

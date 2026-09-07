@@ -178,6 +178,25 @@ export class SessionsController {
     }
   }
 
+  private async assertManagerCanViewBranch(userId: string, branchId: string) {
+    const managedBranch = await prisma.managerBranch.findFirst({
+      where: {
+        userId,
+        branchId,
+        branch: { isActive: true },
+      },
+      select: { id: true },
+    });
+
+    if (!managedBranch) {
+      throw {
+        status: 403,
+        code: 'SESSION_BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
+      };
+    }
+  }
+
   private async resolveCreateSessionBranchId(
     data: CreateSessionInput,
     user: Request['user']
@@ -252,7 +271,8 @@ export class SessionsController {
 
   private async getAuthorizedSessionBranchId(
     sessionId: string,
-    user: Request['user']
+    user: Request['user'],
+    access: 'read' | 'write' = 'write'
   ): Promise<string> {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
@@ -279,7 +299,11 @@ export class SessionsController {
     }
 
     if (user.role === Role.ADMIN_MANAGER) {
-      await this.assertManagerCanAccessBranch(user.userId, session.branchId);
+      if (access === 'read') {
+        await this.assertManagerCanViewBranch(user.userId, session.branchId);
+      } else {
+        await this.assertManagerCanAccessBranch(user.userId, session.branchId);
+      }
       return session.branchId;
     }
 
@@ -310,7 +334,8 @@ export class SessionsController {
 
   private async getAuthorizedEncounterBranchId(
     encounterId: string,
-    user: Request['user']
+    user: Request['user'],
+    access: 'read' | 'write' = 'write'
   ): Promise<string> {
     const encounter = await prisma.encounter.findUnique({
       where: { id: encounterId },
@@ -330,7 +355,11 @@ export class SessionsController {
     }
 
     if (user.role === Role.ADMIN_MANAGER) {
-      await this.assertManagerCanAccessBranch(user.userId, encounter.branchId);
+      if (access === 'read') {
+        await this.assertManagerCanViewBranch(user.userId, encounter.branchId);
+      } else {
+        await this.assertManagerCanAccessBranch(user.userId, encounter.branchId);
+      }
       return encounter.branchId;
     }
 
@@ -427,7 +456,7 @@ export class SessionsController {
   async getSessionById(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getSessionById(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -463,7 +492,8 @@ export class SessionsController {
       } = req.query;
       const { userId, branchId, role } = req.user!;
       
-      // For SUPER_ADMIN and ADMIN_MANAGER, support multiple branch selection
+      // SUPER_ADMIN may select any branch. ADMIN_MANAGER is always limited to
+      // active ManagerBranch assignments, including read-only assignments.
       let effectiveBranchIds: string[] | undefined = undefined;
       
       if (filterBranchIds) {
@@ -482,7 +512,31 @@ export class SessionsController {
           effectiveBranchIds = [branchId];
         }
       }
-      // For SUPER_ADMIN/ADMIN_MANAGER without filter: effectiveBranchIds stays undefined (see all)
+
+      if (role === Role.ADMIN_MANAGER) {
+        const assignments = await prisma.managerBranch.findMany({
+          where: {
+            userId,
+            branch: { isActive: true },
+          },
+          select: { branchId: true },
+        });
+        const allowedBranchIds = new Set(assignments.map((assignment) => assignment.branchId));
+
+        if (effectiveBranchIds?.some((id) => !allowedBranchIds.has(id))) {
+          throw {
+            status: 403,
+            code: 'SESSION_BRANCH_ACCESS_DENIED',
+            message: 'Filter cabang berada di luar akses Admin Manager.',
+          };
+        }
+
+        effectiveBranchIds = effectiveBranchIds || Array.from(allowedBranchIds);
+        if (effectiveBranchIds.length === 0) {
+          // An impossible branch ID makes the result safely empty.
+          effectiveBranchIds = ['no-managed-branches'];
+        }
+      }
       
       // Parse diagnosis categories filter (comma-separated string to array)
       let effectiveDiagnosisCategories: string[] | undefined = undefined;
@@ -598,7 +652,7 @@ export class SessionsController {
   async getDiagnosisByEncounter(req: Request, res: Response, next: NextFunction) {
     try {
       const { encounterId } = req.params;
-      await this.getAuthorizedEncounterBranchId(encounterId, req.user!);
+      await this.getAuthorizedEncounterBranchId(encounterId, req.user!, 'read');
       const diagnosis = await sessionsService.getDiagnosisByEncounter(encounterId);
       return sendSuccess(res, diagnosis);
     } catch (err) {
@@ -669,6 +723,7 @@ export class SessionsController {
   async getTherapyPlan(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getTherapyPlan(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -682,7 +737,7 @@ export class SessionsController {
   async getTherapyPlanSet(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getTherapyPlanSetForSession(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -766,7 +821,7 @@ export class SessionsController {
     try {
       const { sessionId } = req.params;
       const branchId = sessionId
-        ? await this.getAuthorizedSessionBranchId(sessionId, req.user!)
+        ? await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read')
         : req.user!.branchId;
 
       if (!branchId) {
@@ -812,6 +867,7 @@ export class SessionsController {
   async getVitalSigns(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getVitalSigns(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -853,6 +909,7 @@ export class SessionsController {
   async getInfusion(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getInfusion(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -890,7 +947,7 @@ export class SessionsController {
   async getMaterialUsages(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getMaterialUsages(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -935,7 +992,7 @@ export class SessionsController {
   async getMaterialRecommendations(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       return sendSuccess(res, await getSessionMaterialRecommendations(req.user!.userId, sessionId));
     } catch (err) {
       if (err.status) return sendError(res, err.status, err.code, err.message);
@@ -993,6 +1050,7 @@ export class SessionsController {
   async getEvaluation(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getEvaluation(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -1009,6 +1067,7 @@ export class SessionsController {
 
   async previewWhatsAppReport(req: Request, res: Response, next: NextFunction) {
     try {
+      await this.getAuthorizedSessionBranchId(req.params.sessionId, req.user!, 'read');
       const result = await sessionsService.previewWhatsAppReport(
         req.params.sessionId,
         req.user!.userId,
@@ -1047,6 +1106,7 @@ export class SessionsController {
 
   async listWhatsAppReportDeliveries(req: Request, res: Response, next: NextFunction) {
     try {
+      await this.getAuthorizedSessionBranchId(req.params.sessionId, req.user!, 'read');
       const result = await sessionsService.listWhatsAppReportDeliveries(
         req.params.sessionId,
         req.user!.userId,
@@ -1143,6 +1203,7 @@ export class SessionsController {
   async getSessionProgress(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getSessionProgress(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -1192,6 +1253,7 @@ export class SessionsController {
   async getPhoto(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await sessionsService.getPhoto(sessionId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -1285,6 +1347,7 @@ export class SessionsController {
   async getSupportingPhotos(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!, 'read');
       const result = await supportingPhotosService.getSupportingPhotosBySession(sessionId);
       return sendSuccess(res, result);
     } catch (err) {

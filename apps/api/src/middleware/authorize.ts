@@ -8,7 +8,8 @@ const MEMBER_VIEW_ONLY_SCOPE = 'MEMBER_VIEW_ONLY';
 
 function getNormalizedPath(req: Request): string {
   const path = `${req.baseUrl}${req.path}`.replace(/\/+/g, '/');
-  return path.replace(/^\/api\/v\d+/, '') || '/';
+  const unversioned = path.replace(/^\/api\/v\d+/, '') || '/';
+  return unversioned.length > 1 ? unversioned.replace(/\/+$/, '') : unversioned;
 }
 
 function isMemberViewOnlyAllowedRoute(req: Request): boolean {
@@ -27,8 +28,44 @@ function isMemberViewOnlyAllowedRoute(req: Request): boolean {
     return true;
   }
 
-  if (method === 'GET' && path === '/treatment-sessions' && typeof req.query.memberId === 'string') {
-    return true;
+  if (method === 'GET') {
+    if (path === '/treatment-sessions') return true;
+
+    if (/^\/treatment-sessions\/encounters\/[^/]+\/diagnoses$/.test(path)) {
+      return true;
+    }
+
+    const sessionReadMatch = path.match(/^\/treatment-sessions\/([^/]+)(?:\/(.+))?$/);
+    const reservedSessionRoutes = new Set([
+      'workflow-burden',
+      'unfinished-reminders',
+      'members',
+      'booster-stock-availability',
+    ]);
+    const readOnlySessionSuffixes = new Set([
+      undefined,
+      'booster-stock-availability',
+      'therapy-plan',
+      'therapy-plan-set',
+      'vital-signs',
+      'infusion',
+      'material-recommendations',
+      'materials',
+      'evaluation',
+      'photo',
+      'supporting-photos',
+      'progress',
+      'whatsapp-report/preview',
+      'whatsapp-deliveries',
+    ]);
+
+    if (
+      sessionReadMatch &&
+      !reservedSessionRoutes.has(sessionReadMatch[1]) &&
+      readOnlySessionSuffixes.has(sessionReadMatch[2])
+    ) {
+      return true;
+    }
   }
 
   return false;

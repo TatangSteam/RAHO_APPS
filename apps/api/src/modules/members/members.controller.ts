@@ -37,6 +37,47 @@ function getErrorCode(error: unknown): string {
 }
 
 export class MembersController {
+  private async assertAdminManagerCanUploadDocument(
+    memberId: string,
+    user: NonNullable<Request['user']>,
+  ): Promise<void> {
+    if (user.role !== Role.ADMIN_MANAGER) return;
+
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: {
+        registrationBranchId: true,
+        branchAccesses: { select: { branchId: true } },
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan.' };
+    }
+
+    const memberBranchIds = Array.from(new Set([
+      member.registrationBranchId,
+      ...member.branchAccesses.map((access) => access.branchId),
+    ]));
+    const writableAssignment = await prisma.managerBranch.findFirst({
+      where: {
+        userId: user.userId,
+        branchId: { in: memberBranchIds },
+        accessScope: 'FULL',
+        branch: { isActive: true },
+      },
+      select: { id: true },
+    });
+
+    if (!writableAssignment) {
+      throw {
+        status: 403,
+        code: 'ADMIN_MANAGER_BRANCH_MEMBER_VIEW_ONLY',
+        message: 'Upload informed consent memerlukan akses penuh pada cabang member.',
+      };
+    }
+  }
+
   async getEmployeeEnrollmentOptions(_req: Request, res: Response, next: NextFunction) {
     try {
       sendSuccess(res, await getEmployeeMemberEnrollmentOptions());
@@ -863,6 +904,8 @@ export class MembersController {
           message: 'Foto profil hanya menerima file gambar.',
         };
       }
+
+      await this.assertAdminManagerCanUploadDocument(memberId, req.user!);
 
       const result = await membersService.uploadMemberDocument(
         memberId,

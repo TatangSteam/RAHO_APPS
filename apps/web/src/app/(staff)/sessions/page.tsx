@@ -349,7 +349,10 @@ export default function SessionsPage() {
   });
 
   const [tableFields, setTableFields] = useState<Record<string, boolean>>({ ...DEFAULT_TABLE_FIELDS });
-  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const isReadOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
+  const canDeleteSessions =
+    user?.role === 'SUPER_ADMIN' || (user?.role === 'ADMIN_MANAGER' && !isReadOnlyAdminManager);
 
   // Field categories for UI grouping
   const fieldCategories = [
@@ -1165,7 +1168,7 @@ export default function SessionsPage() {
           <p className={styles.subtitle}>Daftar semua sesi terapi</p>
         </div>
         <div className={styles.headerActions}>
-          {['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && (
+          {['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && !isReadOnlyAdminManager && (
             <button className="btn btn-secondary" onClick={() => router.push('/sessions/workflow-audit')}>
               Audit Beban Pengisian
             </button>
@@ -1182,12 +1185,14 @@ export default function SessionsPage() {
           >
             🔍 Filter {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowExportModal(true)}
-          >
-            📥 Export
-          </button>
+          {!isReadOnlyAdminManager && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowExportModal(true)}
+            >
+              📥 Export
+            </button>
+          )}
         </div>
       </div>
 

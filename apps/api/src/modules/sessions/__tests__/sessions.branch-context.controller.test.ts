@@ -12,6 +12,7 @@ jest.mock('../../../lib/prisma', () => ({
     },
     managerBranch: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
   },
 }));
@@ -24,6 +25,7 @@ jest.mock('../../../utils/response', () => ({
 jest.mock('../sessions.service', () => ({
   SessionsService: jest.fn().mockImplementation(() => ({
     getSessionById: jest.fn(),
+    getAllSessions: jest.fn(),
     createInfusion: jest.fn(),
     updateSessionDetails: jest.fn(),
     updateTherapyPlanSetForSession: jest.fn(),
@@ -181,7 +183,7 @@ describe('SessionsController branch context', () => {
     expect(sessionsServiceMock.getSessionById).not.toHaveBeenCalled();
   });
 
-  it('keeps MEMBER_VIEW_ONLY manager assignments read-only for session data', async () => {
+  it('allows MEMBER_VIEW_ONLY manager assignments to read session data', async () => {
     (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
       branchId: 'managed-branch',
     });
@@ -204,13 +206,74 @@ describe('SessionsController branch context', () => {
 
     await controller.getSessionById(req, res, next);
 
+    expect(sessionsServiceMock.getSessionById).toHaveBeenCalledWith('session-1');
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      { session: { sessionId: 'session-1' } },
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('keeps MEMBER_VIEW_ONLY manager assignments read-only for session writes', async () => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
+      branchId: 'managed-branch',
+    });
+    (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue({
+      id: 'assignment-1',
+      accessScope: 'MEMBER_VIEW_ONLY',
+    });
+
+    const req = {
+      params: { sessionId: 'session-1' },
+      body: { treatmentDate: '2026-08-20T05:00:00.000Z' },
+      user: {
+        userId: 'manager-1',
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+        branches: ['managed-branch'],
+      },
+    } as unknown as Request;
+    const res = {} as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.updateSessionDetails(req, res, next);
+
     expect(sendError).toHaveBeenCalledWith(
       res,
       403,
       'SESSION_BRANCH_ACCESS_DENIED',
       'Akses Admin Manager pada cabang ini hanya untuk melihat data member',
     );
-    expect(sessionsServiceMock.getSessionById).not.toHaveBeenCalled();
+    expect(sessionsServiceMock.updateSessionDetails).not.toHaveBeenCalled();
+  });
+
+  it('limits the ADMIN_MANAGER session list to assigned branches', async () => {
+    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([
+      { branchId: 'managed-branch-1' },
+      { branchId: 'managed-branch-2' },
+    ]);
+    sessionsServiceMock.getAllSessions.mockResolvedValue([]);
+
+    const req = {
+      query: {},
+      user: {
+        userId: 'manager-1',
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+        branches: ['managed-branch-1', 'managed-branch-2'],
+      },
+    } as unknown as Request;
+    const res = {} as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.getAllSessions(req, res, next);
+
+    expect(sessionsServiceMock.getAllSessions).toHaveBeenCalledWith(expect.objectContaining({
+      role: Role.ADMIN_MANAGER,
+      userId: 'manager-1',
+      branchIds: ['managed-branch-1', 'managed-branch-2'],
+    }));
+    expect(sendSuccess).toHaveBeenCalledWith(res, []);
   });
 
   it('allows an assigned DOCTOR to edit the session therapy plan set', async () => {
