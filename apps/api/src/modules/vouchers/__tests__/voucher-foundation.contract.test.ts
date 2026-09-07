@@ -178,7 +178,10 @@ describe('Voucher Partnership foundation', () => {
     expect(sidebar).toContain("href: '/extra/vouchers/locations'");
     expect(sidebar).toContain("href: '/extra/vouchers/operators'");
     expect(sidebar).toContain("roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'VOUCHER_OPERATOR']");
-    expect(sidebar).toContain("VOUCHER_OPERATOR: new Set(['/extra/vouchers', '/extra/vouchers/history'])");
+    const voucherOperatorFocusedMenu = sidebar.match(/VOUCHER_OPERATOR:\s*new Set\(\[([^\]]+)]\)/)?.[1] ?? '';
+    expect(voucherOperatorFocusedMenu).toContain("'/extra/vouchers'");
+    expect(voucherOperatorFocusedMenu).toContain("'/extra/vouchers/history'");
+    expect(voucherOperatorFocusedMenu).toContain('...COLLABORATION_MENU');
     expect(middleware).toContain("pathname === '/extra/vouchers/history'");
     expect(middleware).not.toContain("pathname.startsWith('/extra/vouchers/')");
     expect(page).toContain('Klaim Voucher');
