@@ -67,20 +67,7 @@ export class EvaluationService {
   async createEvaluation(sessionId: string, data: CreateEvaluationInput, userId: string) {
     const authorizedSession = await this.assertEditor(sessionId, data, userId);
     assertSessionEditWindow(authorizedSession);
-    // Check if evaluation already exists
-    const existing = await prisma.doctorEvaluation.findUnique({
-      where: { treatmentSessionId: sessionId },
-    });
 
-    if (existing) {
-      throw {
-        status: 409,
-        code: 'EVALUATION_EXISTS',
-        message: 'Evaluasi dokter untuk sesi ini sudah ada',
-      };
-    }
-
-    // Check if session exists
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
       include: {
@@ -93,33 +80,18 @@ export class EvaluationService {
       throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
     }
 
-    // Relaxed validation - allow evaluation without EMR notes for pending sessions
-    // if (session.emrNotes.length === 0) {
-    //   throw {
-    //     status: 422,
-    //     code: 'EMR_NOTES_REQUIRED',
-    //     message: 'Catatan EMR harus dibuat terlebih dahulu',
-    //   };
-    // }
-
-    // Generate evaluation code with sequence
     const branchCode = session.branch.branchCode;
-    const prefix = `EVL-${branchCode}-`;
-    const lastEvaluation = await prisma.doctorEvaluation.findFirst({
-      where: { evaluationCode: { startsWith: prefix } },
-      orderBy: { evaluationCode: 'desc' },
-    });
-    
-    const sequence = lastEvaluation 
-      ? parseInt(lastEvaluation.evaluationCode.split('-').pop() || '0') + 1 
-      : 1;
-    
-    const evaluationCode = generateEvaluationCode(branchCode, sequence);
+    const stored = await prisma.$transaction(async (tx) => {
+      // Step 8 and Step 9 share one DoctorEvaluation row. Serialize saves per
+      // branch so stale clients and concurrent sessions cannot create duplicate
+      // rows or reuse the same human-readable evaluation code.
+      const lockKey = `doctor-evaluation:${authorizedSession.branchId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-    const evaluation = await prisma.doctorEvaluation.create({
-      data: {
-        evaluationCode,
-        treatmentSessionId: sessionId,
+      const existing = await tx.doctorEvaluation.findUnique({
+        where: { treatmentSessionId: sessionId },
+      });
+      const evaluationData = {
         keluhan: data.keluhan,
         rekomendasi: data.rekomendasi,
         subjective: data.subjective,
@@ -128,20 +100,51 @@ export class EvaluationService {
         plan: data.plan,
         generalNotes: data.generalNotes,
         writtenBy: userId,
-      },
+      };
+
+      if (existing) {
+        const evaluation = await tx.doctorEvaluation.update({
+          where: { treatmentSessionId: sessionId },
+          data: evaluationData,
+        });
+        return { evaluation, previous: existing, action: AuditAction.UPDATE };
+      }
+
+      const prefix = `EVL-${branchCode}-`;
+      const lastEvaluation = await tx.doctorEvaluation.findFirst({
+        where: { evaluationCode: { startsWith: prefix } },
+        orderBy: { evaluationCode: 'desc' },
+      });
+      const sequence = lastEvaluation
+        ? parseInt(lastEvaluation.evaluationCode.split('-').pop() || '0') + 1
+        : 1;
+      const evaluationCode = generateEvaluationCode(branchCode, sequence);
+      const evaluation = await tx.doctorEvaluation.create({
+        data: {
+          evaluationCode,
+          treatmentSessionId: sessionId,
+          ...evaluationData,
+        },
+      });
+      return { evaluation, previous: null, action: AuditAction.CREATE };
     });
 
     await logAudit({
       userId,
       branchId: authorizedSession.branchId,
-      action: AuditAction.CREATE,
+      action: stored.action,
       resource: 'DoctorEvaluation',
-      resourceId: evaluation.id,
-      afterData: evaluation,
-      meta: { evaluationCode, sessionId, changedFields: Object.keys(data) },
+      resourceId: stored.evaluation.id,
+      beforeData: stored.previous,
+      afterData: stored.evaluation,
+      meta: {
+        evaluationCode: stored.evaluation.evaluationCode,
+        sessionId,
+        changedFields: Object.keys(data),
+      },
     });
 
-    return evaluation;
+    return stored.evaluation;
   }
 
   async updateEvaluation(sessionId: string, data: Partial<CreateEvaluationInput>, userId: string) {

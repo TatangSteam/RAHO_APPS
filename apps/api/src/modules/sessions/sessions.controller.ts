@@ -82,6 +82,7 @@ export class SessionsController {
         vitalSigns: { select: { waktuCatat: true } },
         infusion: { select: { id: true } },
         materials: { take: 1, select: { id: true } },
+        skipInventoryConsumption: true,
       },
     });
 
@@ -129,7 +130,7 @@ export class SessionsController {
         Boolean(session.therapyPlan) &&
         session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM') &&
         Boolean(session.infusion) &&
-        session.materials.length > 0 &&
+        (session.skipInventoryConsumption || session.materials.length > 0) &&
         session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
 
       if (!prerequisitesReady) {

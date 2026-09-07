@@ -6,6 +6,7 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { evaluationApi } from '@/lib/evaluationApi';
 import { devError } from '@/lib/logger';
+import { getApiErrorMessage } from '@/lib/api';
 import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
 
 interface Evaluation {
@@ -104,7 +105,7 @@ export default function Step9Evaluation({
     } catch (error) {
       assertCaughtError(error);
       devError('Error saving evaluation:', error);
-      showToast.error(error.message || 'Gagal menyimpan evaluasi');
+      showToast.error(getApiErrorMessage(error) || 'Gagal menyimpan evaluasi');
     } finally {
       setLoading(false);
     }

@@ -292,8 +292,10 @@ export default function SessionDetailPage() {
     for (let attempt = 0; workflowSaveInFlightRef.current && attempt < 50; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
-    const saved = await saveWorkflowProgress(true);
-    if (saved) await loadSessionDetail();
+    await saveWorkflowProgress(true);
+    // Always reload the clinical record. A workflow revision conflict must not
+    // leave the next step with stale data from the previous save.
+    await loadSessionDetail();
   }, [loadSessionDetail, saveWorkflowProgress]);
 
   useEffect(() => {
@@ -747,8 +749,9 @@ export default function SessionDetailPage() {
   );
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
-  // Check if step can be accessed
-  const canAccessStep = (step: number): boolean => {
+  // All assigned session participants may view every step. These prerequisites
+  // only control editing, preserving the required clinical sequence.
+  const areStepPrerequisitesMet = (step: number): boolean => {
     if (step === 1) return true; // Diagnosis always accessible
     if (step === 2) return steps.step1_diagnosis; // Therapy Plan needs diagnosis
     if (step === 3) return steps.step2_therapyPlan; // Vital Before needs therapy plan
@@ -760,6 +763,31 @@ export default function SessionDetailPage() {
     if (step === 9) return steps.step7_vitalAfter; // Evaluation needs vital after (step 8 is optional)
     return false;
   };
+
+  const hasViewableStepData = (step: number): boolean => {
+    if (step === 1) return Boolean(session.diagnosis);
+    if (step === 2) return Boolean(session.therapyPlan);
+    if (step === 3) return vitalSignsBefore.length > 0;
+    if (step === 4) return Boolean(session.infusion);
+    if (step === 5) return skipsInventory || session.materials.length > 0;
+    if (step === 6) return Boolean(session.photo);
+    if (step === 7) return session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
+    if (step === 8) return Boolean(session.evaluation?.keluhan || session.evaluation?.rekomendasi);
+    if (step === 9) return Boolean(
+      session.evaluation && [
+        session.evaluation.subjective,
+        session.evaluation.objective,
+        session.evaluation.assessment,
+        session.evaluation.plan,
+        session.evaluation.generalNotes,
+      ].some((value) => typeof value === 'string' && value.trim().length > 0),
+    );
+    return false;
+  };
+
+  const canRenderStep = (step: number) => (
+    areStepPrerequisitesMet(step) || hasViewableStepData(step)
+  );
 
   // Check if all required steps are complete (photo is optional)
   const allRequiredStepsComplete = 
@@ -1107,7 +1135,7 @@ export default function SessionDetailPage() {
         </div>
 
         <p className={styles.stepHint}>
-          Pilih langkah di bawah. Sistem mengunci langkah yang belum siap agar urutan pengisian tetap aman.
+          Semua anggota sesi dapat membuka dan melihat setiap langkah. Hak edit tetap mengikuti penugasan dan urutan klinis.
         </p>
 
         <div className={styles.stepGrid} style={{
@@ -1120,8 +1148,8 @@ export default function SessionDetailPage() {
             title="Diagnosis" 
             completed={steps.step1_diagnosis} 
             active={activeStep === 1} 
-            onClick={() => canAccessStep(1) && setActiveStep(1)}
-            locked={!canAccessStep(1)}
+            onClick={() => setActiveStep(1)}
+            locked={false}
             icon="🩺"
           />
           <StepIndicator 
@@ -1129,8 +1157,8 @@ export default function SessionDetailPage() {
             title="Therapy Plan" 
             completed={steps.step2_therapyPlan} 
             active={activeStep === 2} 
-            onClick={() => canAccessStep(2) && setActiveStep(2)}
-            locked={!canAccessStep(2)}
+            onClick={() => setActiveStep(2)}
+            locked={false}
             icon="📝"
           />
           <StepIndicator 
@@ -1138,8 +1166,8 @@ export default function SessionDetailPage() {
             title="Vital Sebelum" 
             completed={steps.step3_vitalBefore} 
             active={activeStep === 3} 
-            onClick={() => canAccessStep(3) && setActiveStep(3)}
-            locked={!canAccessStep(3)}
+            onClick={() => setActiveStep(3)}
+            locked={false}
             icon="💉"
           />
           <StepIndicator 
@@ -1147,8 +1175,8 @@ export default function SessionDetailPage() {
             title="Infus Aktual" 
             completed={steps.step4_infusion} 
             active={activeStep === 4} 
-            onClick={() => canAccessStep(4) && setActiveStep(4)}
-            locked={!canAccessStep(4)}
+            onClick={() => setActiveStep(4)}
+            locked={false}
             icon="💧"
           />
           <StepIndicator 
@@ -1156,8 +1184,8 @@ export default function SessionDetailPage() {
             title="Material Usage" 
             completed={steps.step5_materials} 
             active={activeStep === 5} 
-            onClick={() => canAccessStep(5) && setActiveStep(5)}
-            locked={!canAccessStep(5)}
+            onClick={() => setActiveStep(5)}
+            locked={false}
             icon="📦"
           />
           <StepIndicator 
@@ -1165,8 +1193,8 @@ export default function SessionDetailPage() {
             title="Upload Foto" 
             completed={steps.step6_photo} 
             active={activeStep === 6} 
-            onClick={() => canAccessStep(6) && setActiveStep(6)}
-            locked={!canAccessStep(6)}
+            onClick={() => setActiveStep(6)}
+            locked={false}
             icon="📸"
             optional={true}
           />
@@ -1175,8 +1203,8 @@ export default function SessionDetailPage() {
             title="Vital Sesudah" 
             completed={steps.step7_vitalAfter} 
             active={activeStep === 7} 
-            onClick={() => canAccessStep(7) && setActiveStep(7)}
-            locked={!canAccessStep(7)}
+            onClick={() => setActiveStep(7)}
+            locked={false}
             icon="💉"
           />
           <StepIndicator
@@ -1184,8 +1212,8 @@ export default function SessionDetailPage() {
             title="Keluhan & Rekomendasi"
             completed={session.evaluation?.keluhan || session.evaluation?.rekomendasi ? true : false}
             active={activeStep === 8}
-            onClick={() => canAccessStep(8) && setActiveStep(8)}
-            locked={!canAccessStep(8)}
+            onClick={() => setActiveStep(8)}
+            locked={false}
             icon="📝"
             optional={true}
           />
@@ -1194,8 +1222,8 @@ export default function SessionDetailPage() {
             title="Evaluasi Dokter"
             completed={steps.step8_evaluation}
             active={activeStep === 9}
-            onClick={() => canAccessStep(9) && setActiveStep(9)}
-            locked={!canAccessStep(9)}
+            onClick={() => setActiveStep(9)}
+            locked={false}
             icon="📋"
           />
         </div>
@@ -1203,11 +1231,17 @@ export default function SessionDetailPage() {
 
       {/* Step Content */}
       <div className="card">
-        {!canEditStepNow(activeStep) && (
+        {(!canEditStepNow(activeStep) || !areStepPrerequisitesMet(activeStep)) && (
           <div style={{ margin: '16px', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.35)', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Langkah ini merupakan tanggung jawab <strong>{SESSION_STEP_OWNER[activeStep]}</strong>. Anda dapat melihat statusnya, tetapi tidak dapat mengubah isian.
+            {!areStepPrerequisitesMet(activeStep)
+              ? 'Langkah ini dapat dilihat, tetapi belum dapat diubah karena tahap sebelumnya belum lengkap.'
+              : <>Langkah ini merupakan tanggung jawab <strong>{SESSION_STEP_OWNER[activeStep]}</strong>. Anda dapat melihat isinya, tetapi tidak dapat mengubah data.</>}
           </div>
         )}
+        <fieldset
+          disabled={!canEditStepNow(activeStep) || !areStepPrerequisitesMet(activeStep)}
+          style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+        >
         <SessionWorkflowDraftProvider
           drafts={workflowDrafts}
           updateDraft={updateWorkflowDraft}
@@ -1218,7 +1252,7 @@ export default function SessionDetailPage() {
             encounterId={sessionInfo.encounterId}
             memberId={session.memberId}
             diagnosis={session.diagnosis}
-            isLocked={!canEditStepNow(1)}
+            isLocked={!canRenderStep(1)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1228,7 +1262,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
-            isLocked={!canAccessStep(2) || !canEditStepNow(2)}
+            isLocked={!canRenderStep(2)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1237,7 +1271,7 @@ export default function SessionDetailPage() {
           <Step3VitalBefore 
             sessionId={sessionId}
             vitalSigns={vitalSignsBefore}
-            isLocked={!canAccessStep(3) || !canEditStepNow(3)}
+            isLocked={!canRenderStep(3)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(4)}
           />
@@ -1249,7 +1283,7 @@ export default function SessionDetailPage() {
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
             infusion={session.infusion}
-            isLocked={!canAccessStep(4) || !canEditStepNow(4)}
+            isLocked={!canRenderStep(4)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(5)}
             onEditTherapyPlanSet={openTherapyPlanEditModal}
@@ -1288,7 +1322,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             branchId={sessionInfo.branchId || ''}
             materials={session.materials || []}
-            isLocked={!canAccessStep(5) || !canEditStepNow(5)}
+            isLocked={!canRenderStep(5)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1297,7 +1331,7 @@ export default function SessionDetailPage() {
           <Step7Photo 
             sessionId={sessionId}
             photo={session.photo}
-            isLocked={!canAccessStep(6) || !canEditStepNow(6)}
+            isLocked={!canRenderStep(6)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1306,7 +1340,7 @@ export default function SessionDetailPage() {
           <Step8VitalAfter 
             sessionId={sessionId}
             vitalSigns={session.vitalSigns}
-            isLocked={!canAccessStep(7) || !canEditStepNow(7)}
+            isLocked={!canRenderStep(7)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1318,7 +1352,7 @@ export default function SessionDetailPage() {
               keluhan: session.evaluation.keluhan,
               rekomendasi: session.evaluation.rekomendasi
             } : null}
-            isLocked={!canAccessStep(8) || !canEditStepNow(8)}
+            isLocked={!canRenderStep(8)}
             onComplete={async () => {
               await handleStepComplete();
               setActiveStep(9);
@@ -1330,11 +1364,12 @@ export default function SessionDetailPage() {
           <Step9Evaluation 
             sessionId={sessionId}
             evaluation={session.evaluation}
-            isLocked={!canAccessStep(9) || !canEditStepNow(9)}
+            isLocked={!canRenderStep(9)}
             onComplete={handleStepComplete}
           />
         )}
         </SessionWorkflowDraftProvider>
+        </fieldset>
       </div>
 
       {/* Session Completed Banner */}

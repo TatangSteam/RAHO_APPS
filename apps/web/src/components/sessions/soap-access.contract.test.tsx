@@ -8,6 +8,14 @@ describe('SOAP role access contract', () => {
     expect(component).toContain('perubahan tercatat di audit');
     expect(component).not.toContain("const canEdit = user?.role === 'DOCTOR'");
   });
+
+  it('lets session participants open every step while keeping non-owned steps read-only', () => {
+    const page = readFileSync(resolve(__dirname, '../../app/(staff)/sessions/[sessionId]/page.tsx'), 'utf8');
+    expect(page).toContain('Semua anggota sesi dapat membuka dan melihat setiap langkah');
+    expect(page).toContain('onClick={() => setActiveStep(9)}');
+    expect(page).toContain('disabled={!canEditStepNow(activeStep) || !areStepPrerequisitesMet(activeStep)}');
+    expect(page).not.toContain('onClick={() => canAccessStep(9)');
+  });
 });
 
 describe('WhatsApp report readiness contract', () => {
