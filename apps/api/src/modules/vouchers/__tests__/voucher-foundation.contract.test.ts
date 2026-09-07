@@ -192,7 +192,7 @@ describe('Voucher Partnership foundation', () => {
     expect(page).toContain('Terbitkan Voucher');
     expect(page).toContain('Akun Pengelola');
     expect(page).toContain('Export kode untuk print (CSV)');
-    expect(page).toContain('Generate sisa');
+    expect(page).toContain('kode berikutnya');
     expect(page).toContain('Buat Campaign Baru');
     expect(page).toContain('Buat Campaign Voucher Baru');
     expect(page).toContain('Simpan Campaign');

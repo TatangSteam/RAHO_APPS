@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedModules": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  }
+}
