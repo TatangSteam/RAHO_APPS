@@ -59,21 +59,20 @@ export class MembersController {
       member.registrationBranchId,
       ...member.branchAccesses.map((access) => access.branchId),
     ]));
-    const writableAssignment = await prisma.managerBranch.findFirst({
+    const assignment = await prisma.managerBranch.findFirst({
       where: {
         userId: user.userId,
         branchId: { in: memberBranchIds },
-        accessScope: 'FULL',
         branch: { isActive: true },
       },
       select: { id: true },
     });
 
-    if (!writableAssignment) {
+    if (!assignment) {
       throw {
         status: 403,
-        code: 'ADMIN_MANAGER_BRANCH_MEMBER_VIEW_ONLY',
-        message: 'Upload informed consent memerlukan akses penuh pada cabang member.',
+        code: 'BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke cabang member ini.',
       };
     }
   }

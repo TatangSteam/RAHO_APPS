@@ -50,7 +50,7 @@ describe('MembersController.uploadMemberDocuments', () => {
     });
   });
 
-  it('allows ADMIN_MANAGER with FULL branch assignment to upload informed consent', async () => {
+  it('allows ADMIN_MANAGER with an assigned branch to upload informed consent', async () => {
     (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue({ id: 'assignment-1' });
     uploadMemberDocumentMock.mockResolvedValue({ id: 'document-1' });
     const req = {
@@ -74,7 +74,6 @@ describe('MembersController.uploadMemberDocuments', () => {
       where: expect.objectContaining({
         userId: 'manager-1',
         branchId: { in: ['branch-1'] },
-        accessScope: 'FULL',
       }),
     }));
     expect(uploadMemberDocumentMock).toHaveBeenCalledWith(
@@ -87,7 +86,37 @@ describe('MembersController.uploadMemberDocuments', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('rejects document upload without a FULL assignment to a member branch', async () => {
+  it('allows a MEMBER_VIEW_ONLY manager to upload documents in an assigned branch', async () => {
+    (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue({ id: 'assignment-1' });
+    uploadMemberDocumentMock.mockResolvedValue({ id: 'document-1' });
+    const req = {
+      params: { memberId: 'member-1' },
+      body: { documentType: 'FOTO_PROFIL' },
+      file: { ...file, originalname: 'profile.png', mimetype: 'image/png' },
+      user: {
+        userId: 'manager-1',
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+        branches: ['branch-1'],
+        adminManagerAccessScope: 'MEMBER_VIEW_ONLY',
+      },
+    } as unknown as Request;
+    const res = {} as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.uploadMemberDocuments(req, res, next);
+
+    expect(uploadMemberDocumentMock).toHaveBeenCalledWith(
+      'member-1',
+      expect.objectContaining({ originalname: 'profile.png', mimetype: 'image/png' }),
+      'FOTO_PROFIL',
+      'manager-1',
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(res, { id: 'document-1' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects ADMIN_MANAGER document upload outside assigned member branches', async () => {
     (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue(null);
     const req = {
       params: { memberId: 'member-1' },
@@ -108,7 +137,7 @@ describe('MembersController.uploadMemberDocuments', () => {
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({
       status: 403,
-      code: 'ADMIN_MANAGER_BRANCH_MEMBER_VIEW_ONLY',
+      code: 'BRANCH_ACCESS_DENIED',
     }));
     expect(uploadMemberDocumentMock).not.toHaveBeenCalled();
   });

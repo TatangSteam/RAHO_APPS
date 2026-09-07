@@ -22,10 +22,14 @@ const readOnlyManager = {
   adminManagerAccessScope: 'MEMBER_VIEW_ONLY',
 };
 
-function request(method: string, path: string): Request {
+function request(
+  method: string,
+  path: string,
+  baseUrl = '/api/v1/treatment-sessions',
+): Request {
   return {
     method,
-    baseUrl: '/api/v1/treatment-sessions',
+    baseUrl,
     path,
     params: {},
     query: {},
@@ -86,5 +90,14 @@ describe('authorize ADMIN_MANAGER session read-only access', () => {
       'Akses Admin Manager ini dibatasi hanya untuk melihat data member.',
     );
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows informed-consent and profile-photo uploads for read-only managers', async () => {
+    const next = jest.fn() as NextFunction;
+    const req = request('POST', '/member-1/documents', '/api/v1/members');
+
+    await authorize([Role.ADMIN_MANAGER])(req, response, next);
+
+    expect(next).toHaveBeenCalledWith();
   });
 });

@@ -20,6 +20,10 @@ function isMemberViewOnlyAllowedRoute(req: Request): boolean {
     return true;
   }
 
+  if (method === 'POST' && /^\/members\/[^/]+\/documents$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && (path === '/branches/all' || path === '/branches')) {
     return true;
   }

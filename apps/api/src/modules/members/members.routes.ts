@@ -22,7 +22,7 @@ const ALLSTAFF = [
 
 const ALLSTAFF_EXCEPT_ADMIN_MANAGER = ALLSTAFF.filter((role) => role !== Role.ADMIN_MANAGER);
 const MEMBER_MUTATORS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.SUPER_ADMIN];
-const MEMBER_DOCUMENT_UPLOADERS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
+const MEMBER_DOCUMENT_UPLOADERS = ALLSTAFF;
 const MEMBER_PROFILE_MUTATORS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
 const MEMBER_DELETERS = [Role.SUPER_ADMIN];
 const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
@@ -405,8 +405,8 @@ router.post(
 // ============================================================
 
 // POST /api/v1/members/:memberId/documents - Upload member documents (PSP or Profile Photo)
-// Accessible by operational admins and ADMIN_MANAGER with FULL access to the
-// member's branch. Per-branch manager scope is enforced in the controller.
+// Accessible by every clinical/member-facing staff role. Branch scope remains
+// enforced so staff cannot change documents of members outside their access.
 router.post(
   '/:memberId/documents',
   authenticate,

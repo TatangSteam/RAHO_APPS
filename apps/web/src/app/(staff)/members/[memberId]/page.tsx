@@ -341,9 +341,14 @@ export default function MemberDetailPage() {
   const canEditPackage = canAssignPackage || canPrivilegedEditPackage;
   const canEditWaitingVerificationPackage = canPrivilegedEditPackage;
   const canEditVerifiedPackage = canPrivilegedEditPackage;
-  const canUploadDocuments =
-    ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '') ||
-    (isAdminManager && user?.adminManagerAccessScope !== 'MEMBER_VIEW_ONLY');
+  const canUploadDocuments = [
+    'ADMIN_LAYANAN',
+    'ADMIN_CABANG',
+    'ADMIN_MANAGER',
+    'SUPER_ADMIN',
+    'DOCTOR',
+    'NURSE',
+  ].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
   const canCreateDiagnosis = [
     'DOCTOR',
