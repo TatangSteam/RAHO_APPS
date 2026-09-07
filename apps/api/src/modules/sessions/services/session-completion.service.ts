@@ -160,6 +160,9 @@ export class SessionCompletionService {
       const completionAggregateId = revisionKey
         ? `${session.id}:REVISION:${revisionKey}`
         : session.id;
+      const completionEventKey = revisionKey
+        ? `TREATMENT_COMPLETED:${session.id}:REVISION:${revisionKey}`
+        : `TREATMENT_COMPLETED:${session.id}`;
       if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
         throw errors.conflict('SESSION_COMPLETION_CANCELLED', 'Completion sesi ini sudah dibatalkan dan tidak dapat diposting ulang.');
       }
@@ -171,7 +174,7 @@ export class SessionCompletionService {
           tx.integrationEvent.findUnique({
             where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: completionAggregateId } },
           }),
-          tx.domainEvent.findUnique({ where: { eventKey: `TREATMENT_COMPLETED:${session.id}` } }),
+          tx.domainEvent.findUnique({ where: { eventKey: completionEventKey } }),
           replayPackageId ? tx.memberPackage.findUnique({
             where: { id: replayPackageId },
             select: { revenueFlowVersion: true },

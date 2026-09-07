@@ -1809,7 +1809,7 @@ model DomainEvent {
   aggregateType      String
   aggregateId        String
   branchId           String
-  treatmentSessionId String?           @unique
+  treatmentSessionId String?
   payloadHash        String
   payload            Json
   status             DomainEventStatus @default(PENDING)
@@ -1825,6 +1825,7 @@ model DomainEvent {
 
   @@index([eventType, status, occurredAt])
   @@index([aggregateType, aggregateId])
+  @@index([treatmentSessionId])
   @@map("domain_events")
 }
 
@@ -1851,7 +1852,7 @@ model RevenueRecognition {
   branch           Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
   journalEntry     JournalEntry?          @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
 
-  @@unique([treatmentSessionId, memberPackageId])
+  @@index([treatmentSessionId, memberPackageId])
   @@index([journalEntryId])
   @@index([contractId, status])
   @@index([branchId, recognizedAt])
@@ -3094,7 +3095,7 @@ model TreatmentSession {
   // Multiple doctors and nurses support
   sessionDoctors           SessionDoctor[]
   sessionNurses            SessionNurse[]
-  completedEvent           DomainEvent?
+  completionEvents         DomainEvent[]
   revenueRecognitions      RevenueRecognition[]
   deferredRevenueMovements DeferredRevenueMovement[]
   whatsappDeliveries       WhatsAppDelivery[]

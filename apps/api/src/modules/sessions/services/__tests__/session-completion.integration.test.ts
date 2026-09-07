@@ -383,7 +383,7 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
   afterAll(async () => {
     const testBranchIds = [sourceBranchId, branchId];
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId: { in: testBranchIds } }] } });
-    await prisma.integrationEvent.deleteMany({ where: { aggregateId: sessionId } });
+    await prisma.integrationEvent.deleteMany({ where: { aggregateId: { startsWith: sessionId } } });
     await prisma.deferredRevenueMovement.deleteMany({ where: { memberPackageId } });
     await prisma.revenueRecognition.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.domainEvent.deleteMany({ where: { treatmentSessionId: sessionId } });
@@ -825,5 +825,36 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
     expect(await prisma.integrationEvent.count({
       where: { eventType: 'TREATMENT_COMPLETION_CANCELLED', aggregateId: sessionId },
     })).toBe(1);
-  }, 60_000);
+
+    const reopen = await service.cancelCompletion(sessionId, actorId, {
+      idempotencyKey: cancellationKey,
+      reason: 'Correct the posted treatment data',
+      reopenForEditing: true,
+    });
+    expect(reopen).toMatchObject({
+      completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
+      reopenedForEditing: true,
+    });
+
+    const recompletion = await service.completeSession(sessionId, actorId);
+    expect(recompletion).toMatchObject({
+      isCompleted: true,
+      idempotentReplay: false,
+    });
+    expect(recompletion.domainEventId).not.toBe(results[0].domainEventId);
+    expect(await prisma.domainEvent.count({ where: { treatmentSessionId: sessionId } })).toBe(2);
+    expect(await prisma.revenueRecognition.count({ where: { treatmentSessionId: sessionId } })).toBe(2);
+    expect(await prisma.revenueRecognition.count({
+      where: { treatmentSessionId: sessionId, status: 'REVERSED' },
+    })).toBe(1);
+    expect(await prisma.revenueRecognition.count({
+      where: { treatmentSessionId: sessionId, status: 'POSTED' },
+    })).toBe(1);
+    expect(await prisma.integrationEvent.count({
+      where: {
+        eventType: 'TREATMENT_COMPLETED',
+        aggregateId: { startsWith: `${sessionId}:REVISION:` },
+      },
+    })).toBe(1);
+  }, 90_000);
 });
