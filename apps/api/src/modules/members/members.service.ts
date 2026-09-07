@@ -1,8 +1,7 @@
 import { DocumentType, Role } from '@prisma/client';
-import { prisma } from '../../lib/prisma';
-import { logAudit } from '../../utils/auditLog';
 import { MemberRetrievalService, type MemberFilters } from './services/member-retrieval.service';
 import { MemberRegistrationService } from './services/member-registration.service';
+import { MemberDocumentsService } from './services/member-documents.service';
 import { MemberUpdateService } from './services/member-update.service';
 import { MemberBranchAccessService } from './services/member-branch-access.service';
 import {
@@ -38,6 +37,7 @@ import { MemberDestructionService } from './services/member-destruction.service'
 export class MembersService {
   private retrievalService: MemberRetrievalService;
   private registrationService: MemberRegistrationService;
+  private documentsService: MemberDocumentsService;
   private updateService: MemberUpdateService;
   private branchAccessService: MemberBranchAccessService;
   private medicalRecordsService: MemberMedicalRecordsService;
@@ -49,6 +49,7 @@ export class MembersService {
   constructor() {
     this.retrievalService = new MemberRetrievalService();
     this.registrationService = new MemberRegistrationService();
+    this.documentsService = new MemberDocumentsService();
     this.updateService = new MemberUpdateService();
     this.branchAccessService = new MemberBranchAccessService();
     this.medicalRecordsService = new MemberMedicalRecordsService();
@@ -345,97 +346,17 @@ export class MembersService {
     documentType: DocumentType,
     userId: string
   ) {
-    const { uploadFile } = await import('../../config/minio');
-    const { processFile } = await import('../../utils/imageProcessor');
-    try {
-      // Check if member exists
-      const member = await prisma.member.findUnique({
-        where: { id: memberId },
-      });
+    const document = await this.documentsService.uploadDocument(
+      memberId,
+      documentType,
+      file,
+      userId,
+    );
 
-      if (!member) {
-        throw {
-          status: 404,
-          code: 'MEMBER_NOT_FOUND',
-          message: 'Member tidak ditemukan',
-        };
-      }
-
-      if (documentType === 'FOTO_PROFIL' && !file.mimetype.startsWith('image/')) {
-        throw {
-          status: 400,
-          code: 'INVALID_PROFILE_PHOTO_TYPE',
-          message: 'Foto profil hanya menerima file gambar.',
-        };
-      }
-
-      // Process file based on type
-      const processType = documentType === 'FOTO_PROFIL' ? 'profilePhoto' : 'document';
-      const processed = await processFile(file.buffer, file.mimetype, processType);
-      
-      const fileExt = processed.mimeType === 'image/jpeg' ? 'jpg' : 
-                      processed.mimeType === 'image/webp' ? 'webp' :
-                      processed.mimeType === 'application/pdf' ? 'pdf' :
-                      file.mimetype.split('/')[1];
-      
-      const prefix = documentType === 'FOTO_PROFIL' ? 'profile' : 'psp';
-      const fileKey = `uploads/members/${memberId}/documents/${prefix}-${Date.now()}.${fileExt}`;
-      
-      const uploadResult = await uploadFile(processed.buffer, fileKey, processed.mimeType);
-
-      // Check if document already exists (for replacement)
-      const existingDoc = await prisma.memberDocument.findFirst({
-        where: {
-          memberId,
-          documentType,
-        },
-      });
-
-      if (existingDoc) {
-        // Update existing document
-        await prisma.memberDocument.update({
-          where: { id: existingDoc.id },
-          data: {
-            fileUrl: uploadResult.url,
-            fileName: file.originalname,
-            fileSize: processed.buffer.length,
-            mimeType: processed.mimeType,
-            uploadedBy: userId,
-          },
-        });
-      } else {
-        // Create new document
-        await prisma.memberDocument.create({
-          data: {
-            memberId,
-            documentType,
-            fileUrl: uploadResult.url,
-            fileName: file.originalname,
-            fileSize: processed.buffer.length,
-            mimeType: processed.mimeType,
-            uploadedBy: userId,
-          },
-        });
-      }
-
-      // Audit log
-      await logAudit({
-        userId,
-        branchId: null,
-        action: 'UPDATE',
-        resource: 'MemberDocument',
-        resourceId: memberId,
-        meta: { documentType },
-      });
-
-      return {
-        message: 'Document uploaded successfully',
-        fileUrl: uploadResult.url,
-      };
-    } catch (error) {
-      console.error('Failed to upload member document:', error);
-      throw error;
-    }
+    return {
+      message: 'Dokumen berhasil diunggah.',
+      document,
+    };
   }
 }
 

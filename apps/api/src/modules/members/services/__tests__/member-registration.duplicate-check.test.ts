@@ -1,4 +1,5 @@
 import { prisma } from '../../../../lib/prisma';
+import { MemberDocumentsService } from '../member-documents.service';
 import { MemberRegistrationService } from '../member-registration.service';
 
 jest.mock('../../../../lib/prisma', () => ({
@@ -10,6 +11,8 @@ jest.mock('../../../../lib/prisma', () => ({
       findFirst: jest.fn(),
       findMany: jest.fn(),
     },
+    notification: { create: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -19,10 +22,16 @@ jest.mock('../../../../utils/auditLog', () => ({
 
 jest.mock('../../../../config/minio', () => ({
   uploadFile: jest.fn(),
+  safeDeleteFile: jest.fn(),
+  deleteFileByUrl: jest.fn(),
 }));
 
 jest.mock('../../../../utils/imageProcessor', () => ({
   processFile: jest.fn(),
+}));
+
+jest.mock('../../../zoho/zoho.contact.service', () => ({
+  enqueueContactSafely: jest.fn(),
 }));
 
 const prismaMock = prisma as any;
@@ -95,5 +104,57 @@ describe('MemberRegistrationService duplicate checks', () => {
         where: { dateOfBirth: new Date('1990-01-15T00:00:00.000Z') },
       }),
     );
+  });
+
+  it('returns an explicit warning when a selected informed-consent file fails to upload', async () => {
+    prismaMock.member.findUnique.mockResolvedValue(null);
+    prismaMock.member.findMany.mockResolvedValue([]);
+    prismaMock.member.findFirst.mockResolvedValue(null);
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
+      user: {
+        create: jest.fn().mockResolvedValue({
+          id: 'member-user-1',
+          email: registrationData.memberUsername,
+          profile: { fullName: registrationData.fullName },
+        }),
+      },
+      member: {
+        create: jest.fn().mockResolvedValue({
+          id: 'member-1',
+          userId: 'member-user-1',
+          memberNo: 'MBR-PST-2609-0001',
+        }),
+      },
+    }));
+    prismaMock.notification.create.mockResolvedValue({ id: 'notification-1' });
+    jest.spyOn(MemberDocumentsService.prototype, 'uploadDocument').mockRejectedValueOnce(
+      new Error('storage unavailable'),
+    );
+
+    const result = await new MemberRegistrationService().createMember(
+      registrationData,
+      {
+        psp: {
+          fieldname: 'psp',
+          originalname: 'consent.pdf',
+          encoding: '7bit',
+          mimetype: 'application/pdf',
+          size: 9,
+          buffer: Buffer.from('%PDF-test'),
+          stream: undefined as never,
+          destination: '',
+          filename: '',
+          path: '',
+        },
+      },
+      'branch-1',
+      'admin-1',
+    );
+
+    expect(result.uploadedDocuments.informedConsent).toBe(false);
+    expect(result.uploadWarnings).toEqual([
+      'Member berhasil dibuat, tetapi informed consent gagal diunggah. Silakan unggah ulang dari detail member.',
+    ]);
+    expect(result.message).toContain('peringatan upload dokumen');
   });
 });

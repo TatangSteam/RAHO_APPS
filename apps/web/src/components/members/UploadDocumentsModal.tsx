@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Image as ImageIcon, Check, File } from 'lucide-react';
 import { api } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 
 interface UploadDocumentsModalProps {
   isOpen: boolean;
@@ -122,7 +123,7 @@ export default function UploadDocumentsModal({
       });
 
       console.log('Upload success:', response.data);
-      alert(`${activeTab === 'psp' ? 'PSP' : 'Foto Profil'} berhasil diupload!`);
+      showToast.success(`${activeTab === 'psp' ? 'Informed consent' : 'Foto profil'} berhasil diunggah.`);
       setFile(null);
       setPreview(null);
       onSuccess();
@@ -135,7 +136,7 @@ export default function UploadDocumentsModal({
       const errorMessage = err.response?.data?.error?.message || err.message || 'Gagal upload file';
       const errorCode = err.response?.data?.error?.code || 'UNKNOWN_ERROR';
       
-      alert(`Gagal upload file!\n\nError: ${errorMessage}\nCode: ${errorCode}\n\nDetail: ${JSON.stringify(err.response?.data, null, 2)}`);
+      showToast.error(`${errorMessage} (${errorCode})`);
     } finally {
       setUploading(false);
     }

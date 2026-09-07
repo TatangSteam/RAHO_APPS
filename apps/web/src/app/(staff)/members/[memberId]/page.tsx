@@ -351,11 +351,10 @@ export default function MemberDetailPage() {
     'SUPER_ADMIN',
   ].includes(user?.role || '');
   
-  // Check if member has any documents (PSP or Profile Photo)
+  // The upload CTA specifically reflects informed-consent availability.
   const hasDocuments = member ? (
     member.documents?.some(doc => 
-      doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN' || 
-      doc.documentType === 'FOTO_PROFIL'
+      doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN'
     ) || false
   ) : false;
 

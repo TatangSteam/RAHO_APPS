@@ -1,7 +1,77 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, DocumentType } from '@prisma/client';
-import { uploadFile, deleteFileByUrl } from '../../../config/minio';
+import sharp from 'sharp';
+import { randomUUID } from 'node:crypto';
+import { AppError } from '../../../middleware/errorHandler';
+import { deleteFileByUrl, safeDeleteFile, uploadFile } from '../../../config/minio';
+import { processFile } from '../../../utils/imageProcessor';
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
+
+function extensionForMimeType(mimeType: string): string {
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg';
+  if (mimeType === 'image/webp') return 'webp';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'application/pdf') return 'pdf';
+  return 'bin';
+}
+
+async function validateDocumentContents(
+  file: Express.Multer.File,
+  documentType: DocumentType,
+): Promise<void> {
+  if (!file.buffer.length) {
+    throw new AppError(400, 'EMPTY_DOCUMENT', 'File dokumen kosong.');
+  }
+
+  if (file.mimetype === 'application/pdf') {
+    if (documentType === DocumentType.FOTO_PROFIL) {
+      throw new AppError(
+        400,
+        'INVALID_PROFILE_PHOTO_TYPE',
+        'Foto profil hanya menerima file gambar.',
+      );
+    }
+
+    if (file.buffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+      throw new AppError(
+        400,
+        'INVALID_DOCUMENT_CONTENT',
+        'Isi file tidak sesuai dengan format PDF.',
+      );
+    }
+    return;
+  }
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype)) {
+    throw new AppError(
+      400,
+      'INVALID_DOCUMENT_TYPE',
+      'Dokumen hanya menerima file gambar atau PDF.',
+    );
+  }
+
+  try {
+    const metadata = await sharp(file.buffer).metadata();
+    if (!metadata.format || !metadata.width || !metadata.height) {
+      throw new Error('Image metadata is incomplete');
+    }
+  } catch {
+    throw new AppError(
+      400,
+      'INVALID_DOCUMENT_CONTENT',
+      'Isi file gambar tidak valid atau rusak.',
+    );
+  }
+}
 
 /**
  * Service for managing member documents (PSP, profile photos, etc.)
@@ -18,7 +88,6 @@ export class MemberDocumentsService {
     file: Express.Multer.File,
     userId: string
   ) {
-    // Verify member exists
     const member = await prisma.member.findUnique({
       where: { id: memberId },
     });
@@ -27,73 +96,88 @@ export class MemberDocumentsService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Check if document of this type already exists
-    const existingDocument = await prisma.memberDocument.findFirst({
-      where: {
-        memberId,
-        documentType,
-      },
-    });
+    await validateDocumentContents(file, documentType);
 
-    // If exists, delete old file from MinIO
-    if (existingDocument && existingDocument.fileUrl) {
-      console.log(`[MemberDocuments] Deleting old ${documentType} file: ${existingDocument.fileUrl}`);
-      await deleteFileByUrl(existingDocument.fileUrl);
+    const processType = documentType === DocumentType.FOTO_PROFIL ? 'profilePhoto' : 'document';
+    const processed = await processFile(file.buffer, file.mimetype, processType);
+    const fileExt = extensionForMimeType(processed.mimeType);
+    const docTypeSlug = documentType.toLowerCase().replace(/_/g, '-');
+    const key = `uploads/members/${memberId}/documents/${docTypeSlug}-${randomUUID()}.${fileExt}`;
+
+    console.log(`[MemberDocuments] Uploading ${documentType} to MinIO: ${key}`);
+    let uploadResult;
+    try {
+      uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
+    } catch (error) {
+      console.error(`[MemberDocuments] Failed to upload ${documentType}:`, error);
+      throw new AppError(
+        503,
+        'DOCUMENT_STORAGE_UNAVAILABLE',
+        'Penyimpanan dokumen sedang tidak tersedia. Silakan coba lagi.',
+      );
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const fileExt = file.mimetype.split('/')[1] || 'bin';
-    const docTypeSlug = documentType.toLowerCase().replace(/_/g, '-');
-    const key = `uploads/members/${memberId}/documents/${docTypeSlug}-${timestamp}.${fileExt}`;
-
-    // Upload to MinIO
-    console.log(`[MemberDocuments] Uploading ${documentType} to MinIO: ${key}`);
-    const uploadResult = await uploadFile(file.buffer, key, file.mimetype);
-
-    // Save or update in database
     const documentData = {
       fileUrl: uploadResult.url,
       fileName: file.originalname,
-      fileSize: file.size,
-      mimeType: file.mimetype,
+      fileSize: processed.buffer.length,
+      mimeType: processed.mimeType,
       uploadedBy: userId,
     };
 
-    let document;
-    if (existingDocument) {
-      document = await prisma.memberDocument.update({
-        where: { id: existingDocument.id },
-        data: documentData,
+    let storedDocument;
+    let previousFileUrl: string | null = null;
+    try {
+      const stored = await prisma.$transaction(async (tx) => {
+        const lockKey = `member-document:${memberId}:${documentType}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+        const existingDocument = await tx.memberDocument.findUnique({
+          where: {
+            memberId_documentType: { memberId, documentType },
+          },
+        });
+
+        const document = await tx.memberDocument.upsert({
+          where: {
+            memberId_documentType: { memberId, documentType },
+          },
+          create: {
+            ...documentData,
+            memberId,
+            documentType,
+          },
+          update: documentData,
+        });
+
+        return { document, previousFileUrl: existingDocument?.fileUrl ?? null };
       });
-      console.log(`[MemberDocuments] Updated existing document: ${document.id}`);
-    } else {
-      document = await prisma.memberDocument.create({
-        data: {
-          ...documentData,
-          memberId,
-          documentType,
-        },
-      });
-      console.log(`[MemberDocuments] Created new document: ${document.id}`);
+      storedDocument = stored.document;
+      previousFileUrl = stored.previousFileUrl;
+    } catch (error) {
+      await safeDeleteFile(uploadResult.key);
+      throw error;
     }
 
-    // Audit log
+    if (previousFileUrl && previousFileUrl !== uploadResult.url) {
+      await deleteFileByUrl(previousFileUrl);
+    }
+
     await logAudit({
       userId,
       branchId: member.registrationBranchId,
-      action: existingDocument ? AuditAction.UPDATE : AuditAction.CREATE,
+      action: previousFileUrl ? AuditAction.UPDATE : AuditAction.CREATE,
       resource: 'MemberDocument',
-      resourceId: document.id,
+      resourceId: storedDocument.id,
       meta: {
         memberId,
         documentType,
         fileName: file.originalname,
-        previousFileUrl: existingDocument?.fileUrl || null,
+        previousFileUrl,
       },
     });
 
-    return document;
+    return storedDocument;
   }
 
   /**

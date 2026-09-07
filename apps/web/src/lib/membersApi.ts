@@ -45,7 +45,13 @@ export async function grantAccessApi(memberNo: string): Promise<{ message: strin
 export async function createMemberApi(
   memberData: CreateMemberData,
   files: { psp?: File; photo?: File }
-): Promise<{ memberId: string; memberNo: string; message: string }> {
+): Promise<{
+  memberId: string;
+  memberNo: string;
+  message: string;
+  uploadedDocuments: { informedConsent: boolean; profilePhoto: boolean };
+  uploadWarnings: string[];
+}> {
   const formData = new FormData();
 
   devLog('🔍 [membersApi] createMemberApi called with:', memberData);
@@ -85,7 +91,13 @@ export async function createMemberApi(
   }
 
   const { data } = await api.post<{
-    data: { memberId: string; memberNo: string; message: string };
+    data: {
+      memberId: string;
+      memberNo: string;
+      message: string;
+      uploadedDocuments: { informedConsent: boolean; profilePhoto: boolean };
+      uploadWarnings: string[];
+    };
   }>('/members', formData);
 
   return data.data;

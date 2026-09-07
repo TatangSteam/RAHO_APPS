@@ -1316,7 +1316,7 @@ model MemberDocument {
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@index([memberId, documentType])
+  @@unique([memberId, documentType])
   @@map("member_documents")
 }
 

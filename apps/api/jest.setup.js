@@ -15,6 +15,7 @@ process.env.JWT_REFRESH_EXPIRES = '7d';
 const databaseTestsEnabled = (
   process.env.RUN_FINANCE_DB_TESTS === 'true'
   || process.env.RUN_INVENTORY_DB_TESTS === 'true'
+  || process.env.RUN_MEMBER_DOCUMENT_DB_TESTS === 'true'
   || process.env.RUN_ZOHO_DB_TESTS === 'true'
 );
 
@@ -29,11 +30,13 @@ if (databaseTestsEnabled) {
   process.env.DATABASE_URL ||= 'postgresql://jest:jest@127.0.0.1:1/raho_jest_no_database';
 }
 
-// Satisfy configuration validation without using deployment secrets or an
-// external object-storage service during unit tests.
-process.env.MINIO_ACCESS_KEY ||= 'jest-minio-access-key';
-process.env.MINIO_SECRET_KEY ||= 'jest-minio-secret-key';
-process.env.MINIO_PUBLIC_URL ||= 'http://127.0.0.1:9000';
+if (process.env.RUN_MEMBER_DOCUMENT_DB_TESTS !== 'true') {
+  // Satisfy configuration validation without using deployment secrets or an
+  // external object-storage service during unit tests.
+  process.env.MINIO_ACCESS_KEY ||= 'jest-minio-access-key';
+  process.env.MINIO_SECRET_KEY ||= 'jest-minio-secret-key';
+  process.env.MINIO_PUBLIC_URL ||= 'http://127.0.0.1:9000';
+}
 
 // Mock console methods to reduce noise in tests (optional)
 // global.console = {

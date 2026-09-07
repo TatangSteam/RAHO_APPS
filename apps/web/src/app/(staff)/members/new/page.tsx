@@ -359,6 +359,7 @@ export default function NewMemberPage() {
       });
 
       showToast.success(`Member berhasil didaftarkan! No. Member: ${result.memberNo}`);
+      result.uploadWarnings.forEach((warning) => showToast.warning(warning));
       
       // Clear saved form data after successful submission
       clearSavedFormData();
