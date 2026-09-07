@@ -52,8 +52,24 @@ interface MenuGroup {
 // ── Menu Config ───────────────────────────────────────────────
 
 const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'];
+const COLLABORATION_ROLES: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_CABANG',
+  'ADMIN_LAYANAN',
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+  'DOCTOR',
+  'NURSE',
+  'VOUCHER_OPERATOR',
+];
+const COLLABORATION_MENU = [
+  '/extra/collaboration',
+  '/extra/collaboration/tasks',
+  '/extra/collaboration/teams',
+];
 const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
-  VOUCHER_OPERATOR: new Set(['/extra/vouchers', '/extra/vouchers/history']),
+  VOUCHER_OPERATOR: new Set(['/extra/vouchers', '/extra/vouchers/history', ...COLLABORATION_MENU]),
   ADMIN_LAYANAN: new Set([
     '/dashboard',
     '/members',
@@ -63,6 +79,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/inventory/team',
     '/notifications',
     '/chat',
+    ...COLLABORATION_MENU,
   ]),
   NURSE: new Set([
     '/dashboard',
@@ -74,6 +91,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/reimbursements',
     '/notifications',
     '/chat',
+    ...COLLABORATION_MENU,
   ]),
   DOCTOR: new Set([
     '/dashboard',
@@ -83,6 +101,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/reimbursements',
     '/notifications',
     '/chat',
+    ...COLLABORATION_MENU,
   ]),
 };
 
@@ -352,6 +371,34 @@ const MENU_GROUPS: MenuGroup[] = [
   },
   {
     title: 'Ekstra',
+    dropdown: {
+      key: 'team-collaboration',
+      label: 'Tim & Tugas',
+      icon: <UsersRound size={20} />,
+      activePrefix: '/extra/collaboration',
+    },
+    items: [
+      {
+        label: 'Dashboard Monitoring',
+        href: '/extra/collaboration',
+        icon: <BarChart3 size={20} />,
+        roles: COLLABORATION_ROLES,
+      },
+      {
+        label: 'Tugas & Subtask',
+        href: '/extra/collaboration/tasks',
+        icon: <ListChecks size={20} />,
+        roles: COLLABORATION_ROLES,
+      },
+      {
+        label: 'Tim Saya',
+        href: '/extra/collaboration/teams',
+        icon: <UsersRound size={20} />,
+        roles: COLLABORATION_ROLES,
+      },
+    ],
+  },
+  {
     dropdown: {
       key: 'voucher-partnership',
       label: 'Voucher Partnership',
@@ -862,7 +909,9 @@ export function Sidebar({
           const visibleItems = group.items.filter((item) => (
             item.roles.includes(role) &&
             (!focusedMenu || focusedMenu.has(item.href)) &&
-            (!isMemberViewOnlyAdminManager || ['/members', '/sessions'].includes(item.href))
+            (!isMemberViewOnlyAdminManager ||
+              ['/members', '/sessions'].includes(item.href) ||
+              item.href.startsWith('/extra/collaboration'))
           ));
           if (visibleItems.length === 0) return null;
 

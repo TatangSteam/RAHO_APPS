@@ -16,6 +16,10 @@ function isMemberViewOnlyAllowedRoute(req: Request): boolean {
   const method = req.method.toUpperCase();
   const path = getNormalizedPath(req);
 
+  if (path === '/collaboration' || path.startsWith('/collaboration/')) {
+    return true;
+  }
+
   if (method === 'GET' && (path === '/members' || path.startsWith('/members/'))) {
     return true;
   }

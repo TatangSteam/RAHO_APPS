@@ -66,6 +66,44 @@ enum AdminManagerAccessScope {
   MEMBER_VIEW_ONLY
 }
 
+enum CollaborationTeamRole {
+  OWNER
+  LEADER
+  STAFF
+}
+
+enum CollaborationTeamStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CollaborationMembershipStatus {
+  ACTIVE
+  REMOVED
+  LEFT
+}
+
+enum CollaborationTaskVisibility {
+  ASSIGNEE_ONLY
+  ALL_TEAM_MEMBERS
+}
+
+enum CollaborationTaskStatus {
+  TODO
+  IN_PROGRESS
+  SUBMITTED
+  NEEDS_REVISION
+  COMPLETED
+  CANCELLED
+}
+
+enum CollaborationTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum PermissionEffect {
   ALLOW
   DENY
@@ -869,6 +907,15 @@ model User {
   zohoConnectionsCreated        ZohoConnection[]          @relation("ZohoConnectionCreatedBy")
   zohoConnectionsUpdated        ZohoConnection[]          @relation("ZohoConnectionUpdatedBy")
   voucherOperatorLocations      VoucherOperatorLocation[]
+  collaborationTeamsOwned       CollaborationTeam[]       @relation("CollaborationTeamOwner")
+  collaborationMemberships      TeamMembership[]
+  collaborationMembershipsMade  TeamMembership[]          @relation("TeamMembershipAssignedBy")
+  collaborationTasksCreated     TeamTask[]                @relation("TeamTaskCreatedBy")
+  collaborationTasksReviewed    TeamTask[]                @relation("TeamTaskReviewedBy")
+  collaborationAssignments      TaskAssignment[]          @relation("TaskAssignmentUser")
+  collaborationAssignmentsMade  TaskAssignment[]          @relation("TaskAssignmentAssignedBy")
+  collaborationComments         TaskComment[]
+  collaborationActivities       TaskActivity[]
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -958,6 +1005,144 @@ model UserProfile {
 
   @@index([fullName])
   @@map("user_profiles")
+}
+
+model CollaborationTeam {
+  id                        String                      @id @default(cuid())
+  name                      String
+  description               String?
+  ownerId                   String
+  primaryLeaderMembershipId String?                     @unique
+  taskVisibilityPolicy      CollaborationTaskVisibility @default(ALL_TEAM_MEMBERS)
+  status                    CollaborationTeamStatus     @default(ACTIVE)
+  archivedAt                DateTime?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+
+  owner         User             @relation("CollaborationTeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  primaryLeader TeamMembership?  @relation("PrimaryTeamLeader", fields: [primaryLeaderMembershipId], references: [id], onDelete: SetNull)
+  memberships   TeamMembership[] @relation("TeamMembershipTeam")
+  tasks         TeamTask[]
+  activities    TaskActivity[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId, status])
+  @@index([status])
+  @@map("collaboration_teams")
+}
+
+model TeamMembership {
+  id         String                        @id @default(cuid())
+  teamId     String
+  userId     String
+  role       CollaborationTeamRole         @default(STAFF)
+  status     CollaborationMembershipStatus @default(ACTIVE)
+  assignedBy String
+  joinedAt   DateTime                      @default(now())
+  removedAt  DateTime?
+  createdAt  DateTime                      @default(now())
+  updatedAt  DateTime                      @updatedAt
+
+  team           CollaborationTeam  @relation("TeamMembershipTeam", fields: [teamId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assigner       User               @relation("TeamMembershipAssignedBy", fields: [assignedBy], references: [id], onDelete: Restrict)
+  primaryForTeam CollaborationTeam? @relation("PrimaryTeamLeader")
+
+  @@unique([teamId, userId])
+  @@index([userId, status])
+  @@index([teamId, role, status])
+  @@map("team_memberships")
+}
+
+model TeamTask {
+  id           String                    @id @default(cuid())
+  teamId       String
+  taskNo       Int
+  title        String
+  description  String?
+  parentTaskId String?
+  sortOrder    Int                       @default(0)
+  isRequired   Boolean                   @default(true)
+  status       CollaborationTaskStatus   @default(TODO)
+  priority     CollaborationTaskPriority @default(MEDIUM)
+  dueAt        DateTime?
+  createdById  String
+  reviewedById String?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  version      Int                       @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  team        CollaborationTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parentTask  TeamTask?         @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks    TeamTask[]        @relation("TaskSubtasks")
+  createdBy   User              @relation("TeamTaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedBy  User?             @relation("TeamTaskReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  assignments TaskAssignment[]
+  comments    TaskComment[]
+  activities  TaskActivity[]
+
+  @@unique([teamId, taskNo])
+  @@index([teamId, parentTaskId, sortOrder])
+  @@index([teamId, status, dueAt])
+  @@index([createdById])
+  @@map("team_tasks")
+}
+
+model TaskAssignment {
+  id           String    @id @default(cuid())
+  taskId       String
+  userId       String
+  assignedById String
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+
+  task       TeamTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User     @relation("TaskAssignmentUser", fields: [userId], references: [id], onDelete: Restrict)
+  assignedBy User     @relation("TaskAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@unique([taskId, userId])
+  @@index([userId, unassignedAt])
+  @@map("task_assignments")
+}
+
+model TaskComment {
+  id        String    @id @default(cuid())
+  taskId    String
+  authorId  String
+  content   String
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  task   TeamTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([authorId])
+  @@map("task_comments")
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  teamId    String
+  taskId    String?
+  actorId   String
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  team  CollaborationTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  task  TeamTask?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User              @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([teamId, createdAt])
+  @@index([taskId, createdAt])
+  @@map("task_activities")
 }
 
 model ManagerBranch {
@@ -3776,26 +3961,26 @@ model WhatsAppDelivery {
 }
 
 model WhatsAppConnection {
-  id                   String                   @id
-  status               WhatsAppConnectionStatus @default(DISCONNECTED)
-  phoneMasked          String?
-  authStateEncrypted   String?                  @db.Text
-  authKeyVersion       Int                      @default(1)
-  defaultBackgroundKey String                   @default("RAHO_RED")
-  customBackgroundUrl      String?
+  id                        String                   @id
+  status                    WhatsAppConnectionStatus @default(DISCONNECTED)
+  phoneMasked               String?
+  authStateEncrypted        String?                  @db.Text
+  authKeyVersion            Int                      @default(1)
+  defaultBackgroundKey      String                   @default("RAHO_RED")
+  customBackgroundUrl       String?
   customBackgroundObjectKey String?
-  customBackgroundFileName String?
-  customBackgroundMimeType String?
-  customBackgroundFileSize Int?
-  customBackgroundWidth    Int?
-  customBackgroundHeight   Int?
-  lastConnectedAt      DateTime?
-  lastDisconnectedAt   DateTime?
-  lastErrorSanitized   String?                  @db.Text
-  createdBy            String
-  updatedBy            String
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
+  customBackgroundFileName  String?
+  customBackgroundMimeType  String?
+  customBackgroundFileSize  Int?
+  customBackgroundWidth     Int?
+  customBackgroundHeight    Int?
+  lastConnectedAt           DateTime?
+  lastDisconnectedAt        DateTime?
+  lastErrorSanitized        String?                  @db.Text
+  createdBy                 String
+  updatedBy                 String
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
 
   @@map("whatsapp_connections")
 }

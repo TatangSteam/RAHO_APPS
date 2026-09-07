@@ -43,6 +43,7 @@ import notificationRouter from './modules/notifications/notification.routes';
 import zohoRouter from './modules/zoho/zoho.routes';
 import whatsappRouter from './modules/whatsapp/whatsapp.routes';
 import voucherRouter from './modules/vouchers/voucher.routes';
+import collaborationRouter from './modules/collaboration/collaboration.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -155,6 +156,7 @@ export function createApp(): Application {
   app.use(`${prefix}/integrations/zoho`, zohoRouter);
   app.use(`${prefix}/integrations/whatsapp`, whatsappRouter);
   app.use(`${prefix}/vouchers`, voucherRouter);
+  app.use(`${prefix}/collaboration`, collaborationRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);
