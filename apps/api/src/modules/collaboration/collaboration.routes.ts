@@ -5,17 +5,8 @@ import { authorize } from '@middleware/authorize';
 import * as controller from './collaboration.controller';
 
 const router = Router();
-const COLLABORATION_ROLES = [
-  Role.SUPER_ADMIN,
-  Role.VOUCHER_OPERATOR,
-  Role.ADMIN_MANAGER,
-  Role.ADMIN_CABANG,
-  Role.ADMIN_LAYANAN,
-  Role.ADMIN_LOGISTIK,
-  Role.FINANCE_LOGISTICS_CONTROLLER,
-  Role.DOCTOR,
-  Role.NURSE,
-];
+// Collaboration belongs to every internal ERP account. MEMBER uses a separate portal.
+const COLLABORATION_ROLES = Object.values(Role).filter((role) => role !== Role.MEMBER);
 
 router.use(authenticate, authorize(COLLABORATION_ROLES));
 router.get('/bootstrap', controller.bootstrap);

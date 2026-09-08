@@ -41,6 +41,7 @@ describe('Team task collaboration contract', () => {
 
     expect(app).toContain("app.use(`${prefix}/collaboration`, collaborationRouter)");
     expect(routes).toContain('router.use(authenticate, authorize(COLLABORATION_ROLES))');
+    expect(routes).toContain('Object.values(Role).filter((role) => role !== Role.MEMBER)');
     expect(routes).toContain("router.post('/tasks/:taskId/subtasks'");
     expect(migration).toContain('CREATE TABLE "collaboration_teams"');
     expect(migration).toContain('CREATE TABLE "team_tasks"');

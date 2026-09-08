@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import { test } from '../fixtures/base';
 import { StaffLayoutPage } from '../pages/StaffLayoutPage';
 
@@ -12,6 +13,18 @@ test.describe('Staff layout navigation', () => {
     await layout.expectSidebarLinkHidden(/^Kas & Bank$/);
     await layout.expectSidebarLinkHidden(/^Expense$/);
     await layout.expectSidebarLinkHidden(/^Purchasing & AP$/);
+  });
+
+  test('should highlight only the current collaboration submenu', async ({ loginAs, page }) => {
+    await loginAs('ADMIN_CABANG');
+
+    const layout = new StaffLayoutPage(page);
+    await layout.goto('/extra/collaboration/teams');
+
+    const sidebar = layout.desktopSidebar();
+    await expect(sidebar.getByRole('link', { name: /^Tim Saya$/ })).toHaveClass(/bg-amber-100/);
+    await expect(sidebar.getByRole('link', { name: /^Dashboard Monitoring$/ })).not.toHaveClass(/bg-amber-100/);
+    await expect(sidebar.getByRole('link', { name: /^Tugas & Subtask$/ })).not.toHaveClass(/bg-amber-100/);
   });
 
   test('should show manager system links for admin manager', async ({ loginAs, page }) => {

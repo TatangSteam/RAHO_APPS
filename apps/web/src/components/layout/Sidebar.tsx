@@ -16,7 +16,7 @@ import {
   TicketPercent,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { Role } from '@/types/auth';
+import { STAFF_ROLES, type Role } from '@/types/auth';
 import { clsx } from 'clsx';
 import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { devError } from '@/lib/logger';
@@ -52,17 +52,7 @@ interface MenuGroup {
 // ── Menu Config ───────────────────────────────────────────────
 
 const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'];
-const COLLABORATION_ROLES: Role[] = [
-  'SUPER_ADMIN',
-  'ADMIN_MANAGER',
-  'ADMIN_CABANG',
-  'ADMIN_LAYANAN',
-  'ADMIN_LOGISTIK',
-  'FINANCE_LOGISTICS_CONTROLLER',
-  'DOCTOR',
-  'NURSE',
-  'VOUCHER_OPERATOR',
-];
+const COLLABORATION_ROLES: Role[] = [...STAFF_ROLES];
 const COLLABORATION_MENU = [
   '/extra/collaboration',
   '/extra/collaboration/tasks',
@@ -639,6 +629,7 @@ export function Sidebar({
     if (href === '/dashboard') return pathname === href;
     if (href === '/inventory') return pathname === '/inventory';
     if (href === '/extra/vouchers') return pathname === href;
+    if (href === '/extra/collaboration') return pathname === href;
     if (pathname === href) return true;
     return pathname.startsWith(href + '/');
   };
@@ -954,7 +945,7 @@ export function Sidebar({
                         'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98]',
                         collapsed && 'lg:justify-center lg:p-3',
                         dropdownActive
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+                          ? 'text-amber-700 hover:bg-neutral-100 dark:text-amber-400 dark:hover:bg-neutral-800'
                           : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white'
                       )}
                       aria-expanded={dropdownOpen}
