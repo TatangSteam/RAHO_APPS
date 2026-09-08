@@ -329,7 +329,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Kas & Bank',
         href: '/cash-bank',
         icon: <CreditCard size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_CABANG'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER'],
       },
       {
         label: 'Opening Balance',
@@ -341,7 +341,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Expense',
         href: '/expenses',
         icon: <ReceiptText size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_LAYANAN'],
       },
       {
         label: 'Reimburse',
@@ -353,7 +353,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Purchasing & AP',
         href: '/purchasing',
         icon: <ShoppingCart size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_CABANG', 'ADMIN_LOGISTIK'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_LOGISTIK'],
       },
       {
         label: 'Deferred Revenue',

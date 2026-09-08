@@ -9,6 +9,9 @@ test.describe('Staff layout navigation', () => {
     await layout.expectRoleLabel('Admin Cabang');
     await layout.expectSidebarLinkVisible(/^Notifikasi$/);
     await layout.expectSidebarLinkVisible(/^Chat$/);
+    await layout.expectSidebarLinkHidden(/^Kas & Bank$/);
+    await layout.expectSidebarLinkHidden(/^Expense$/);
+    await layout.expectSidebarLinkHidden(/^Purchasing & AP$/);
   });
 
   test('should show manager system links for admin manager', async ({ loginAs, page }) => {
