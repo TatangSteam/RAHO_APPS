@@ -267,6 +267,43 @@
   color: var(--brand);
 }
 
+.teamActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.deleteTeamButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #fecdd3;
+  border-radius: 0.65rem;
+  color: #be123c;
+  background: #fff1f2;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+}
+
+.deleteTeamButton:hover:not(:disabled) {
+  border-color: #fda4af;
+  background: #ffe4e6;
+}
+
+.deleteTeamButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:global(.dark) .deleteTeamButton {
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  background: rgba(225, 29, 72, 0.12);
+}
+
 .compactTasks,
 .timeline,
 .memberList,
@@ -758,6 +795,9 @@
   .memberRow > .leaderBadge,
   .memberRow > select,
   .memberRow > .textButton { grid-column: 2 / -1; }
+  .sectionHeading { align-items: flex-start; }
+  .teamActions { align-items: stretch; flex-direction: column-reverse; }
+  .teamActions button { width: 100%; }
   .detailInfo { grid-template-columns: 1fr; }
   .assigneeGrid,
   .formGrid { grid-template-columns: 1fr; }

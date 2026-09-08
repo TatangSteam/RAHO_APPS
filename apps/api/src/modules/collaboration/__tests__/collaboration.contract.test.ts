@@ -29,6 +29,8 @@ describe('Team task collaboration contract', () => {
     expect(service).toContain('where: { id: taskId, version: input.version }');
     expect(service).toContain('TASK_VERSION_CONFLICT');
     expect(service).toContain('restrictSubtasks');
+    expect(service).toContain("data: { status: 'ARCHIVED', archivedAt: new Date() }");
+    expect(service).toContain("'TEAM_DELETED'");
   });
 
   it('registers authenticated routes and persists the complete hierarchy', () => {
@@ -42,6 +44,7 @@ describe('Team task collaboration contract', () => {
     expect(app).toContain("app.use(`${prefix}/collaboration`, collaborationRouter)");
     expect(routes).toContain('router.use(authenticate, authorize(COLLABORATION_ROLES))');
     expect(routes).toContain('Object.values(Role).filter((role) => role !== Role.MEMBER)');
+    expect(routes).toContain("router.delete('/teams/:teamId', controller.deleteTeam)");
     expect(routes).toContain("router.post('/tasks/:taskId/subtasks'");
     expect(migration).toContain('CREATE TABLE "collaboration_teams"');
     expect(migration).toContain('CREATE TABLE "team_tasks"');
@@ -64,6 +67,8 @@ describe('Team task collaboration contract', () => {
     expect(sidebar).toContain("label: 'Tim & Tugas'");
     expect(sidebar).toContain("href: '/extra/collaboration/tasks'");
     expect(page).toContain('Tugas & Subtask');
+    expect(page).toContain('Hapus Tim');
+    expect(page).toContain('collaborationApi.deleteTeam');
     expect(page).toContain("setModal('subtask')");
     expect(styles).toContain('@media (max-width: 680px)');
     expect(styles).toContain(':global(.dark) .page');

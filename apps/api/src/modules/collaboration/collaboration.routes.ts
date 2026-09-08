@@ -12,6 +12,7 @@ router.use(authenticate, authorize(COLLABORATION_ROLES));
 router.get('/bootstrap', controller.bootstrap);
 router.post('/teams', controller.createTeam);
 router.patch('/teams/:teamId', controller.updateTeam);
+router.delete('/teams/:teamId', controller.deleteTeam);
 router.post('/teams/:teamId/members', controller.addMember);
 router.patch('/teams/:teamId/members/:membershipId', controller.updateMember);
 router.patch('/teams/:teamId/primary-leader', controller.setPrimaryLeader);

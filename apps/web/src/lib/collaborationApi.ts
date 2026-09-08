@@ -94,6 +94,8 @@ export const collaborationApi = {
     data<Team>(await api.post('/collaboration/teams', payload)),
   updateTeam: async (teamId: string, payload: Partial<Pick<Team, 'name' | 'description' | 'taskVisibilityPolicy'>>) =>
     data<Team>(await api.patch(`/collaboration/teams/${teamId}`, payload)),
+  deleteTeam: async (teamId: string) =>
+    data<Team>(await api.delete(`/collaboration/teams/${teamId}`)),
   addMember: async (teamId: string, payload: { userId: string; role: 'LEADER' | 'STAFF' }) =>
     data<Membership>(await api.post(`/collaboration/teams/${teamId}/members`, payload)),
   updateMember: async (teamId: string, membershipId: string, payload: { role?: 'LEADER' | 'STAFF'; status?: 'ACTIVE' | 'REMOVED' }) =>

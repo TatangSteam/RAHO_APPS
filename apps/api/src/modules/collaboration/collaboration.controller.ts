@@ -24,6 +24,9 @@ export async function createTeam(req: Request, res: Response, next: NextFunction
 export async function updateTeam(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await service.updateTeam(req.user.userId, req.params.teamId, updateTeamSchema.parse(req.body))); } catch (error) { next(error); }
 }
+export async function deleteTeam(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await service.deleteTeam(req.user.userId, req.params.teamId)); } catch (error) { next(error); }
+}
 export async function addMember(req: Request, res: Response, next: NextFunction) {
   try { sendCreated(res, await service.addTeamMember(req.user.userId, req.params.teamId, addMemberSchema.parse(req.body))); } catch (error) { next(error); }
 }

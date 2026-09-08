@@ -189,6 +189,18 @@ export async function updateTeam(actorId: string, teamId: string, input: UpdateT
   });
 }
 
+export async function deleteTeam(actorId: string, teamId: string) {
+  await requireOwner(actorId, teamId);
+  return prisma.$transaction(async (tx) => {
+    const team = await tx.collaborationTeam.update({
+      where: { id: teamId },
+      data: { status: 'ARCHIVED', archivedAt: new Date() },
+    });
+    await addActivity(tx, teamId, actorId, 'TEAM_DELETED', undefined, { name: team.name });
+    return team;
+  });
+}
+
 export async function addTeamMember(actorId: string, teamId: string, input: AddMemberInput) {
   await requireOwner(actorId, teamId);
   const user = await prisma.user.findFirst({ where: { id: input.userId, isActive: true, role: { not: 'MEMBER' } }, select: { id: true } });

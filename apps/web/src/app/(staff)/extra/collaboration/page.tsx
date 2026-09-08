@@ -20,6 +20,7 @@ import {
   Settings2,
   Sparkles,
   Target,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -116,7 +117,11 @@ export default function CollaborationPage() {
         search: search || undefined,
       });
       setData(result);
-      if (!selectedTeamId && result.selectedTeamId) setSelectedTeamId(result.selectedTeamId);
+      setSelectedTeamId((current) => (
+        result.teams.some((team) => team.id === current)
+          ? current
+          : result.selectedTeamId || ''
+      ));
     } catch (error) {
       showToast.error(getError(error));
     } finally {
@@ -230,6 +235,21 @@ export default function CollaborationPage() {
     } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
   };
 
+  const deleteTeam = async () => {
+    if (!selectedTeam || selectedTeam.myRole !== 'OWNER') return;
+    const confirmed = window.confirm(
+      `Hapus tim "${selectedTeam.name}"? Tim akan diarsipkan dan tidak lagi muncul pada daftar aktif. Tugas serta histori tetap tersimpan.`,
+    );
+    if (!confirmed) return;
+    try {
+      setBusy(true);
+      await collaborationApi.deleteTeam(selectedTeam.id);
+      showToast.success('Tim berhasil dihapus dari daftar aktif.');
+      setSelectedTeamId('');
+      await load();
+    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+  };
+
   const unassignedUsers = data.users.filter((candidate) => !selectedTeam?.memberships.some((member) => member.userId === candidate.id));
 
   return (
@@ -288,7 +308,7 @@ export default function CollaborationPage() {
           </section>
         )}
         {view === 'teams' && selectedTeam && (
-          <TeamsView team={selectedTeam} isOwner={Boolean(isOwner)} onAdd={() => setModal('member')} onSetLeader={setLeader} onRole={updateMemberRole} />
+          <TeamsView team={selectedTeam} isOwner={Boolean(isOwner)} busy={busy} onAdd={() => setModal('member')} onDelete={deleteTeam} onSetLeader={setLeader} onRole={updateMemberRole} />
         )}
       </>}
 
@@ -367,10 +387,10 @@ function TaskRow({ task, expanded, onToggle, onOpen, onAddSubtask, canManage }: 
   </article>;
 }
 
-function TeamsView({ team, isOwner, onAdd, onSetLeader, onRole }: { team: Team; isOwner: boolean; onAdd: () => void; onSetLeader: (id: string) => void; onRole: (id: string, role: 'LEADER' | 'STAFF') => void }) {
+function TeamsView({ team, isOwner, busy, onAdd, onDelete, onSetLeader, onRole }: { team: Team; isOwner: boolean; busy: boolean; onAdd: () => void; onDelete: () => void; onSetLeader: (id: string) => void; onRole: (id: string, role: 'LEADER' | 'STAFF') => void }) {
   return <div className={styles.teamsGrid}>
     <section className={styles.panel}>
-      <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <button className="btn btn-primary btn-sm" onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button>}</div>
+      <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <div className={styles.teamActions}><button className={styles.deleteTeamButton} disabled={busy} onClick={onDelete}><Trash2 size={16} /> Hapus Tim</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button></div>}</div>
       <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} onClick={() => onSetLeader(member.id)}>Jadikan Leader</button>}</div>)}</div>
     </section>
     <aside className={styles.panel}><div className={styles.sectionHeading}><div><h2>Aturan tim</h2><p>Konfigurasi akses saat ini.</p></div><Settings2 size={20} /></div><div className={styles.infoList}><div><span>Role Anda</span><strong>{team.myRole}</strong></div><div><span>Visibilitas tugas</span><strong>{team.taskVisibilityPolicy === 'ALL_TEAM_MEMBERS' ? 'Semua anggota' : 'Assignee saja'}</strong></div><div><span>Primary Leader</span><strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong></div></div></aside>
