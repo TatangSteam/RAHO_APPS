@@ -1,0 +1,7 @@
+# Default owner and required reviewer for the entire repository.
+* @TatangSteam
+
+# Attribution metadata.
+/NOTICE.md @TatangSteam
+/package.json @TatangSteam
+

@@ -4,6 +4,7 @@ import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getMissingRequiredScopes } from './zoho.client';
 import { isZohoReconnectRequired } from './zoho.error';
+import { hasActiveZohoApiConfig } from '@modules/runtime/runtime.service';
 
 export type ZohoRuntimeMode = 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE';
 export type ZohoRuntimeGate = {
@@ -18,15 +19,11 @@ function stringArray(value: Prisma.JsonValue | null | undefined): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
-function hasZohoSyncCredentials(): boolean {
-  return Boolean(
-    env.ZOHO_CLIENT_ID
-    && env.ZOHO_CLIENT_SECRET
-    && env.ZOHO_TOKEN_ENCRYPTION_KEY,
-  );
+async function hasZohoSyncCredentials(): Promise<boolean> {
+  return hasActiveZohoApiConfig();
 }
 
-function assertRuntimeReadyForMode(mode: ZohoRuntimeMode): void {
+async function assertRuntimeReadyForMode(mode: ZohoRuntimeMode): Promise<void> {
   if (mode === 'OFF') return;
   if (!env.ZOHO_SYNC_WORKER_ENABLED) {
     throw new AppError(
@@ -35,7 +32,7 @@ function assertRuntimeReadyForMode(mode: ZohoRuntimeMode): void {
       'Worker Zoho belum aktif. Aktifkan ZOHO_SYNC_WORKER_ENABLED lalu restart API sebelum rehearsal atau go-live.',
     );
   }
-  if ((mode === 'CANARY' || mode === 'LIVE') && !hasZohoSyncCredentials()) {
+  if ((mode === 'CANARY' || mode === 'LIVE') && !await hasZohoSyncCredentials()) {
     throw new AppError(
       409,
       'ZOHO_RUNTIME_CONFIG_INCOMPLETE',
@@ -125,7 +122,7 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
         source: 'LEGACY_ENV',
       };
     }
-    if (!env.ZOHO_SYNC_DRY_RUN && !hasZohoSyncCredentials()) {
+    if (!env.ZOHO_SYNC_DRY_RUN && !await hasZohoSyncCredentials()) {
       return {
         mode: 'OFF',
         connectionId: connection.id,
@@ -156,7 +153,7 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
       source: 'CONFIGURATION_INVALID',
     };
   }
-  if ((mode === 'CANARY' || mode === 'LIVE') && !hasZohoSyncCredentials()) {
+  if ((mode === 'CANARY' || mode === 'LIVE') && !await hasZohoSyncCredentials()) {
     return {
       mode: 'OFF',
       connectionId: connection.id,
@@ -390,7 +387,7 @@ export async function setGoLiveMode(actorUserId: string, mode: ZohoRuntimeMode) 
     where: { zohoConnectionId: connection.id },
   });
   if (!control) throw new AppError(409, 'ZOHO_GO_LIVE_NOT_CONFIGURED', 'Konfigurasi cutover belum dibuat.');
-  assertRuntimeReadyForMode(mode);
+  await assertRuntimeReadyForMode(mode);
   if (mode === 'CANARY' || mode === 'LIVE') {
     await assertPromotionReady(mode, control, connection.id);
   }

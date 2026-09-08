@@ -1,5 +1,7 @@
 # Raho ERP - Clinic Management System
 
+Project ownership and maintainer contact are recorded in [NOTICE.md](NOTICE.md).
+
 > Sistem manajemen klinik terintegrasi untuk Raho ERP dengan dukungan multi-cabang, manajemen paket terapi, inventory, dan electronic medical records (EMR).
 
 ## 📋 Daftar Isi

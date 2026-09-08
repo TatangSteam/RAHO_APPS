@@ -992,6 +992,57 @@ model ZohoConnection {
   @@map("zoho_connections")
 }
 
+/// Control-plane registry. Records always live in the bootstrap DATABASE_URL,
+/// never in a runtime-selected operational database.
+model RuntimeDatabaseProfile {
+  id           String   @id
+  label        String
+  encryptedUrl String   @db.Text
+  isEnabled    Boolean  @default(true)
+  createdBy    String
+  updatedBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isEnabled, label])
+  @@map("runtime_database_profiles")
+}
+
+model RuntimeZohoApiProfile {
+  id                    String   @id @default(cuid())
+  label                 String
+  encryptedClientId     String   @db.Text
+  encryptedClientSecret String   @db.Text
+  redirectUri           String
+  accountsBaseUrl       String
+  apiBaseUrl            String
+  isActive              Boolean  @default(false)
+  createdBy              String
+  updatedBy              String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organizationBindings RuntimeZohoOrganizationBinding[]
+
+  @@index([isActive, label])
+  @@map("runtime_zoho_api_profiles")
+}
+
+model RuntimeZohoOrganizationBinding {
+  id                String   @id @default(cuid())
+  databaseProfileId String
+  organizationId    String
+  zohoApiProfileId  String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  zohoApiProfile RuntimeZohoApiProfile @relation(fields: [zohoApiProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([databaseProfileId, organizationId])
+  @@index([zohoApiProfileId])
+  @@map("runtime_zoho_organization_bindings")
+}
+
 model UserProfile {
   id        String   @id @default(cuid())
   userId    String   @unique

@@ -6,6 +6,11 @@ import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { isZohoReconnectRequired, normalizeZohoError, ZohoApiError } from './zoho.error';
+import {
+  getActiveZohoApiConfig,
+  getZohoApiConfigForOrganization,
+  type ZohoApiRuntimeConfig,
+} from '@modules/runtime/runtime.service';
 
 const ZOHO_BOOKS_SCOPES = [
   'ZohoBooks.settings.READ',
@@ -80,11 +85,14 @@ const ZOHO_ACCOUNTS_HOSTS = new Set([
   'accounts.zoho.com.cn',
 ]);
 
-function configuredCredentials() {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET) {
+async function configuredCredentials(
+  config?: ZohoApiRuntimeConfig | null,
+): Promise<ZohoApiRuntimeConfig> {
+  const resolved = config || await getActiveZohoApiConfig();
+  if (!resolved) {
     throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Credential OAuth Zoho belum lengkap pada server.');
   }
-  return { clientId: env.ZOHO_CLIENT_ID, clientSecret: env.ZOHO_CLIENT_SECRET };
+  return resolved;
 }
 
 export function parseGrantedScopes(scopes: string): Set<string> {
@@ -133,16 +141,14 @@ export function resolveZohoAccountsBaseUrl(candidate?: string | null): string {
 export async function exchangeAuthorizationCode(
   code: string,
   accountsBaseUrl?: string | null,
+  runtimeConfig?: ZohoApiRuntimeConfig | null,
 ): Promise<ZohoTokenResponse> {
-  const credentials = configuredCredentials();
-  if (!env.ZOHO_REDIRECT_URI) {
-    throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Redirect URI Zoho belum dikonfigurasi.');
-  }
+  const credentials = await configuredCredentials(runtimeConfig);
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: credentials.clientId,
     client_secret: credentials.clientSecret,
-    redirect_uri: env.ZOHO_REDIRECT_URI,
+    redirect_uri: credentials.redirectUri,
     code,
   });
   const response = await axios.post<ZohoTokenResponse>(
@@ -173,7 +179,9 @@ export async function refreshZohoAccessToken(connection: ZohoConnection): Promis
   if (existing) return existing;
 
   const promise = (async () => {
-    const credentials = configuredCredentials();
+    const credentials = await configuredCredentials(
+      await getZohoApiConfigForOrganization(connection.organizationId),
+    );
     try {
       const params = new URLSearchParams({
         grant_type: 'refresh_token',

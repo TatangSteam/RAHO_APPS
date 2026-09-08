@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { env } from '@config/env';
-import { prisma } from '@lib/prisma';
+import { prisma, runWithActiveDatabase } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { normalizeZohoError } from './zoho.error';
@@ -478,8 +478,9 @@ export function startZohoReconciliationScheduler(): void {
       scheduledRunning = false;
     }
   };
-  void tick();
-  timer = setInterval(() => void tick(), env.ZOHO_RECONCILIATION_INTERVAL_MS);
+  const runTick = () => runWithActiveDatabase(tick);
+  void runTick();
+  timer = setInterval(() => void runTick(), env.ZOHO_RECONCILIATION_INTERVAL_MS);
 }
 
 export function stopZohoReconciliationScheduler(): void {

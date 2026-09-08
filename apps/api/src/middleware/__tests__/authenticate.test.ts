@@ -2,7 +2,11 @@ import type { NextFunction, Request, Response } from 'express';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { authenticate } from '../authenticate';
 import { verifyAccessToken, type JwtPayload } from '@lib/jwt';
-import { prisma } from '@lib/prisma';
+import {
+  getCurrentDatabaseProfileId,
+  getCurrentDatabaseRuntimeRevision,
+  prisma,
+} from '@lib/prisma';
 import { sendError } from '@utils/response';
 import {
   getAccessibleBranchIds,
@@ -16,6 +20,8 @@ jest.mock('@modules/iam/authorization.service', () => ({
   getEffectivePermissionCodes: jest.fn(),
 }));
 jest.mock('@lib/prisma', () => ({
+  getCurrentDatabaseProfileId: jest.fn(() => 'dummy'),
+  getCurrentDatabaseRuntimeRevision: jest.fn(() => 2),
   prisma: {
     user: { findUnique: jest.fn() },
     branch: { findMany: jest.fn() },
@@ -103,6 +109,49 @@ describe('authenticate middleware', () => {
     expect(sendError).toHaveBeenCalledWith(
       res, 401, 'AUTH_USER_INACTIVE', 'Akun tidak aktif atau tidak ditemukan.',
     );
+  });
+
+  it('rejects a token issued before the active database changed', async () => {
+    req.headers = { authorization: 'Bearer old-database-token' };
+    (verifyAccessToken as jest.Mock).mockReturnValue({
+      userId: 'user-123',
+      databaseProfileId: 'production',
+      databaseRuntimeRevision: 1,
+    });
+
+    await authenticate(req as Request, res as Response, next);
+
+    expect(getCurrentDatabaseProfileId).toHaveBeenCalled();
+    expect(getCurrentDatabaseRuntimeRevision).not.toHaveBeenCalled();
+    expect(sendError).toHaveBeenCalledWith(
+      res,
+      401,
+      'AUTH_DATABASE_CHANGED',
+      'Database aktif telah berubah. Silakan login kembali.',
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects an old session after switching away and back to the same database', async () => {
+    req.headers = { authorization: 'Bearer stale-revision-token' };
+    (verifyAccessToken as jest.Mock).mockReturnValue({
+      userId: 'user-123',
+      databaseProfileId: 'dummy',
+      databaseRuntimeRevision: 1,
+    });
+
+    await authenticate(req as Request, res as Response, next);
+
+    expect(getCurrentDatabaseRuntimeRevision).toHaveBeenCalled();
+    expect(sendError).toHaveBeenCalledWith(
+      res,
+      401,
+      'AUTH_DATABASE_CHANGED',
+      'Database aktif telah berubah. Silakan login kembali.',
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('uses the active database context for single-level impersonation', async () => {

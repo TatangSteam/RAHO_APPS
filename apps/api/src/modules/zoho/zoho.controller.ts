@@ -177,7 +177,7 @@ const rollbackSchema = z.object({
 });
 
 export async function connect(req: Request, res: Response, next: NextFunction) {
-  try { sendSuccess(res, service.getAuthorizationUrl(req.user.userId)); } catch (error) { next(error); }
+  try { sendSuccess(res, await service.getAuthorizationUrl(req.user.userId)); } catch (error) { next(error); }
 }
 
 export async function callback(req: Request, res: Response) {

@@ -1,7 +1,7 @@
 import os from 'os';
 import { IntegrationEvent, Prisma } from '@prisma/client';
 import { env } from '@config/env';
-import { prisma } from '@lib/prisma';
+import { prisma, runWithActiveDatabase } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { ZohoApiError, normalizeZohoError } from './zoho.error';
 import { sanitizeForAudit, stablePayloadHash } from './zoho.sanitizer';
@@ -270,11 +270,12 @@ export function startZohoWorker(): void {
     dryRun: env.ZOHO_SYNC_DRY_RUN,
     intervalMs: env.ZOHO_SYNC_WORKER_INTERVAL_MS,
   });
-  void runZohoWorkerOnce().catch((error) => {
+  const runCycle = () => runWithActiveDatabase(() => runZohoWorkerOnce());
+  void runCycle().catch((error) => {
     logZohoErrorThrottled('worker-cycle', 'Zoho worker cycle failed', error);
   });
   timer = setInterval(() => {
-    void runZohoWorkerOnce().catch((error) => {
+    void runCycle().catch((error) => {
       logZohoErrorThrottled('worker-cycle', 'Zoho worker cycle failed', error);
     });
   }, env.ZOHO_SYNC_WORKER_INTERVAL_MS);

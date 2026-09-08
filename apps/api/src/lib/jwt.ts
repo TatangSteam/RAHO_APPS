@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
 import { Role } from '@prisma/client';
+import {
+  getCurrentDatabaseProfileId,
+  getCurrentDatabaseRuntimeRevision,
+} from '@lib/prisma';
 
 export interface ImpersonationData {
   userId: string;
@@ -13,6 +17,8 @@ export interface ImpersonationData {
 }
 
 export interface JwtPayload {
+  databaseProfileId?: string;
+  databaseRuntimeRevision?: number;
   userId: string;
   email: string;
   role: string;
@@ -32,15 +38,30 @@ export interface TokenPair {
 }
 
 export function signAccessToken(payload: JwtPayload, expiresIn?: string): string {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+  return jwt.sign({
+    ...payload,
+    databaseProfileId: payload.databaseProfileId || getCurrentDatabaseProfileId(),
+    databaseRuntimeRevision: payload.databaseRuntimeRevision
+      ?? getCurrentDatabaseRuntimeRevision(),
+  }, env.JWT_ACCESS_SECRET, {
     expiresIn: expiresIn || env.JWT_ACCESS_EXPIRES,
     issuer: 'raho-api',
     audience: 'raho-client',
   } as jwt.SignOptions);
 }
 
-export function signRefreshToken(payload: Pick<JwtPayload, 'userId' | 'email'>): string {
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+type RefreshTokenPayload = Pick<
+  JwtPayload,
+  'userId' | 'email' | 'databaseProfileId' | 'databaseRuntimeRevision'
+>;
+
+export function signRefreshToken(payload: RefreshTokenPayload): string {
+  return jwt.sign({
+    ...payload,
+    databaseProfileId: payload.databaseProfileId || getCurrentDatabaseProfileId(),
+    databaseRuntimeRevision: payload.databaseRuntimeRevision
+      ?? getCurrentDatabaseRuntimeRevision(),
+  }, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_EXPIRES,
     issuer: 'raho-api',
     audience: 'raho-client',
@@ -54,16 +75,21 @@ export function verifyAccessToken(token: string): JwtPayload {
   }) as JwtPayload;
 }
 
-export function verifyRefreshToken(token: string): Pick<JwtPayload, 'userId' | 'email'> {
+export function verifyRefreshToken(token: string): RefreshTokenPayload {
   return jwt.verify(token, env.JWT_REFRESH_SECRET, {
     issuer: 'raho-api',
     audience: 'raho-client',
-  }) as Pick<JwtPayload, 'userId' | 'email'>;
+  }) as RefreshTokenPayload;
 }
 
 export function generateTokenPair(payload: JwtPayload): TokenPair {
   return {
     accessToken: signAccessToken(payload),
-    refreshToken: signRefreshToken({ userId: payload.userId, email: payload.email }),
+    refreshToken: signRefreshToken({
+      userId: payload.userId,
+      email: payload.email,
+      databaseProfileId: payload.databaseProfileId,
+      databaseRuntimeRevision: payload.databaseRuntimeRevision,
+    }),
   };
 }

@@ -8,6 +8,7 @@ import { env } from '@config/env';
 import { logger } from '@lib/logger';
 import { errorHandler } from '@middleware/errorHandler';
 import { apiRateLimiter } from '@middleware/rateLimiter';
+import { databaseContext } from '@middleware/databaseContext';
 
 // ── Route Modules ─────────────────────────────────────────────
 import { authRouter } from '@modules/auth/auth.routes';
@@ -44,6 +45,7 @@ import zohoRouter from './modules/zoho/zoho.routes';
 import whatsappRouter from './modules/whatsapp/whatsapp.routes';
 import voucherRouter from './modules/vouchers/voucher.routes';
 import collaborationRouter from './modules/collaboration/collaboration.routes';
+import runtimeRouter from './modules/runtime/runtime.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -139,6 +141,11 @@ export function createApp(): Application {
 
   // ── API Routes ────────────────────────────────────────────
   const prefix = env.API_PREFIX;
+
+  // Capture the globally selected database once per request. Switching the
+  // runtime target can never split one request across two databases.
+  app.use(prefix, databaseContext);
+  app.use(`${prefix}/runtime`, runtimeRouter);
 
   app.use(`${prefix}/auth`, authRouter);
   app.use(`${prefix}/iam`, iamRouter);

@@ -2,6 +2,18 @@
   "name": "raho-system",
   "version": "1.0.0",
   "private": true,
+  "author": {
+    "name": "Jovan Prabowo Kunoro",
+    "email": "jovanku1@gmail.com",
+    "url": "https://github.com/TatangSteam"
+  },
+  "contributors": [
+    {
+      "name": "Jovan Prabowo Kunoro",
+      "email": "jovanku1@gmail.com",
+      "url": "https://github.com/TatangSteam"
+    }
+  ],
   "description": "RAHO — Monorepo (Backend + Frontend)",
   "scripts": {
     "dev:api": "npm run dev --prefix apps/api",

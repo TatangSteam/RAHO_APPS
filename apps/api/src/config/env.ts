@@ -15,6 +15,9 @@ export const envSchema = z.object({
   API_URL: z.string().url().optional().default('http://localhost:4000'),
 
   DATABASE_URL: z.string().url(),
+  DATABASE_PROFILES_JSON: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  DATABASE_DEFAULT_PROFILE_ID: z.string().trim().min(1).max(40).default('default'),
+  RUNTIME_CONFIG_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined, z.string().min(32).optional()),
   PRISMA_QUERY_LOG: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
   JWT_ACCESS_SECRET: z.string().min(32),
@@ -87,3 +90,40 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export type Env = typeof env;
+
+const databaseProfileSchema = z.object({
+  id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/i),
+  label: z.string().trim().min(1).max(80),
+  url: z.string().url(),
+});
+
+export type DatabaseProfile = z.infer<typeof databaseProfileSchema>;
+
+function parseDatabaseProfiles(): DatabaseProfile[] {
+  if (!env.DATABASE_PROFILES_JSON) {
+    return [{
+      id: env.DATABASE_DEFAULT_PROFILE_ID,
+      label: 'Database Utama',
+      url: env.DATABASE_URL,
+    }];
+  }
+
+  try {
+    const profiles = z.array(databaseProfileSchema).min(1).max(10)
+      .parse(JSON.parse(env.DATABASE_PROFILES_JSON));
+    const normalizedIds = profiles.map((profile) => profile.id.toLowerCase());
+    if (new Set(normalizedIds).size !== normalizedIds.length) {
+      throw new Error('ID profile database harus unik.');
+    }
+    if (!profiles.some((profile) => profile.id === env.DATABASE_DEFAULT_PROFILE_ID)) {
+      throw new Error(`DATABASE_DEFAULT_PROFILE_ID \"${env.DATABASE_DEFAULT_PROFILE_ID}\" tidak ditemukan.`);
+    }
+    return profiles;
+  } catch (error) {
+    console.error('❌ DATABASE_PROFILES_JSON tidak valid:', error);
+    process.exit(1);
+  }
+}
+
+/** Daftar koneksi server-side. URL tidak pernah dikirimkan ke browser. */
+export const databaseProfiles = parseDatabaseProfiles();

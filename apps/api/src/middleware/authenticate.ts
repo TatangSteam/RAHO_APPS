@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { verifyAccessToken, JwtPayload } from '@lib/jwt';
 import { sendError } from '@utils/response';
-import { prisma } from '@lib/prisma';
+import {
+  getCurrentDatabaseProfileId,
+  getCurrentDatabaseRuntimeRevision,
+  prisma,
+} from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { getAccessibleBranchIds, getEffectivePermissionCodes } from '@modules/iam/authorization.service';
 
@@ -107,6 +111,24 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   try {
     const payload = verifyAccessToken(token);
+
+    if (
+      (
+        payload.databaseProfileId
+        && payload.databaseProfileId !== getCurrentDatabaseProfileId()
+      ) || (
+        payload.databaseRuntimeRevision !== undefined
+        && payload.databaseRuntimeRevision !== getCurrentDatabaseRuntimeRevision()
+      )
+    ) {
+      sendError(
+        res,
+        401,
+        'AUTH_DATABASE_CHANGED',
+        'Database aktif telah berubah. Silakan login kembali.',
+      );
+      return;
+    }
 
     if (payload.impersonating) {
       const { deepest, chain } = extractDeepestImpersonation(payload);

@@ -1,7 +1,8 @@
 import { createApp } from './app';
 import { env } from '@config/env';
-import { prisma } from '@lib/prisma';
+import { disconnectAllPrismaClients, prisma, runWithActiveDatabase } from '@lib/prisma';
 import { logger } from '@lib/logger';
+import { controlPrisma } from '@lib/controlPrisma';
 import { startZohoWorker, stopZohoWorker } from '@modules/zoho/zoho.worker';
 import { registerZohoHandlers } from '@modules/zoho/zoho.handlers';
 import {
@@ -33,7 +34,7 @@ async function bootstrap(): Promise<void> {
   startZohoWorker();
   startZohoReconciliationScheduler();
   try {
-    await startWhatsAppRuntime();
+    await runWithActiveDatabase(() => startWhatsAppRuntime());
   } catch (error) {
     // WhatsApp is an optional side effect. A broken pairing/auth state must not
     // make core RAHO transactions unavailable.
@@ -48,7 +49,10 @@ async function bootstrap(): Promise<void> {
     logger.info(`\n${signal} received — shutting down gracefully`);
 
     server.close(async () => {
-      await prisma.$disconnect();
+      await Promise.all([
+        disconnectAllPrismaClients(),
+        controlPrisma.$disconnect(),
+      ]);
       logger.info('🛑 Server closed, database disconnected');
       process.exit(0);
     });

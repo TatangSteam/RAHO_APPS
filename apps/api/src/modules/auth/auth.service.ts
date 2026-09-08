@@ -1,5 +1,9 @@
 import bcrypt from 'bcryptjs';
-import { prisma } from '@lib/prisma';
+import {
+  getCurrentDatabaseProfileId,
+  getCurrentDatabaseRuntimeRevision,
+  prisma,
+} from '@lib/prisma';
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
 import { logAudit } from '@utils/auditLog';
@@ -135,12 +139,29 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
 }
 
 export async function refreshService(refreshToken: string) {
-  let decoded: { userId: string; email: string };
+  let decoded: {
+    userId: string;
+    email: string;
+    databaseProfileId?: string;
+    databaseRuntimeRevision?: number;
+  };
 
   try {
     decoded = verifyRefreshToken(refreshToken);
   } catch {
     throw new AppError(401, 'AUTH_TOKEN_INVALID', 'Refresh token tidak valid atau kedaluwarsa.');
+  }
+
+  if (
+    (
+      decoded.databaseProfileId
+      && decoded.databaseProfileId !== getCurrentDatabaseProfileId()
+    ) || (
+      decoded.databaseRuntimeRevision !== undefined
+      && decoded.databaseRuntimeRevision !== getCurrentDatabaseRuntimeRevision()
+    )
+  ) {
+    throw new AppError(401, 'AUTH_DATABASE_CHANGED', 'Database aktif telah berubah. Silakan login kembali.');
   }
 
   const user = await prisma.user.findUnique({

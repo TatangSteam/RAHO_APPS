@@ -1,6 +1,15 @@
 import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
-import { prisma } from '@lib/prisma';
+import {
+  getCurrentDatabaseProfileId,
+  prisma,
+  runWithDatabaseProfile,
+} from '@lib/prisma';
+import {
+  bindZohoOrganizationToApiProfile,
+  getActiveZohoApiConfig,
+  getZohoApiConfig,
+} from '@modules/runtime/runtime.service';
 import { AppError } from '@middleware/errorHandler';
 import { encryptToken } from './zoho.crypto';
 import {
@@ -14,14 +23,20 @@ import {
   ZOHO_SCOPE_VERSION,
 } from './zoho.client';
 import { isZohoReconnectRequired, normalizeZohoError } from './zoho.error';
-
 const SCOPES = ZOHO_REQUIRED_SCOPES.join(',');
 
-type OAuthState = { userId: string; purpose: 'zoho-oauth' };
-function assertConfigured() {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REDIRECT_URI || !env.ZOHO_TOKEN_ENCRYPTION_KEY) {
+type OAuthState = {
+  userId: string;
+  purpose: 'zoho-oauth';
+  databaseProfileId?: string;
+  zohoApiProfileId?: string;
+};
+async function assertConfigured() {
+  const config = await getActiveZohoApiConfig();
+  if (!config || !env.ZOHO_TOKEN_ENCRYPTION_KEY) {
     throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Credential OAuth Zoho belum lengkap pada server.');
   }
+  return config;
 }
 
 function stateSecret(): string {
@@ -36,26 +51,33 @@ function webRedirect(status: 'success' | 'error', message?: string): string {
   return url.toString();
 }
 
-export function getAuthorizationUrl(userId: string) {
-  assertConfigured();
+export async function getAuthorizationUrl(userId: string) {
+  const config = await assertConfigured();
   const state = jwt.sign(
-    { userId, purpose: 'zoho-oauth' } satisfies OAuthState,
+    {
+      userId,
+      purpose: 'zoho-oauth',
+      databaseProfileId: getCurrentDatabaseProfileId(),
+      zohoApiProfileId: config.id,
+    } satisfies OAuthState,
     stateSecret(),
     { expiresIn: '10m', issuer: 'raho-api', audience: 'zoho-oauth' },
   );
-  const url = new URL('/oauth/v2/auth', resolveZohoAccountsBaseUrl());
+  const url = new URL('/oauth/v2/auth', resolveZohoAccountsBaseUrl(config.accountsBaseUrl));
   url.searchParams.set('scope', SCOPES);
-  url.searchParams.set('client_id', env.ZOHO_CLIENT_ID!);
+  url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
-  url.searchParams.set('redirect_uri', env.ZOHO_REDIRECT_URI!);
+  url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('state', state);
   return { authorizationUrl: url.toString() };
 }
 
 export async function handleCallback(code: string, state: string, accountsServer?: string | null) {
-  assertConfigured();
+  if (!env.ZOHO_TOKEN_ENCRYPTION_KEY) {
+    throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Kunci enkripsi token Zoho belum tersedia.');
+  }
   let payload: OAuthState;
   try {
     payload = jwt.verify(state, stateSecret(), {
@@ -66,13 +88,19 @@ export async function handleCallback(code: string, state: string, accountsServer
     throw new AppError(400, 'ZOHO_STATE_INVALID', 'Sesi koneksi Zoho tidak valid atau kedaluwarsa.');
   }
   if (payload.purpose !== 'zoho-oauth') throw new AppError(400, 'ZOHO_STATE_INVALID', 'State OAuth tidak valid.');
-  const user = await prisma.user.findFirst({ where: { id: payload.userId, isActive: true, role: 'SUPER_ADMIN' } });
-  if (!user) throw new AppError(403, 'AUTH_FORBIDDEN', 'Pengguna tidak berwenang menghubungkan Zoho.');
+  const databaseProfileId = payload.databaseProfileId || getCurrentDatabaseProfileId();
+  return runWithDatabaseProfile(databaseProfileId, async () => {
+    const runtimeConfig = payload.zohoApiProfileId
+      ? await getZohoApiConfig(payload.zohoApiProfileId)
+      : await getActiveZohoApiConfig();
+    if (!runtimeConfig) throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Profile API Zoho tidak tersedia.');
+    const user = await prisma.user.findFirst({ where: { id: payload.userId, isActive: true, role: 'SUPER_ADMIN' } });
+    if (!user) throw new AppError(403, 'AUTH_FORBIDDEN', 'Pengguna tidak berwenang menghubungkan Zoho.');
 
-  const accountsBaseUrl = resolveZohoAccountsBaseUrl(accountsServer);
+  const accountsBaseUrl = resolveZohoAccountsBaseUrl(accountsServer || runtimeConfig.accountsBaseUrl);
   let token: ZohoTokenResponse;
   try {
-    token = await exchangeAuthorizationCode(code, accountsBaseUrl);
+    token = await exchangeAuthorizationCode(code, accountsBaseUrl, runtimeConfig);
   } catch (error) {
     const normalized = normalizeZohoError(error);
     if (/invalid_code|invalid_grant/i.test(`${normalized.code} ${normalized.message}`)) {
@@ -98,7 +126,7 @@ export async function handleCallback(code: string, state: string, accountsServer
       token.error_description || token.error || 'Zoho tidak mengembalikan refresh token. Cabut izin aplikasi lalu coba kembali.',
     );
   }
-  const apiDomain = token.api_domain || env.ZOHO_API_BASE_URL;
+  const apiDomain = token.api_domain || runtimeConfig.apiBaseUrl;
   const organizations = await listOrganizationsWithToken(apiDomain, token.access_token);
   if (!organizations.length) {
     throw new AppError(422, 'ZOHO_ORGANIZATION_NOT_FOUND', 'Tidak ada organisasi Zoho Books yang dapat diakses.');
@@ -151,10 +179,15 @@ export async function handleCallback(code: string, state: string, accountsServer
       });
     }
   });
-  return webRedirect('success');
+  await Promise.all(organizations.map((organization) => (
+    bindZohoOrganizationToApiProfile(organization.organization_id, runtimeConfig.id)
+  )));
+    return webRedirect('success');
+  });
 }
 
 export async function getStatus() {
+  const runtimeConfig = await getActiveZohoApiConfig();
   const connections = await prisma.zohoConnection.findMany({
     orderBy: [{ isActive: 'desc' }, { organizationName: 'asc' }],
     select: {
@@ -237,8 +270,8 @@ export async function getStatus() {
     };
   });
   return {
-    configured: Boolean(env.ZOHO_CLIENT_ID && env.ZOHO_CLIENT_SECRET && env.ZOHO_REDIRECT_URI && env.ZOHO_TOKEN_ENCRYPTION_KEY),
-    redirectUri: env.ZOHO_REDIRECT_URI || null,
+    configured: Boolean(runtimeConfig && env.ZOHO_TOKEN_ENCRYPTION_KEY),
+    redirectUri: runtimeConfig?.redirectUri || null,
     connected: connectionStatuses.some((item) => item.authorizationReady),
     dryRun: env.ZOHO_SYNC_DRY_RUN,
     workerEnabled: env.ZOHO_SYNC_WORKER_ENABLED,

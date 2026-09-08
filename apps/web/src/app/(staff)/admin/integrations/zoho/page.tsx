@@ -1,7 +1,7 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Ban,
@@ -97,6 +97,22 @@ type Status = {
   dryRun: boolean;
   workerEnabled: boolean;
   connections: Connection[];
+};
+type RuntimeDatabases = {
+  activeProfileId: string;
+  profiles: Array<{ id: string; label: string; isActive: boolean }>;
+};
+type RuntimeZohoApiProfiles = {
+  activeProfileId: string | null;
+  profiles: Array<{
+    id: string;
+    label: string;
+    redirectUri: string;
+    accountsBaseUrl: string;
+    apiBaseUrl: string;
+    source: 'ENV' | 'REGISTRY';
+    isActive: boolean;
+  }>;
 };
 type SyncAttempt = {
   id: string;
@@ -804,9 +820,23 @@ export default function ZohoIntegrationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
   const canManageConnection = user?.role === 'SUPER_ADMIN';
   const [tab, setTab] = useState<Tab>('connection');
   const [status, setStatus] = useState<Status | null>(null);
+  const [runtimeDatabases, setRuntimeDatabases] = useState<RuntimeDatabases | null>(null);
+  const [runtimeZohoApis, setRuntimeZohoApis] = useState<RuntimeZohoApiProfiles | null>(null);
+  const [showDatabaseForm, setShowDatabaseForm] = useState(false);
+  const [showZohoApiForm, setShowZohoApiForm] = useState(false);
+  const [databaseForm, setDatabaseForm] = useState({ id: '', label: '', url: '' });
+  const [zohoApiForm, setZohoApiForm] = useState({
+    label: '',
+    clientId: '',
+    clientSecret: '',
+    redirectUri: 'http://localhost:3000/api/zoho/callback',
+    accountsBaseUrl: 'https://accounts.zoho.com',
+    apiBaseUrl: 'https://www.zohoapis.com',
+  });
   const [queue, setQueue] = useState<QueueData | null>(null);
   const [discovery, setDiscovery] = useState<DiscoveryData | null>(null);
   const [contacts, setContacts] = useState<ContactData | null>(null);
@@ -876,6 +906,16 @@ export default function ZohoIntegrationPage() {
   const loadStatus = useCallback(async () => {
     const response = await api.get<{ data: Status }>('/integrations/zoho/status');
     setStatus(response.data.data);
+  }, []);
+
+  const loadRuntimeDatabases = useCallback(async () => {
+    const response = await api.get<{ data: RuntimeDatabases }>('/runtime/databases');
+    setRuntimeDatabases(response.data.data);
+  }, []);
+
+  const loadRuntimeZohoApis = useCallback(async () => {
+    const response = await api.get<{ data: RuntimeZohoApiProfiles }>('/runtime/zoho-api-profiles');
+    setRuntimeZohoApis(response.data.data);
   }, []);
 
   const loadQueue = useCallback(async () => {
@@ -1048,6 +1088,12 @@ export default function ZohoIntegrationPage() {
   }, [loadStatus]);
 
   useEffect(() => {
+    if (!canManageConnection) return;
+    void Promise.all([loadRuntimeDatabases(), loadRuntimeZohoApis()])
+      .catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat pilihan target runtime.')));
+  }, [canManageConnection, loadRuntimeDatabases, loadRuntimeZohoApis]);
+
+  useEffect(() => {
     if (tab === 'queue') void loadQueue().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat antrean Zoho.')));
     if (tab === 'discovery') void loadDiscovery().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat master Zoho.')));
     if (tab === 'contacts') void loadContacts().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat mapping contact.')));
@@ -1123,6 +1169,94 @@ export default function ZohoIntegrationPage() {
       assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Gagal memilih organisasi.'));
     } finally { setAction(null); }
+  }
+
+  async function activateDatabase(profileId: string) {
+    if (!runtimeDatabases || profileId === runtimeDatabases.activeProfileId) return;
+    const target = runtimeDatabases.profiles.find((profile) => profile.id === profileId);
+    if (!target) return;
+    const confirmed = window.confirm(
+      `Ganti database aktif untuk seluruh aplikasi ke \"${target.label}\"?\n\n`
+      + 'Semua pengguna harus login ulang. Organisasi Zoho dapat dipilih terpisah setelah login.',
+    );
+    if (!confirmed) return;
+
+    setAction(`database:${profileId}`);
+    try {
+      await api.post('/runtime/databases/activate', { profileId });
+      clearAuth();
+      document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      sessionStorage.setItem(
+        'logoutMessage',
+        `Database aktif diganti ke ${target.label}. Silakan login kembali.`,
+      );
+      window.location.replace('/login');
+    } catch (error) {
+      assertCaughtError(error);
+      toast.error(apiErrorMessage(error, 'Database tidak dapat diganti.'));
+      setAction(null);
+    }
+  }
+
+  async function addDatabase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAction('add-database');
+    try {
+      const response = await api.post<{ data: RuntimeDatabases }>('/runtime/databases', databaseForm);
+      setRuntimeDatabases(response.data.data);
+      setDatabaseForm({ id: '', label: '', url: '' });
+      setShowDatabaseForm(false);
+      toast.success('Profile database berhasil ditambahkan dan koneksinya valid.');
+    } catch (error) {
+      assertCaughtError(error);
+      toast.error(apiErrorMessage(error, 'Profile database gagal ditambahkan.'));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function addZohoApi(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAction('add-zoho-api');
+    try {
+      const response = await api.post<{ data: RuntimeZohoApiProfiles }>(
+        '/runtime/zoho-api-profiles',
+        zohoApiForm,
+      );
+      setRuntimeZohoApis(response.data.data);
+      setZohoApiForm((current) => ({
+        ...current,
+        label: '',
+        clientId: '',
+        clientSecret: '',
+      }));
+      setShowZohoApiForm(false);
+      toast.success('API Zoho ditambahkan dan dijadikan aktif untuk OAuth berikutnya.');
+      await loadStatus();
+    } catch (error) {
+      assertCaughtError(error);
+      toast.error(apiErrorMessage(error, 'API Zoho gagal ditambahkan.'));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function activateZohoApi(profileId: string) {
+    if (!profileId || profileId === runtimeZohoApis?.activeProfileId) return;
+    setAction(`zoho-api:${profileId}`);
+    try {
+      const response = await api.post<{ data: RuntimeZohoApiProfiles }>(
+        `/runtime/zoho-api-profiles/${profileId}/activate`,
+      );
+      setRuntimeZohoApis(response.data.data);
+      toast.success('API Zoho aktif diperbarui. Koneksi organisasi yang sudah ada tetap memakai API asalnya.');
+      await loadStatus();
+    } catch (error) {
+      assertCaughtError(error);
+      toast.error(apiErrorMessage(error, 'API Zoho tidak dapat diaktifkan.'));
+    } finally {
+      setAction(null);
+    }
   }
 
   async function disconnect() {
@@ -1914,12 +2048,204 @@ export default function ZohoIntegrationPage() {
 
       {tab === 'connection' && (
         <>
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 md:p-6">
+            <div>
+              <h2 className="font-semibold text-neutral-900 dark:text-white">Target runtime</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Database dan organisasi Zoho dipilih secara terpisah; tidak ada pasangan yang dikunci.
+              </p>
+            </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div>
+                <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <Database size={17} className="text-blue-600" /> Database aktif
+                </span>
+                {canManageConnection ? (
+                  <select
+                    value={runtimeDatabases?.activeProfileId || ''}
+                    onChange={(event) => void activateDatabase(event.target.value)}
+                    disabled={!runtimeDatabases || !!action}
+                    className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm disabled:opacity-50 dark:border-neutral-700"
+                  >
+                    {!runtimeDatabases && <option value="">Memuat database...</option>}
+                    {runtimeDatabases?.profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>{profile.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-lg border px-3 py-2 text-sm dark:border-neutral-700">
+                    {runtimeDatabases?.profiles.find((profile) => profile.isActive)?.label || 'Dikelola SUPER_ADMIN'}
+                  </div>
+                )}
+                <span className="mt-1 block text-xs text-amber-700">
+                  Pergantian database berlaku global dan mewajibkan login ulang.
+                </span>
+                {canManageConnection && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDatabaseForm((value) => !value)}
+                    className="mt-2 text-xs font-semibold text-blue-600 hover:underline"
+                  >
+                    + Tambah database
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <PlugZap size={17} className="text-violet-600" /> API Zoho aktif
+                </span>
+                <select
+                  value={runtimeZohoApis?.activeProfileId || ''}
+                  onChange={(event) => void activateZohoApi(event.target.value)}
+                  disabled={!canManageConnection || !runtimeZohoApis?.profiles.length || !!action}
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm disabled:opacity-50 dark:border-neutral-700"
+                >
+                  {!runtimeZohoApis?.profiles.length && <option value="">Belum ada API Zoho</option>}
+                  {runtimeZohoApis?.profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>{profile.label}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-neutral-500">
+                  Digunakan saat memulai OAuth Zoho baru.
+                </span>
+                {canManageConnection && (
+                  <button
+                    type="button"
+                    onClick={() => setShowZohoApiForm((value) => !value)}
+                    className="mt-2 text-xs font-semibold text-violet-600 hover:underline"
+                  >
+                    + Tambah API Zoho
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <Building2 size={17} className="text-emerald-600" /> Organisasi Zoho aktif
+                </span>
+                <select
+                  value={status?.connections.find((connection) => connection.isActive)?.id || ''}
+                  onChange={(event) => void activate(event.target.value)}
+                  disabled={!canManageConnection || !status?.connections.length || !!action}
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm disabled:opacity-50 dark:border-neutral-700"
+                >
+                  {!status?.connections.length && <option value="">Belum ada organisasi Zoho</option>}
+                  {status?.connections.map((connection) => (
+                    <option key={connection.id} value={connection.id}>
+                      {connection.organizationName} ({connection.organizationId})
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-neutral-500">
+                  Organisasi dipilih terpisah pada database yang sedang aktif.
+                </span>
+              </div>
+            </div>
+
+            {showDatabaseForm && canManageConnection && (
+              <form onSubmit={addDatabase} className="mt-5 rounded-xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Tambah koneksi database</h3>
+                    <p className="mt-1 text-xs text-neutral-500">Connection URL diuji oleh server lalu disimpan terenkripsi.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowDatabaseForm(false)} className="text-sm text-neutral-500">Tutup</button>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <label className="text-xs font-semibold">
+                    Nama database
+                    <input
+                      required
+                      value={databaseForm.label}
+                      onChange={(event) => setDatabaseForm((current) => ({ ...current, label: event.target.value }))}
+                      placeholder="Database Dummy"
+                      className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold">
+                    ID/alias
+                    <input
+                      required
+                      pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,39}"
+                      value={databaseForm.id}
+                      onChange={(event) => setDatabaseForm((current) => ({ ...current, id: event.target.value }))}
+                      placeholder="dummy"
+                      className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold md:col-span-2">
+                    PostgreSQL connection URL
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      value={databaseForm.url}
+                      onChange={(event) => setDatabaseForm((current) => ({ ...current, url: event.target.value }))}
+                      placeholder="postgresql://user:password@host:5432/database?schema=public"
+                      className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!!action}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {action === 'add-database' ? 'Memeriksa koneksi...' : 'Simpan database'}
+                </button>
+              </form>
+            )}
+
+            {showZohoApiForm && canManageConnection && (
+              <form onSubmit={addZohoApi} className="mt-5 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900 dark:bg-violet-950/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Tambah OAuth API Zoho</h3>
+                    <p className="mt-1 text-xs text-neutral-500">Client secret disimpan terenkripsi dan tidak akan ditampilkan kembali.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowZohoApiForm(false)} className="text-sm text-neutral-500">Tutup</button>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <label className="text-xs font-semibold md:col-span-2">
+                    Nama API
+                    <input required value={zohoApiForm.label} onChange={(event) => setZohoApiForm((current) => ({ ...current, label: event.target.value }))} placeholder="Zoho Dummy" className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                  <label className="text-xs font-semibold">
+                    Client ID
+                    <input required autoComplete="off" value={zohoApiForm.clientId} onChange={(event) => setZohoApiForm((current) => ({ ...current, clientId: event.target.value }))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                  <label className="text-xs font-semibold">
+                    Client Secret
+                    <input required type="password" autoComplete="new-password" value={zohoApiForm.clientSecret} onChange={(event) => setZohoApiForm((current) => ({ ...current, clientSecret: event.target.value }))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                  <label className="text-xs font-semibold md:col-span-2">
+                    Authorized Redirect URI
+                    <input required type="url" value={zohoApiForm.redirectUri} onChange={(event) => setZohoApiForm((current) => ({ ...current, redirectUri: event.target.value }))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                  <label className="text-xs font-semibold">
+                    Zoho Accounts URL
+                    <input required type="url" value={zohoApiForm.accountsBaseUrl} onChange={(event) => setZohoApiForm((current) => ({ ...current, accountsBaseUrl: event.target.value }))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                  <label className="text-xs font-semibold">
+                    Zoho API URL
+                    <input required type="url" value={zohoApiForm.apiBaseUrl} onChange={(event) => setZohoApiForm((current) => ({ ...current, apiBaseUrl: event.target.value }))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700 dark:bg-neutral-900" />
+                  </label>
+                </div>
+                <p className="mt-3 text-xs text-amber-700">Redirect URI harus sama persis dengan yang didaftarkan pada Zoho API Console.</p>
+                <button type="submit" disabled={!!action} className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  {action === 'add-zoho-api' ? 'Menyimpan...' : 'Simpan API Zoho'}
+                </button>
+              </form>
+            )}
+          </section>
+
           {!status?.configured && (
             <div className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
               <CircleAlert className="shrink-0" />
               <div>
                 <p className="font-semibold">Konfigurasi server belum lengkap</p>
-                <p className="mt-1 text-sm">Isi credential dan kunci enkripsi Zoho, lalu restart API.</p>
+                <p className="mt-1 text-sm">Tambahkan API Zoho di Target runtime. Kunci enkripsi server tetap wajib tersedia.</p>
               </div>
             </div>
           )}
