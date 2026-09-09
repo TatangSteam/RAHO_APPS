@@ -69,6 +69,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/inventory/team',
     '/notifications',
     '/chat',
+    '/staff-incentives',
     ...COLLABORATION_MENU,
   ]),
   NURSE: new Set([
@@ -81,6 +82,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/reimbursements',
     '/notifications',
     '/chat',
+    '/staff-incentives',
     ...COLLABORATION_MENU,
   ]),
   DOCTOR: new Set([
@@ -273,6 +275,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/staff-performance',
         icon: <BarChart3 size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR'],
+      },
+      {
+        label: 'Insentif Nakes & MSO',
+        href: '/staff-incentives',
+        icon: <BadgeDollarSign size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE', 'FINANCE_LOGISTICS_CONTROLLER'],
       },
       {
         label: 'Laporan',

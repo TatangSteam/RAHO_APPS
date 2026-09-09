@@ -32,6 +32,7 @@ import {
 } from './services/staff-performance.service';
 import { exportStaffPerformanceService } from './services/staff-performance-export.service';
 import { exportStaffPerformanceDetailService } from './services/staff-performance-detail-export.service';
+import { getMonthlyStaffIncentivesService } from './services/staff-incentive.service';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
@@ -570,6 +571,27 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
   } catch (err) { next(err); }
+}
+
+/**
+ * Calculate Nakes and MSO incentives for one Jakarta calendar month.
+ * GET /users/incentives/monthly
+ */
+export async function getMonthlyStaffIncentives(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getMonthlyStaffIncentivesService(
+      {
+        month: req.query.month as string | undefined,
+        branchId: req.query.branchId as string | undefined,
+      },
+      req.user.role as Role,
+      req.user.userId,
+      req.user.branchId,
+    );
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
 }
 
 /**

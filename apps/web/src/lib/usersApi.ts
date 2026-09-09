@@ -123,6 +123,63 @@ export interface StaffPerformanceQuery {
   limit?: number;
 }
 
+export interface StaffMonthlyIncentiveResponse {
+  period: {
+    month: string;
+    timezone: string;
+    start: string;
+    endExclusive: string;
+  };
+  rules: {
+    nakes: { ratePerInfusion: number; target: number; bonus: number };
+    mso: {
+      visitTarget: number;
+      minimumPaidAirNanoBoxes: number;
+      visitBonus: number;
+      ratePerPaidAirNanoBox: number;
+    };
+  };
+  nakes: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    staffCode: string | null;
+    role: string;
+    infusionCount: number;
+    ratePerInfusion: number;
+    baseAmount: number;
+    target: number;
+    targetReached: boolean;
+    targetBonus: number;
+    totalAmount: number;
+  }>;
+  mso: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    staffCode: string | null;
+    role: string;
+    visitCount: number;
+    visitTarget: number;
+    visitTargetReached: boolean;
+    paidAirNanoBoxes: number;
+    minimumPaidAirNanoBoxes: number;
+    airNanoRequirementReached: boolean;
+    visitBonusEligible: boolean;
+    visitBonus: number;
+    ratePerPaidAirNanoBox: number;
+    airNanoAmount: number;
+    totalAmount: number;
+  }>;
+  summary: {
+    nakesRecipients: number;
+    nakesTotalAmount: number;
+    msoRecipients: number;
+    msoTotalAmount: number;
+    grandTotalAmount: number;
+  };
+}
+
 export interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
@@ -162,6 +219,11 @@ export const usersApi = {
   // Get staff performance summary for a branch
   getStaffPerformanceSummary: async (query: StaffPerformanceQuery = {}): Promise<StaffPerformanceSummaryResponse> => {
     const response = await api.get('/users/performance/summary', { params: query });
+    return response.data.data;
+  },
+
+  getMonthlyStaffIncentives: async (query: { month: string; branchId?: string }): Promise<StaffMonthlyIncentiveResponse> => {
+    const response = await api.get('/users/incentives/monthly', { params: query });
     return response.data.data;
   },
 

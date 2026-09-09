@@ -1,6 +1,8 @@
 # Requirement dan Flow Insentif CHS, Air Nano, dan Add-On
 
 Tanggal dokumen: 3 September 2026  
+Pembaruan aturan NAKES dan MSO: 9 September 2026
+
 Status: Draft requirement untuk review Product Owner, Operasional, HR/Payroll, Finance, Logistik, dan Engineering
 
 ## 1. Tujuan
@@ -52,7 +54,7 @@ Untuk menghindari perbedaan implementasi:
 - `>= 200` berarti minimal **200**;
 - `>= 300` berarti minimal **300**.
 
-Requirement NAKES menyebut “>100 ke atas” dan requirement MSO menyebut “visit >100”. Fase awal memakai arti literal **minimal 101** untuk keduanya sampai Product Owner memutuskan lain.
+Keputusan bisnis final per 9 September 2026 menetapkan target NAKES dan MSO tercapai mulai **100** (`>= 100`). Bonus target dibayarkan satu kali dan tidak berlaku kelipatan.
 
 ## 4. Role dan hak akses
 
@@ -106,8 +108,9 @@ Super Admin tetap dapat melihat dan mengelola seluruh scope.
 |---|---|---|---:|
 | Dokter Cabang | Infus berbayar setelah target cabang | Cabang tanpa Homecare mencapai minimal 200 sesi, atau cabang dengan Homecare mencapai minimal 300 sesi | Rp2.500/infus berbayar |
 | NAKES | Insentif per infus | Setiap sesi valid yang dikreditkan kepada NAKES | Rp10.000/infus |
-| NAKES | Bonus bulanan | Jumlah sesi valid >100 atau minimal 101 | Rp1.000.000 satu kali |
-| MSO | Bonus visit bulanan | Visit valid >100 atau minimal 101, dan penjualan Air Nano lunas minimal 5 dus | Rp2.000.000 satu kali |
+| NAKES | Bonus bulanan | Jumlah sesi valid minimal 100 | Rp2.000.000 satu kali |
+| MSO | Bonus visit bulanan | Visit valid minimal 100, dan penjualan Air Nano lunas minimal 5 dus | Rp2.000.000 satu kali |
+| MSO | Penjualan Air Nano | Setiap dus Air Nano yang lunas dan terverifikasi | Rp90.000/dus |
 | Koordinator CHS | Target tim Homecare | Setiap tim bawahannya mencapai minimal 100 sesi valid | Rp500.000/tim yang lolos |
 | Koordinator CHS | Target cabang | Cabang tanpa tim Homecare mencapai 200 sesi, atau cabang dengan tim Homecare mencapai 300 sesi | Rp250.000/cabang yang lolos |
 | Koordinator CHS | Infus berbayar dari Homecare/cabang | Sesi valid dan telah lunas/terverifikasi | Rp1.000/infus berbayar |
@@ -140,35 +143,40 @@ insentif_dokter_cabang = eligible_dokter_cabang
 1. NAKES memperoleh Rp10.000 untuk setiap sesi valid yang dikreditkan kepadanya.
 2. Jika terdapat beberapa NAKES pada satu sesi, hanya NAKES utama atau `incentiveNakesId` yang menerima kredit.
 3. Sesi gratis dan sosial tetap dihitung untuk komponen NAKES selama sesi valid.
-4. Jika jumlah sesi NAKES minimal 101 dalam satu bulan, sistem menambahkan Rp1.000.000 satu kali.
-5. Sesi yang dibatalkan sebelum periode dikunci tidak dihitung.
-6. Pembatalan setelah periode dikunci menghasilkan adjustment minus pada periode berikutnya.
+4. Jika jumlah sesi NAKES minimal 100 dalam satu bulan, sistem menambahkan Rp2.000.000 satu kali.
+5. Bonus Rp2.000.000 tidak berlaku kelipatan. Pada 200 infus, bonus tetap Rp2.000.000.
+6. Sesi yang dibatalkan sebelum periode dikunci tidak dihitung.
+7. Pembatalan setelah periode dikunci menghasilkan adjustment minus pada periode berikutnya.
 
 Rumus:
 
 ```text
 insentif_nakes = jumlah_infus_valid × Rp10.000
-bonus_nakes = jumlah_infus_valid >= 101 ? Rp1.000.000 : Rp0
+bonus_nakes = jumlah_infus_valid >= 100 ? Rp2.000.000 : Rp0
 total_nakes = insentif_nakes + bonus_nakes
 ```
 
 ### 5.4 Aturan MSO
 
-1. MSO memperoleh bonus Rp2.000.000 satu kali apabila dalam satu bulan:
-   - memiliki minimal 101 visit valid; dan
+1. MSO memperoleh bonus visit Rp2.000.000 satu kali apabila dalam satu bulan:
+   - memiliki minimal 100 visit valid; dan
    - menjual minimal 5 dus Air Nano yang sudah lunas dan terverifikasi.
 2. Kedua syarat harus terpenuhi pada MSO dan periode yang sama.
 3. Kuantitas seluruh varian Air Nano berunit `DUS` boleh dijumlahkan.
 4. SKU berunit `BOTOL` tidak ikut memenuhi syarat dus pada fase awal.
 5. Transaksi pending, belum lunas, ditolak, dibatalkan, atau direfund tidak dihitung.
-6. Bonus tidak berlaku kelipatan.
+6. Bonus visit tidak berlaku kelipatan.
+7. Di luar bonus visit, setiap dus Air Nano yang lunas memberi insentif Rp90.000 kepada MSO penjual, tanpa batas jumlah dus.
+8. Insentif Rp90.000/dus tetap dibayarkan walaupun target visit atau syarat minimal 5 dus untuk bonus visit belum tercapai.
 
 Rumus:
 
 ```text
-bonus_mso = visit_valid >= 101 AND dus_air_nano_lunas >= 5
+bonus_mso = visit_valid >= 100 AND dus_air_nano_lunas >= 5
   ? Rp2.000.000
   : Rp0
+insentif_air_nano_mso = dus_air_nano_lunas × Rp90.000
+total_mso = bonus_mso + insentif_air_nano_mso
 ```
 
 ### 5.5 Aturan Koordinator CHS dari tim Homecare
@@ -216,7 +224,7 @@ insentif_infus_berbayar_koordinator = jumlah_session_id_unik_yang_lunas × Rp1.0
 1. Koordinator memperoleh Rp10.000 untuk setiap tusukan pribadi.
 2. Sesi berbayar, gratis, atau sosial tetap dihitung.
 3. Jika tusukan pribadi mencapai minimal 100 dalam satu bulan, koordinator mendapat tambahan Rp2.000.000 satu kali.
-4. Jika pengguna juga berstatus NAKES, komponen Rp10.000 per sesi hanya dibayar sekali menggunakan aturan Koordinator CHS. Bonus NAKES Rp1.000.000 tidak ditumpuk dengan bonus tusukan Koordinator Rp2.000.000 pada fase awal.
+4. Jika pengguna juga berstatus NAKES, komponen Rp10.000 per sesi hanya dibayar sekali menggunakan aturan Koordinator CHS. Bonus NAKES Rp2.000.000 tidak ditumpuk dengan bonus tusukan Koordinator Rp2.000.000 pada fase awal.
 
 ```text
 insentif_pribadi = jumlah_tusukan_pribadi × Rp10.000
@@ -261,26 +269,28 @@ insentif_dokter_tim_hc = eligible_dokter_tim_hc
 - Insentif personal Koordinator dan target tim/cabang boleh terakumulasi.
 - Untuk koordinator yang merangkap Dokter Tim Homecare, tarif Rp5.000, tarif Rp1.000, dan bonus tim Rp500.000 boleh terakumulasi sesuai aturan yang dinyatakan eksplisit.
 - Rp10.000 NAKES dan Rp10.000 tusukan pribadi Koordinator tidak boleh dibayar dua kali kepada orang yang sama untuk sesi yang sama.
-- Penjualan Air Nano hanya menjadi syarat bonus MSO dan tidak otomatis menghasilkan insentif lain kecuali ada aturan tambahan.
+- Setiap dus Air Nano lunas menghasilkan insentif MSO Rp90.000/dus dan juga dapat memenuhi syarat minimal 5 dus untuk pencairan bonus visit.
 - Setiap baris hasil menyimpan `ruleCode`, sumber data, kuantitas, tarif, dan nominal agar dapat direkonsiliasi.
 
 ## 6. Contoh perhitungan
 
 ### 6.1 NAKES
 
-NAKES A melakukan 105 infus valid:
+NAKES A melakukan 100 infus valid:
 
 ```text
-105 × Rp10.000 = Rp1.050.000
-bonus >100      = Rp1.000.000
-total           = Rp2.050.000
+100 × Rp10.000 = Rp1.000.000
+bonus >=100     = Rp2.000.000
+total           = Rp3.000.000
 ```
+
+Jika NAKES melakukan 200 infus, komponen per infus menjadi Rp2.000.000 dan bonus tetap Rp2.000.000, sehingga total Rp4.000.000.
 
 ### 6.2 MSO
 
-- 110 visit dan 5 dus Air Nano lunas: bonus Rp2.000.000.
-- 110 visit dan 4 dus lunas: Rp0.
-- 100 visit dan 8 dus lunas: Rp0, karena aturan sementara adalah >100.
+- 100 visit dan 8 dus Air Nano lunas: bonus visit Rp2.000.000 + insentif Air Nano Rp720.000 = **Rp2.720.000**.
+- 100 visit dan 4 dus lunas: bonus visit Rp0 + insentif Air Nano Rp360.000 = **Rp360.000**.
+- 99 visit dan 5 dus lunas: bonus visit Rp0 + insentif Air Nano Rp450.000 = **Rp450.000**.
 
 ### 6.3 Dokter Cabang
 
@@ -658,11 +668,11 @@ Implementasi dapat memakai `MemberNonTherapyPurchase` atau `MemberAddOn` existin
 
 1. Sesi selesai dan tidak dibatalkan dihitung tepat satu kali.
 2. Sesi belum selesai atau dibatalkan tidak dihitung.
-3. NAKES dengan 100 sesi menerima Rp1.000.000 dari tarif per sesi tanpa bonus bulanan.
-4. NAKES dengan 101 sesi menerima Rp1.010.000 + Rp1.000.000 bonus, total Rp2.010.000.
-5. MSO dengan 101 visit dan 5 dus lunas menerima Rp2.000.000.
-6. MSO dengan 101 visit tetapi hanya 4 dus lunas tidak menerima bonus.
-7. MSO dengan 100 visit dan 5 dus lunas tidak menerima bonus berdasarkan aturan `>100`.
+3. NAKES dengan 99 sesi menerima Rp990.000 tanpa bonus bulanan.
+4. NAKES dengan 100 sesi menerima Rp1.000.000 + Rp2.000.000 bonus, total Rp3.000.000; pada 200 sesi totalnya Rp4.000.000 karena bonus tetap satu kali.
+5. MSO dengan 100 visit dan 5 dus lunas menerima Rp2.000.000 + Rp450.000, total Rp2.450.000.
+6. MSO dengan 100 visit tetapi hanya 4 dus lunas tidak menerima bonus visit, tetapi tetap menerima Rp360.000 dari penjualan Air Nano.
+7. MSO dengan 99 visit dan 5 dus lunas tidak menerima bonus visit, tetapi tetap menerima Rp450.000 dari penjualan Air Nano.
 8. Botol Air Nano tidak dihitung sebagai dus pada fase awal.
 9. Tim Homecare dengan 100 sesi menghasilkan Rp500.000 untuk koordinator yang valid.
 10. Dua tim yang masing-masing mencapai target menghasilkan Rp1.000.000, bukan berdasarkan kelipatan jumlah sesi.
@@ -704,9 +714,9 @@ Implementasi dapat memakai `MemberNonTherapyPurchase` atau `MemberAddOn` existin
 43. Dua request paralel tidak membuat invoice, reservasi, posting stok, atau kredit penjualan ganda.
 44. Fitur baru tidak mengubah sesi terapi, paket, invoice, atau stok historis yang sudah ada.
 
-## 17. Keputusan bisnis yang wajib ditutup sebelum development
+## 17. Keputusan bisnis
 
-1. Apakah bonus NAKES dan MSO dimulai pada 100 atau 101? Draft ini memakai 101 karena teks menggunakan `>100`.
+1. **Sudah diputuskan:** bonus NAKES dan target visit MSO dimulai pada 100 (`>= 100`).
 2. Apa definisi resmi “tim HO”: Head Office, Homecare, atau kategori tim lain?
 3. Jika koordinator berubah di tengah bulan, bonus target tim/cabang diberikan kepada koordinator akhir bulan, dibagi proporsional, atau mengikuti jumlah sesi pada masa assignment?
 4. Apakah target cabang menghitung sesi Homecare di cabang tersebut atau hanya sesi on-site?

@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
+import { authorize } from '@middleware/authorize';
 import { upload } from '@middleware/upload';
 import { requirePermission } from '@middleware/requirePermission';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import { Role } from '@prisma/client';
 import {
   listUsers,
   getUser,
@@ -21,6 +23,7 @@ import {
   getAvailableBranchesForUser,
   setPrimaryBranch,
   getStaffPerformanceSummary,
+  getMonthlyStaffIncentives,
   getStaffSessionHistory,
   exportStaffPerformanceDetail,
   exportStaffPerformance,
@@ -62,6 +65,20 @@ usersRouter.get(
 // ══════════════════════════════════════════════════════════════
 
 // ── Get Staff Performance Summary ─────────────────────────────
+usersRouter.get(
+  '/incentives/monthly',
+  authenticate,
+  authorize([
+    Role.SUPER_ADMIN,
+    Role.ADMIN_MANAGER,
+    Role.ADMIN_CABANG,
+    Role.ADMIN_LAYANAN,
+    Role.NURSE,
+    Role.FINANCE_LOGISTICS_CONTROLLER,
+  ]),
+  getMonthlyStaffIncentives,
+);
+
 usersRouter.get(
   '/performance/export',
   authenticate,
