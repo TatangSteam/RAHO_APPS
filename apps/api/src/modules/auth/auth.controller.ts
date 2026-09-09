@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
-import { loginSchema, refreshSchema, logoutSchema } from './auth.schema';
-import { loginService, refreshService, getMeService } from './auth.service';
+import { loginSchema, refreshSchema, logoutSchema, updateOwnUsernameSchema } from './auth.schema';
+import { loginService, refreshService, getMeService, updateOwnUsernameService } from './auth.service';
 
 function getRequestIp(req: Request) {
   const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
@@ -76,6 +76,36 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
   try {
     const user = await getMeService(req.user.userId);
     sendSuccess(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateOwnUsername(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = updateOwnUsernameSchema.parse(req.body);
+    const oldUsername = req.user.email;
+    const result = await updateOwnUsernameService(req.user.userId, input);
+
+    logAudit({
+      userId: req.user.userId,
+      branchId: ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(req.user.role) ? null : req.user.branchId,
+      action: 'UPDATE',
+      module: 'AUTH',
+      resource: 'User',
+      resourceId: req.user.userId,
+      entityType: 'User',
+      entityId: req.user.userId,
+      entityCode: result.username,
+      description: `${oldUsername} mengubah username login menjadi ${result.username}.`,
+      meta: { action: 'own_username_change', oldUsername, newUsername: result.username },
+      ipAddress: getRequestIp(req),
+      userAgent: getUserAgent(req),
+    }).catch((error) => {
+      console.error('Failed to create own username change audit log:', error);
+    });
+
+    sendSuccess(res, result);
   } catch (err) {
     next(err);
   }

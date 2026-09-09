@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
 import { loginRateLimiter } from '@middleware/rateLimiter';
-import { login, refresh, logout, getMe } from './auth.controller';
+import { login, refresh, logout, getMe, updateOwnUsername } from './auth.controller';
 
 const router = Router();
 
@@ -33,5 +33,6 @@ router.post('/logout', authenticate, logout);
  * @access Bearer
  */
 router.get('/me', authenticate, getMe);
+router.patch('/me/username', authenticate, updateOwnUsername);
 
 export { router as authRouter };

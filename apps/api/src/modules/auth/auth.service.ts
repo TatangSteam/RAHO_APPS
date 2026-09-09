@@ -7,7 +7,7 @@ import {
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
 import { logAudit } from '@utils/auditLog';
-import { LoginInput } from './auth.schema';
+import { LoginInput, UpdateOwnUsernameInput } from './auth.schema';
 
 export interface AuthUser {
   userId: string;
@@ -212,4 +212,41 @@ export async function getMeService(userId: string) {
   if (!user) throw errors.notFound('User tidak ditemukan.');
 
   return user;
+}
+
+export async function updateOwnUsernameService(
+  userId: string,
+  input: UpdateOwnUsernameInput,
+) {
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true },
+  });
+
+  if (!currentUser) throw errors.notFound('User tidak ditemukan.');
+
+  if (currentUser.email === input.username) {
+    return { userId: currentUser.id, email: currentUser.email, username: currentUser.email };
+  }
+
+  const duplicate = await prisma.user.findUnique({
+    where: { email: input.username },
+    select: { id: true },
+  });
+
+  if (duplicate) {
+    throw errors.conflict('USERNAME_EXISTS', 'Username sudah digunakan oleh pengguna lain.');
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { email: input.username },
+    select: { id: true, email: true },
+  });
+
+  return {
+    userId: updatedUser.id,
+    email: updatedUser.email,
+    username: updatedUser.email,
+  };
 }

@@ -34,6 +34,26 @@ export const logoutSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token diperlukan.'),
 });
 
+const ownUsernameSchema = z
+  .string()
+  .trim()
+  .min(3, 'Username minimal 3 karakter.')
+  .max(100, 'Username maksimal 100 karakter.')
+  .transform((value) => value.toLowerCase())
+  .refine(
+    (value) => (
+      value.includes('@')
+        ? z.string().email().safeParse(value).success
+        : /^[a-z0-9._-]{3,50}$/.test(value)
+    ),
+    'Gunakan alamat email yang valid atau 3-50 karakter berupa huruf, angka, titik, garis bawah, atau strip.',
+  );
+
+export const updateOwnUsernameSchema = z.object({
+  username: ownUsernameSchema,
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;
+export type UpdateOwnUsernameInput = z.infer<typeof updateOwnUsernameSchema>;

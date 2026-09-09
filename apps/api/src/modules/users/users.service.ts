@@ -622,9 +622,21 @@ export async function updateUserEmailService(targetUserId: string, newEmail: str
 // ── Update Avatar ─────────────────────────────────────────────
 
 export async function updateAvatarService(userId: string, avatarUrl: string) {
-  return prisma.userProfile.update({
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  return prisma.userProfile.upsert({
     where: { userId },
-    data: { avatarUrl },
+    update: { avatarUrl },
+    create: {
+      userId,
+      fullName: user.email,
+      avatarUrl,
+    },
     select: { fullName: true, phone: true, avatarUrl: true },
   });
 }
