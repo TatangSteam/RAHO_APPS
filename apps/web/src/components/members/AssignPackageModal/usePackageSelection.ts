@@ -16,6 +16,20 @@ export interface PackageSelection {
   serviceType?: ServiceType;
 }
 
+function replaceBoosterSelection(
+  selections: PackageSelection[],
+  boosterType: ExtendedBoosterType,
+  update: (selection: PackageSelection) => PackageSelection,
+) {
+  let replaced = false;
+  return selections.flatMap((selection) => {
+    if (selection.boosterType !== boosterType) return [selection];
+    if (replaced) return [];
+    replaced = true;
+    return [update(selection)];
+  });
+}
+
 interface AddOnSelection {
   type: AddOnType;
   code: string;
@@ -109,10 +123,14 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
   const updateBoosterQty = (pricingId: string, boosterType: ExtendedBoosterType, quantity: number) => {
     onAssignDataChange({
       ...assignData,
-      selectedPackages: assignData.selectedPackages.map(p =>
-        p.boosterType === boosterType
-          ? { ...p, quantity: Math.max(1, quantity) }
-          : p
+      selectedPackages: replaceBoosterSelection(
+        assignData.selectedPackages,
+        boosterType,
+        (selection) => ({
+          ...selection,
+          pricingId: selection.pricingId || pricingId,
+          quantity: Math.max(1, quantity),
+        }),
       ),
     });
   };
@@ -126,10 +144,14 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
 
     onAssignDataChange({
       ...assignData,
-      selectedPackages: assignData.selectedPackages.map(p =>
-        p.boosterType === boosterType
-          ? { ...p, pricingId: matchedPricing?.id || p.pricingId, serviceType }
-          : p
+      selectedPackages: replaceBoosterSelection(
+        assignData.selectedPackages,
+        boosterType,
+        (selection) => ({
+          ...selection,
+          pricingId: matchedPricing?.id || selection.pricingId || pricingId,
+          serviceType,
+        }),
       ),
     });
   };

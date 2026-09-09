@@ -31,6 +31,7 @@ import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
+import { buildEditPackageSelections } from '@/components/members/EditPackageModal/editPackageSelections';
 import VoucherBalanceEditModal from '@/components/members/VoucherBalanceEditModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
@@ -72,47 +73,6 @@ function isMemberDetailTab(value: string | null): value is MemberDetailTab {
   return Boolean(value && MEMBER_DETAIL_TABS.includes(value as MemberDetailTab));
 }
 
-function getBoosterTypeFromProductCode(productCode?: string | null): ExtendedBoosterType | undefined {
-  const match = productCode?.match(/^BST-([^-]+)-/);
-  return match?.[1] as ExtendedBoosterType | undefined;
-}
-
-function getServiceTypeFromProductCode(productCode?: string | null): ServiceType | undefined {
-  const parts = productCode?.split('-') || [];
-  const serviceCode = parts[0] === 'BST' ? parts[3] : parts[2];
-  return serviceCode as ServiceType | undefined;
-}
-
-function resolvePackagePricing(pkg: MemberPackage, pricings: PackagePricing[]): PackagePricing | undefined {
-  if (pkg.productCode) {
-    const productCodeMatch = pricings.find((pricing) => pricing.productCode === pkg.productCode);
-    if (productCodeMatch) return productCodeMatch;
-  }
-
-  const boosterType = getBoosterTypeFromProductCode(pkg.productCode) || pkg.boosterType;
-  const serviceType = getServiceTypeFromProductCode(pkg.productCode) || pkg.serviceType;
-
-  if (pkg.packageType === 'BOOSTER' && boosterType) {
-    const boosterMatch = pricings.find((pricing) =>
-      pricing.packageType === 'BOOSTER' &&
-      pricing.boosterType === boosterType &&
-      (!serviceType || pricing.serviceType === serviceType)
-    );
-    if (boosterMatch) return boosterMatch;
-  }
-
-  if (pkg.packageType === 'BASIC') {
-    const basicMatch = pricings.find((pricing) =>
-      pricing.packageType === 'BASIC' &&
-      (!serviceType || pricing.serviceType === serviceType) &&
-      (pricing.totalSessions === pkg.baseSessions || pricing.totalSessions === pkg.totalSessions)
-    );
-    if (basicMatch) return basicMatch;
-  }
-
-  return pricings.find((pricing) => pricing.id === pkg.packagePricingId);
-}
-
 function getJakartaDateInputValue(date = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Jakarta',
@@ -142,41 +102,6 @@ function getMemberAddOnTransactions(items: PackageDisplay[]): StandaloneAddOn[] 
 
 function getPackageOnlyTransactions(items: PackageDisplay[]): PackageDisplay[] {
   return items.filter(item => !('isAddOn' in item && item.isAddOn));
-}
-
-function buildEditPackageSelections(packages: MemberPackage[], pricings: PackagePricing[]) {
-  const selections = new Map<string, {
-    pricingId: string;
-    quantity: number;
-    boosterType?: ExtendedBoosterType;
-    serviceType?: ServiceType;
-  }>();
-
-  packages.forEach((pkg) => {
-    const pricing = resolvePackagePricing(pkg, pricings);
-    const pricingId = pricing?.id || pkg.packagePricingId || '';
-    if (!pricingId) return;
-
-    const boosterType = (getBoosterTypeFromProductCode(pkg.productCode) || pricing?.boosterType || pkg.boosterType || undefined) as ExtendedBoosterType | undefined;
-    const serviceType = (getServiceTypeFromProductCode(pkg.productCode) || pricing?.serviceType || pkg.serviceType || undefined) as ServiceType | undefined;
-    const quantity = Number(pkg.purchaseQuantity || 1);
-    const key = [pricingId, boosterType || '', serviceType || ''].join('|');
-    const existing = selections.get(key);
-
-    if (existing) {
-      existing.quantity += quantity;
-      return;
-    }
-
-    selections.set(key, {
-      pricingId,
-      quantity,
-      boosterType,
-      serviceType,
-    });
-  });
-
-  return Array.from(selections.values());
 }
 
 export default function MemberDetailPage() {
