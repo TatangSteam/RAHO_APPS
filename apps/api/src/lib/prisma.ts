@@ -54,7 +54,7 @@ export async function validateDatabaseProfile(profile: DatabaseProfile): Promise
 
 export function getPrismaClient(profileId = getCurrentDatabaseProfileId()): PrismaClient {
   const profile = profileById(profileId);
-  if (!profile) throw new Error(`Profile database \"${profileId}\" tidak ditemukan.`);
+  if (!profile) throw new Error(`Profile database "${profileId}" tidak ditemukan.`);
 
   const existing = clients.get(profile.id);
   if (existing) return existing;
@@ -80,7 +80,7 @@ export function getCurrentDatabaseRuntimeRevision(): number {
 }
 
 export function runWithDatabaseProfile<T>(profileId: string, callback: () => T): T {
-  if (!profileById(profileId)) throw new Error(`Profile database \"${profileId}\" tidak ditemukan.`);
+  if (!profileById(profileId)) throw new Error(`Profile database "${profileId}" tidak ditemukan.`);
   return databaseContext.run({ profileId, runtimeRevision }, callback);
 }
 

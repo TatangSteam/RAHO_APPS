@@ -116,7 +116,7 @@ function parseDatabaseProfiles(): DatabaseProfile[] {
       throw new Error('ID profile database harus unik.');
     }
     if (!profiles.some((profile) => profile.id === env.DATABASE_DEFAULT_PROFILE_ID)) {
-      throw new Error(`DATABASE_DEFAULT_PROFILE_ID \"${env.DATABASE_DEFAULT_PROFILE_ID}\" tidak ditemukan.`);
+      throw new Error(`DATABASE_DEFAULT_PROFILE_ID "${env.DATABASE_DEFAULT_PROFILE_ID}" tidak ditemukan.`);
     }
     return profiles;
   } catch (error) {
