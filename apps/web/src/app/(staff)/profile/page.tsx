@@ -58,6 +58,9 @@ export default function StaffProfilePage() {
   const [editingUsername, setEditingUsername] = useState(false)
   const [usernameInput, setUsernameInput] = useState('')
   const [savingUsername, setSavingUsername] = useState(false)
+  const [editingFullName, setEditingFullName] = useState(false)
+  const [fullNameInput, setFullNameInput] = useState('')
+  const [savingFullName, setSavingFullName] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -69,6 +72,7 @@ export default function StaffProfilePage() {
       const res = await api.get('/auth/me')
       setProfile(res.data.data)
       setUsernameInput(res.data.data.email)
+      setFullNameInput(res.data.data.profile?.fullName ?? '')
     } catch (error) {
       assertCaughtError(error);
       devError('Error fetching profile:', error)
@@ -108,6 +112,46 @@ export default function StaffProfilePage() {
   const cancelUsernameEdit = () => {
     setUsernameInput(profile?.email ?? '')
     setEditingUsername(false)
+  }
+
+  const handleFullNameSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const nextFullName = fullNameInput.trim()
+
+    if (!nextFullName || nextFullName === profile?.profile?.fullName) {
+      setEditingFullName(false)
+      setFullNameInput(profile?.profile?.fullName ?? '')
+      return
+    }
+
+    setSavingFullName(true)
+    try {
+      const res = await api.patch('/auth/me/full-name', { fullName: nextFullName })
+      const updatedFullName = res.data.data.fullName as string
+
+      setProfile((current) => current ? {
+        ...current,
+        profile: {
+          fullName: updatedFullName,
+          phone: current.profile?.phone ?? null,
+          avatarUrl: current.profile?.avatarUrl ?? null,
+        },
+      } : null)
+      setFullNameInput(updatedFullName)
+      updateUser({ fullName: updatedFullName })
+      setEditingFullName(false)
+      showToast.success('Nama lengkap berhasil diperbarui.')
+    } catch (error) {
+      assertCaughtError(error)
+      showToast.error(error.response?.data?.error?.message || 'Gagal memperbarui nama lengkap.')
+    } finally {
+      setSavingFullName(false)
+    }
+  }
+
+  const cancelFullNameEdit = () => {
+    setFullNameInput(profile?.profile?.fullName ?? '')
+    setEditingFullName(false)
   }
 
   const handleAvatarClick = () => {
@@ -304,7 +348,65 @@ export default function StaffProfilePage() {
               Data Akun
             </h3>
             <div className="space-y-4">
-              <InfoRow icon={<User size={14} />} label="Nama Lengkap" value={fullName} />
+              <div className="flex gap-3 items-start">
+                <User size={14} className="text-neutral-400 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-1">
+                    Nama Lengkap
+                  </div>
+                  {editingFullName ? (
+                    <form onSubmit={handleFullNameSave} className="space-y-2">
+                      <input
+                        type="text"
+                        value={fullNameInput}
+                        onChange={(event) => setFullNameInput(event.target.value)}
+                        minLength={2}
+                        maxLength={100}
+                        autoComplete="name"
+                        autoFocus
+                        disabled={savingFullName}
+                        aria-label="Nama lengkap"
+                        className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={savingFullName}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {savingFullName ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                          Simpan
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelFullNameEdit}
+                          disabled={savingFullName}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        >
+                          <X size={13} />
+                          Batal
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="truncate text-sm text-neutral-900 dark:text-white">{fullName || 'â€”'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFullNameInput(fullName ?? '')
+                          setEditingFullName(true)
+                        }}
+                        className="inline-flex flex-shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-500/10 dark:text-amber-400"
+                        aria-label="Edit nama lengkap"
+                      >
+                        <Pencil size={12} />
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="flex gap-3 items-start">
                 <AtSign size={14} className="text-neutral-400 mt-0.5 flex-shrink-0" />
                 <div className="min-w-0 flex-1">

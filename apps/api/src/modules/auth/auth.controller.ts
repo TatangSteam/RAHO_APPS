@@ -1,8 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
-import { loginSchema, refreshSchema, logoutSchema, updateOwnUsernameSchema } from './auth.schema';
-import { loginService, refreshService, getMeService, updateOwnUsernameService } from './auth.service';
+import {
+  loginSchema,
+  refreshSchema,
+  logoutSchema,
+  updateOwnFullNameSchema,
+  updateOwnUsernameSchema,
+} from './auth.schema';
+import {
+  loginService,
+  refreshService,
+  getMeService,
+  updateOwnFullNameService,
+  updateOwnUsernameService,
+} from './auth.service';
 
 function getRequestIp(req: Request) {
   const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
@@ -103,6 +115,41 @@ export async function updateOwnUsername(req: Request, res: Response, next: NextF
       userAgent: getUserAgent(req),
     }).catch((error) => {
       console.error('Failed to create own username change audit log:', error);
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateOwnFullName(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = updateOwnFullNameSchema.parse(req.body);
+    const currentUser = await getMeService(req.user.userId);
+    const previousFullName = currentUser.profile?.fullName ?? '';
+    const result = await updateOwnFullNameService(req.user.userId, input);
+
+    logAudit({
+      userId: req.user.userId,
+      branchId: ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(req.user.role) ? null : req.user.branchId,
+      action: 'UPDATE',
+      module: 'AUTH',
+      resource: 'UserProfile',
+      resourceId: req.user.userId,
+      entityType: 'UserProfile',
+      entityId: req.user.userId,
+      entityCode: req.user.email,
+      description: `${req.user.email} mengubah nama lengkap profil.`,
+      meta: {
+        action: 'own_full_name_change',
+        previousFullName,
+        nextFullName: result.fullName,
+      },
+      ipAddress: getRequestIp(req),
+      userAgent: getUserAgent(req),
+    }).catch((error) => {
+      console.error('Failed to create own full name change audit log:', error);
     });
 
     sendSuccess(res, result);

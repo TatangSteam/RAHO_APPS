@@ -112,6 +112,18 @@ export function generateSessionCode(branchCode: string, infusKe: number): string
   return `SES-${branchCode}-${String(infusKe).padStart(2, '0')}-${getYYMM()}-${randomCode(5)}`;
 }
 
+/**
+ * Keep the ordinal segment of an existing session code aligned with infusKe.
+ * The branch, creation month, and random suffix remain stable.
+ * Legacy/non-standard codes are returned unchanged.
+ */
+export function syncSessionCodeOrdinal(sessionCode: string, infusKe: number): string {
+  const match = sessionCode.match(/^(SES-.+)-\d+-(\d{4})-([A-Z0-9]{5})$/);
+  if (!match) return sessionCode;
+
+  return `${match[1]}-${String(infusKe).padStart(2, '0')}-${match[2]}-${match[3]}`;
+}
+
 // ── Diagnosis ─────────────────────────────────────────────────
 
 /**

@@ -7,7 +7,7 @@ import {
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
 import { logAudit } from '@utils/auditLog';
-import { LoginInput, UpdateOwnUsernameInput } from './auth.schema';
+import { LoginInput, UpdateOwnFullNameInput, UpdateOwnUsernameInput } from './auth.schema';
 
 export interface AuthUser {
   userId: string;
@@ -248,5 +248,30 @@ export async function updateOwnUsernameService(
     userId: updatedUser.id,
     email: updatedUser.email,
     username: updatedUser.email,
+  };
+}
+
+export async function updateOwnFullNameService(
+  userId: string,
+  input: UpdateOwnFullNameInput,
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  const profile = await prisma.userProfile.upsert({
+    where: { userId },
+    update: { fullName: input.fullName },
+    create: { userId, fullName: input.fullName },
+    select: { fullName: true, phone: true, avatarUrl: true },
+  });
+
+  return {
+    userId: user.id,
+    fullName: profile.fullName,
+    profile,
   };
 }

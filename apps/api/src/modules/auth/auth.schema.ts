@@ -53,7 +53,16 @@ export const updateOwnUsernameSchema = z.object({
   username: ownUsernameSchema,
 });
 
+export const updateOwnFullNameSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(2, 'Nama lengkap minimal 2 karakter.')
+    .max(100, 'Nama lengkap maksimal 100 karakter.'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;
 export type UpdateOwnUsernameInput = z.infer<typeof updateOwnUsernameSchema>;
+export type UpdateOwnFullNameInput = z.infer<typeof updateOwnFullNameSchema>;

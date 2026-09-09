@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import type { UpdateSessionDetailsInput } from '../sessions.schema';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
+import { syncSessionCodeOrdinal } from '../../../utils/codeGenerator';
 
 export class SessionDetailsService {
   async updateSessionDetails(
@@ -203,6 +204,7 @@ export class SessionDetailsService {
       const updatedSession = await tx.treatmentSession.update({
         where: { id: sessionId },
         data: {
+          sessionCode: syncSessionCodeOrdinal(session.sessionCode, nextInfusKe),
           infusKe: nextInfusKe,
           branchInfusKe: nextBranchInfusKe,
           treatmentDate: input.treatmentDate ? new Date(input.treatmentDate) : undefined,
@@ -274,6 +276,8 @@ export class SessionDetailsService {
         nextNurseId,
         previousInfusKe: session.infusKe,
         nextInfusKe,
+        previousSessionCode: session.sessionCode,
+        nextSessionCode: result.sessionCode,
         previousBranchInfusKe: session.branchInfusKe,
         nextBranchInfusKe,
         shiftFollowingSessions: !!input.shiftFollowingSessions,
@@ -439,19 +443,57 @@ export class SessionDetailsService {
     if (!input.shiftFollowingSessions) return;
 
     if (input.nextInfusKe !== input.currentInfusKe) {
-      await tx.treatmentSession.updateMany({
+      const followingSessions = await tx.treatmentSession.findMany({
         where: {
           id: { not: input.sessionId },
           infusKe: { gte: input.nextInfusKe },
           encounter: { memberId: input.memberId },
         },
-        data: {
-          infusKe: { increment: 1 },
-        },
+        select: { id: true, infusKe: true, sessionCode: true, isCompleted: true },
       });
+
+      if (followingSessions.some((session) => session.isCompleted)) {
+        throw {
+          status: 409,
+          code: 'POSTED_SESSION_NUMBER_SHIFT_BLOCKED',
+          message: 'Nomor sesi tidak dapat digeser karena ada sesi berikutnya yang sudah diposting.',
+        };
+      }
+
+      await Promise.all(
+        followingSessions.map((followingSession) => {
+          const nextOrdinal = followingSession.infusKe + 1;
+          return tx.treatmentSession.update({
+            where: { id: followingSession.id },
+            data: {
+              infusKe: nextOrdinal,
+              sessionCode: syncSessionCodeOrdinal(followingSession.sessionCode, nextOrdinal),
+            },
+          });
+        }),
+      );
     }
 
     if (input.nextBranchInfusKe !== input.currentBranchInfusKe) {
+      const postedBranchSession = await tx.treatmentSession.findFirst({
+        where: {
+          id: { not: input.sessionId },
+          branchId: input.branchId,
+          branchInfusKe: { gte: input.nextBranchInfusKe },
+          isCompleted: true,
+          encounter: { memberId: input.memberId },
+        },
+        select: { id: true },
+      });
+
+      if (postedBranchSession) {
+        throw {
+          status: 409,
+          code: 'POSTED_SESSION_NUMBER_SHIFT_BLOCKED',
+          message: 'Nomor sesi cabang tidak dapat digeser karena ada sesi berikutnya yang sudah diposting.',
+        };
+      }
+
       await tx.treatmentSession.updateMany({
         where: {
           id: { not: input.sessionId },

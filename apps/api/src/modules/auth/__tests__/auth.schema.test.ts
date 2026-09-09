@@ -1,4 +1,4 @@
-import { loginSchema, updateOwnUsernameSchema } from '../auth.schema';
+import { loginSchema, updateOwnFullNameSchema, updateOwnUsernameSchema } from '../auth.schema';
 
 describe('loginSchema', () => {
   it('accepts and normalizes a member username', () => {
@@ -31,5 +31,18 @@ describe('updateOwnUsernameSchema', () => {
   it('rejects spaces and invalid username characters', () => {
     expect(updateOwnUsernameSchema.safeParse({ username: 'nama user' }).success).toBe(false);
     expect(updateOwnUsernameSchema.safeParse({ username: 'ab' }).success).toBe(false);
+  });
+});
+
+describe('updateOwnFullNameSchema', () => {
+  it('trims and accepts a valid full name', () => {
+    expect(updateOwnFullNameSchema.parse({ fullName: '  Jovan Prabowo Kuncoro  ' })).toEqual({
+      fullName: 'Jovan Prabowo Kuncoro',
+    });
+  });
+
+  it('rejects names outside the allowed length', () => {
+    expect(updateOwnFullNameSchema.safeParse({ fullName: 'J' }).success).toBe(false);
+    expect(updateOwnFullNameSchema.safeParse({ fullName: 'A'.repeat(101) }).success).toBe(false);
   });
 });
