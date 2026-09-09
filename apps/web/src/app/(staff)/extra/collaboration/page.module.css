@@ -379,6 +379,38 @@
 .teamStrip > div:last-child span { display: block; color: var(--muted); font-size: 0.7rem; }
 .teamStrip strong { font-size: 0.88rem; }
 
+.leaderSummary {
+  display: grid;
+  justify-items: end;
+  gap: 0.25rem;
+}
+
+.ownerLeaderButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  padding: 0.42rem 0.65rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 0.6rem;
+  color: var(--brand-strong);
+  background: var(--surface);
+  font-size: 0.7rem;
+  font-weight: 700;
+  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+}
+
+.ownerLeaderButton:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.ownerLeaderButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .teamIcon {
   display: grid;
   width: 2.65rem;
@@ -810,6 +842,7 @@
   .statCard:last-child { grid-column: auto; }
   .teamStrip { align-items: flex-start; flex-direction: column; }
   .teamStrip > div:last-child { text-align: left; }
+  .leaderSummary { justify-items: start; }
   .modalBackdrop { padding: 0; }
   .modal { max-height: 100%; border-radius: 0; }
 }

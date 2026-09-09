@@ -286,7 +286,15 @@ export default function CollaborationPage() {
       {loading && data.teams.length === 0 ? <Loading /> : data.teams.length === 0 ? (
         <EmptyState onCreate={() => setModal('team')} />
       ) : <>
-        {view === 'dashboard' && <DashboardView data={data} team={selectedTeam} onOpenTask={openDetail} />}
+        {view === 'dashboard' && (
+          <DashboardView
+            data={data}
+            team={selectedTeam}
+            busy={busy}
+            onOpenTask={openDetail}
+            onSetLeader={setLeader}
+          />
+        )}
         {view === 'tasks' && (
           <section className={styles.taskBoard}>
             <div className={styles.sectionHeading}><div><h2>Daftar pekerjaan</h2><p>{data.tasks.length} parent task pada tim ini</p></div></div>
@@ -348,7 +356,23 @@ export default function CollaborationPage() {
   );
 }
 
-function DashboardView({ data, team, onOpenTask }: { data: CollaborationBootstrap; team: Team | null; onOpenTask: (task: CollaborationTask) => void }) {
+function DashboardView({
+  data,
+  team,
+  busy,
+  onOpenTask,
+  onSetLeader,
+}: {
+  data: CollaborationBootstrap;
+  team: Team | null;
+  busy: boolean;
+  onOpenTask: (task: CollaborationTask) => void;
+  onSetLeader: (membershipId: string) => void;
+}) {
+  const ownerMembership = team?.memberships.find((member) => member.role === 'OWNER');
+  const ownerIsPrimaryLeader = Boolean(
+    ownerMembership && team?.primaryLeaderMembershipId === ownerMembership.id,
+  );
   const cards = [
     { label: 'Total pekerjaan', value: data.stats.total, icon: ListChecks, tone: 'violet' },
     { label: 'Sedang dikerjakan', value: data.stats.inProgress, icon: Activity, tone: 'blue' },
@@ -368,7 +392,35 @@ function DashboardView({ data, team, onOpenTask }: { data: CollaborationBootstra
         <div className={styles.timeline}>{data.activities.slice(0, 8).map((activity) => <div key={activity.id}><Avatar name={activity.actor.fullName} /><span><strong>{activity.actor.fullName}</strong><p>{activity.action.replaceAll('_', ' ').toLowerCase()}{activity.task ? ` · #${activity.task.taskNo} ${activity.task.title}` : ''}</p><small>{formatDate(activity.createdAt)}</small></span></div>)}{data.activities.length === 0 && <div className={styles.inlineEmpty}>Aktivitas akan muncul di sini.</div>}</div>
       </section>
     </div>
-    {team && <section className={styles.teamStrip}><div><span className={styles.teamIcon}><Users size={22} /></span><div><strong>{team.name}</strong><p>{team.memberships.length} anggota · Anda sebagai {team.myRole}</p></div></div><div><span>Primary Leader</span><strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong></div></section>}
+    {team && (
+      <section className={styles.teamStrip}>
+        <div>
+          <span className={styles.teamIcon}><Users size={22} /></span>
+          <div>
+            <strong>{team.name}</strong>
+            <p>
+              {team.memberships.length} anggota · Anda sebagai {team.myRole}
+              {team.myRole === 'OWNER' && ownerIsPrimaryLeader ? ' sekaligus Primary Leader' : ''}
+            </p>
+          </div>
+        </div>
+        <div className={styles.leaderSummary}>
+          <span>Primary Leader</span>
+          <strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong>
+          {team.myRole === 'OWNER' && ownerMembership && !ownerIsPrimaryLeader && (
+            <button
+              type="button"
+              className={styles.ownerLeaderButton}
+              disabled={busy}
+              onClick={() => onSetLeader(ownerMembership.id)}
+            >
+              {busy && <Loader2 size={13} className="animate-spin" />}
+              Jadikan Saya Primary Leader
+            </button>
+          )}
+        </div>
+      </section>
+    )}
   </>;
 }
 
@@ -391,7 +443,7 @@ function TeamsView({ team, isOwner, busy, onAdd, onDelete, onSetLeader, onRole }
   return <div className={styles.teamsGrid}>
     <section className={styles.panel}>
       <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <div className={styles.teamActions}><button className={styles.deleteTeamButton} disabled={busy} onClick={onDelete}><Trash2 size={16} /> Hapus Tim</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button></div>}</div>
-      <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} onClick={() => onSetLeader(member.id)}>Jadikan Leader</button>}</div>)}</div>
+      <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} onClick={() => onSetLeader(member.id)}>Jadikan Primary Leader</button>}</div>)}</div>
     </section>
     <aside className={styles.panel}><div className={styles.sectionHeading}><div><h2>Aturan tim</h2><p>Konfigurasi akses saat ini.</p></div><Settings2 size={20} /></div><div className={styles.infoList}><div><span>Role Anda</span><strong>{team.myRole}</strong></div><div><span>Visibilitas tugas</span><strong>{team.taskVisibilityPolicy === 'ALL_TEAM_MEMBERS' ? 'Semua anggota' : 'Assignee saja'}</strong></div><div><span>Primary Leader</span><strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong></div></div></aside>
   </div>;
