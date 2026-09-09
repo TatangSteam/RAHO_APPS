@@ -33,9 +33,18 @@ import {
 import { exportStaffPerformanceService } from './services/staff-performance-export.service';
 import { exportStaffPerformanceDetailService } from './services/staff-performance-detail-export.service';
 import { getMonthlyStaffIncentivesService } from './services/staff-incentive.service';
+import { exportMonthlyStaffIncentivesService } from './services/staff-incentive-export.service';
+import {
+  createChsCoordinatorAssignmentService,
+  deactivateChsCoordinatorAssignmentService,
+  getChsCoordinatorAssignmentOptionsService,
+  listChsCoordinatorAssignmentsService,
+} from './services/chs-coordinator-assignment.service';
+import { chsCoordinatorAssignmentSchema } from './staff-incentive.schema';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
+import { errors } from '@middleware/errorHandler';
 import { AuditAction, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import {
@@ -574,7 +583,7 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
 }
 
 /**
- * Calculate Nakes and MSO incentives for one Jakarta calendar month.
+ * Calculate Nakes, MSO, and CHS Coordinator incentives for one Jakarta calendar month.
  * GET /users/incentives/monthly
  */
 export async function getMonthlyStaffIncentives(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -592,6 +601,73 @@ export async function getMonthlyStaffIncentives(req: Request, res: Response, nex
   } catch (err) {
     next(err);
   }
+}
+
+export async function exportMonthlyStaffIncentives(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await exportMonthlyStaffIncentivesService(
+      {
+        month: req.query.month as string | undefined,
+        branchId: req.query.branchId as string | undefined,
+      },
+      req.user.role as Role,
+      req.user.userId,
+      req.user.branchId,
+    );
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listChsCoordinatorAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await listChsCoordinatorAssignmentsService(
+      { month: req.query.month as string | undefined, branchId: req.query.branchId as string | undefined },
+      { role: req.user.role as Role, userId: req.user.userId, branchId: req.user.branchId },
+    );
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function getChsCoordinatorAssignmentOptions(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.query.branchId) throw errors.badRequest('BRANCH_REQUIRED', 'Cabang wajib dipilih.');
+    const result = await getChsCoordinatorAssignmentOptionsService(String(req.query.branchId), {
+      role: req.user.role as Role,
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function createChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = chsCoordinatorAssignmentSchema.parse(req.body);
+    const result = await createChsCoordinatorAssignmentService(
+      input as Parameters<typeof createChsCoordinatorAssignmentService>[0],
+      {
+        role: req.user.role as Role,
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+      },
+    );
+    sendCreated(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function deactivateChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await deactivateChsCoordinatorAssignmentService(req.params.assignmentId, {
+      role: req.user.role as Role,
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
 }
 
 /**

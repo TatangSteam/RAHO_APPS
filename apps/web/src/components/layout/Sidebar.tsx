@@ -298,6 +298,12 @@ const MENU_GROUPS: MenuGroup[] = [
         icon: <BadgeDollarSign size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'FINANCE_LOGISTICS_CONTROLLER'],
       },
+      {
+        label: 'Koordinator CHS',
+        href: '/staff-incentives/coordinator',
+        icon: <Users size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR', 'NURSE', 'FINANCE_LOGISTICS_CONTROLLER'],
+      },
     ],
   },
   {

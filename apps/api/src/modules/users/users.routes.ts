@@ -24,6 +24,11 @@ import {
   setPrimaryBranch,
   getStaffPerformanceSummary,
   getMonthlyStaffIncentives,
+  exportMonthlyStaffIncentives,
+  listChsCoordinatorAssignments,
+  getChsCoordinatorAssignmentOptions,
+  createChsCoordinatorAssignment,
+  deactivateChsCoordinatorAssignment,
   getStaffSessionHistory,
   exportStaffPerformanceDetail,
   exportStaffPerformance,
@@ -66,6 +71,57 @@ usersRouter.get(
 
 // ── Get Staff Performance Summary ─────────────────────────────
 usersRouter.get(
+  '/incentives/coordinator/assignment-options',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  getChsCoordinatorAssignmentOptions,
+);
+
+usersRouter.get(
+  '/incentives/coordinator/assignments',
+  authenticate,
+  authorize([
+    Role.SUPER_ADMIN,
+    Role.ADMIN_MANAGER,
+    Role.ADMIN_CABANG,
+    Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
+    Role.NURSE,
+    Role.FINANCE_LOGISTICS_CONTROLLER,
+  ]),
+  listChsCoordinatorAssignments,
+);
+
+usersRouter.post(
+  '/incentives/coordinator/assignments',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  createChsCoordinatorAssignment,
+);
+
+usersRouter.delete(
+  '/incentives/coordinator/assignments/:assignmentId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  deactivateChsCoordinatorAssignment,
+);
+
+usersRouter.get(
+  '/incentives/monthly/export',
+  authenticate,
+  authorize([
+    Role.SUPER_ADMIN,
+    Role.ADMIN_MANAGER,
+    Role.ADMIN_CABANG,
+    Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
+    Role.NURSE,
+    Role.FINANCE_LOGISTICS_CONTROLLER,
+  ]),
+  exportMonthlyStaffIncentives,
+);
+
+usersRouter.get(
   '/incentives/monthly',
   authenticate,
   authorize([
@@ -73,6 +129,7 @@ usersRouter.get(
     Role.ADMIN_MANAGER,
     Role.ADMIN_CABANG,
     Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
     Role.NURSE,
     Role.FINANCE_LOGISTICS_CONTROLLER,
   ]),

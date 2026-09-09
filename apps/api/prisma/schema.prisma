@@ -790,56 +790,57 @@ model Branch {
   updatedAt      DateTime   @updatedAt
 
   // Relations
-  users                   User[]
-  members                 Member[]
-  branchMemberAccess      BranchMemberAccess[]
-  memberPackages          MemberPackage[]
-  memberAddOns            MemberAddOn[]
-  nonTherapyPurchases     MemberNonTherapyPurchase[]
-  invoices                Invoice[]
-  packagePricings         PackagePricing[]
-  inventoryItems          InventoryItem[]
-  stockRequests           StockRequest[]             @relation("StockRequestDestination")
-  stockRequestsFulfilled  StockRequest[]             @relation("StockRequestSource")
-  shipmentsFrom           Shipment[]                 @relation("ShipmentFrom")
-  shipmentsTo             Shipment[]                 @relation("ShipmentTo")
-  encounters              Encounter[]
-  treatmentSessions       TreatmentSession[]
-  managerBranches         ManagerBranch[]
-  staffBranches           StaffBranch[]              @relation("StaffBranches")
-  referralCodes           ReferralCode[]
-  auditLogs               AuditLog[]
-  permissionOverrides     UserPermissionOverride[]
-  accountingPeriods       AccountingPeriod[]
-  journalEntries          JournalEntry[]
-  journalLines            JournalLine[]
-  cashBankAccounts        CashBankAccount[]
-  cashBankTransactions    CashBankTransaction[]
-  overstocks              BranchOverstock[]
-  warehouses              Warehouse[]
-  inventoryPostings       InventoryPosting[]
-  inventoryBalances       InventoryBalance[]
-  openingBalances         OpeningBalance[]
-  expenses                Expense[]
-  reimbursements          Reimbursement[]
-  internalTransfersFrom   InternalTransferLedger[]   @relation("InternalTransferFromBranch")
-  internalTransfersTo     InternalTransferLedger[]   @relation("InternalTransferToBranch")
-  purchaseRequests        PurchaseRequest[]
-  purchaseOrders          PurchaseOrder[]
-  goodsReceipts           GoodsReceipt[]
-  supplierInvoices        SupplierInvoice[]
-  supplierPayments        SupplierPayment[]
-  supplierPaymentRefunds  SupplierPaymentRefund[]
-  packageRevenueContracts PackageRevenueContract[]
-  domainEvents            DomainEvent[]
-  revenueRecognitions     RevenueRecognition[]
-  treatmentBoms           TreatmentBom[]
-  approvalInstances       ApprovalInstance[]
-  socialProgramRequests   SocialProgramRequest[]
-  stockOpnames            StockOpname[]
-  invoicePaymentRefunds   InvoicePaymentRefund[]
-  whatsappDeliveries      WhatsAppDelivery[]
-  voucherClaimLocations   VoucherClaimLocation[]
+  users                     User[]
+  members                   Member[]
+  branchMemberAccess        BranchMemberAccess[]
+  memberPackages            MemberPackage[]
+  memberAddOns              MemberAddOn[]
+  nonTherapyPurchases       MemberNonTherapyPurchase[]
+  invoices                  Invoice[]
+  packagePricings           PackagePricing[]
+  inventoryItems            InventoryItem[]
+  stockRequests             StockRequest[]             @relation("StockRequestDestination")
+  stockRequestsFulfilled    StockRequest[]             @relation("StockRequestSource")
+  shipmentsFrom             Shipment[]                 @relation("ShipmentFrom")
+  shipmentsTo               Shipment[]                 @relation("ShipmentTo")
+  encounters                Encounter[]
+  treatmentSessions         TreatmentSession[]
+  managerBranches           ManagerBranch[]
+  staffBranches             StaffBranch[]              @relation("StaffBranches")
+  referralCodes             ReferralCode[]
+  auditLogs                 AuditLog[]
+  permissionOverrides       UserPermissionOverride[]
+  accountingPeriods         AccountingPeriod[]
+  journalEntries            JournalEntry[]
+  journalLines              JournalLine[]
+  cashBankAccounts          CashBankAccount[]
+  cashBankTransactions      CashBankTransaction[]
+  overstocks                BranchOverstock[]
+  warehouses                Warehouse[]
+  inventoryPostings         InventoryPosting[]
+  inventoryBalances         InventoryBalance[]
+  openingBalances           OpeningBalance[]
+  expenses                  Expense[]
+  reimbursements            Reimbursement[]
+  internalTransfersFrom     InternalTransferLedger[]   @relation("InternalTransferFromBranch")
+  internalTransfersTo       InternalTransferLedger[]   @relation("InternalTransferToBranch")
+  purchaseRequests          PurchaseRequest[]
+  purchaseOrders            PurchaseOrder[]
+  goodsReceipts             GoodsReceipt[]
+  supplierInvoices          SupplierInvoice[]
+  supplierPayments          SupplierPayment[]
+  supplierPaymentRefunds    SupplierPaymentRefund[]
+  packageRevenueContracts   PackageRevenueContract[]
+  domainEvents              DomainEvent[]
+  revenueRecognitions       RevenueRecognition[]
+  treatmentBoms             TreatmentBom[]
+  approvalInstances         ApprovalInstance[]
+  socialProgramRequests     SocialProgramRequest[]
+  stockOpnames              StockOpname[]
+  invoicePaymentRefunds     InvoicePaymentRefund[]
+  whatsappDeliveries        WhatsAppDelivery[]
+  voucherClaimLocations     VoucherClaimLocation[]
+  chsCoordinatorAssignments ChsCoordinatorAssignment[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -862,60 +863,61 @@ model User {
   updatedAt               DateTime                @updatedAt
 
   // Relations
-  branch                        Branch?                   @relation(fields: [branchId], references: [id])
-  roleTemplate                  RoleTemplate?             @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
+  branch                        Branch?                    @relation(fields: [branchId], references: [id])
+  roleTemplate                  RoleTemplate?              @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
   profile                       UserProfile?
   member                        Member?
   auditLogs                     AuditLog[]
   notifications                 Notification[]
   chatMessages                  ChatMessage[]
-  chatRooms                     ChatRoom[]                @relation("ChatRoomStaff")
+  chatRooms                     ChatRoom[]                 @relation("ChatRoomStaff")
   managedBranches               ManagerBranch[]
-  staffBranches                 StaffBranch[]             @relation("StaffBranches")
-  permissionOverrides           UserPermissionOverride[]  @relation("PermissionOverrideUser")
-  permissionOverridesCreated    UserPermissionOverride[]  @relation("PermissionOverrideCreatedBy")
-  journalEntriesCreated         JournalEntry[]            @relation("JournalEntryCreatedBy")
-  journalEntriesPosted          JournalEntry[]            @relation("JournalEntryPostedBy")
-  accountingPeriodsCreated      AccountingPeriod[]        @relation("AccountingPeriodCreatedBy")
-  accountingPeriodsClosed       AccountingPeriod[]        @relation("AccountingPeriodClosedBy")
-  paymentsVerified              InvoicePayment[]          @relation("PaymentVerifiedBy")
-  invoicePaymentRefundsCreated  InvoicePaymentRefund[]    @relation("InvoicePaymentRefundCreatedBy")
-  cashBankAccountsCreated       CashBankAccount[]         @relation("CashBankAccountCreatedBy")
-  cashBankTransactionsCreated   CashBankTransaction[]     @relation("CashBankTransactionCreatedBy")
-  openingBalancesCreated        OpeningBalance[]          @relation("OpeningBalanceCreatedBy")
-  openingBalancesReviewed       OpeningBalance[]          @relation("OpeningBalanceReviewedBy")
-  expensesCreated               Expense[]                 @relation("ExpenseCreatedBy")
-  expensesReviewed              Expense[]                 @relation("ExpenseReviewedBy")
-  expensesPaid                  Expense[]                 @relation("ExpensePaidBy")
-  reimbursementsClaimed         Reimbursement[]           @relation("ReimbursementClaimant")
-  reimbursementsReviewed        Reimbursement[]           @relation("ReimbursementReviewedBy")
-  reimbursementsPaid            Reimbursement[]           @relation("ReimbursementPaidBy")
-  socialProgramsRequested       SocialProgramRequest[]    @relation("SocialProgramRequestedBy")
-  suppliersCreated              Supplier[]                @relation("SupplierCreatedBy")
-  purchaseRequestsCreated       PurchaseRequest[]         @relation("PurchaseRequestCreatedBy")
-  purchaseRequestsReviewed      PurchaseRequest[]         @relation("PurchaseRequestReviewedBy")
-  purchaseOrdersCreated         PurchaseOrder[]           @relation("PurchaseOrderCreatedBy")
-  goodsReceiptsCreated          GoodsReceipt[]            @relation("GoodsReceiptCreatedBy")
-  supplierInvoicesCreated       SupplierInvoice[]         @relation("SupplierInvoiceCreatedBy")
-  supplierPaymentsCreated       SupplierPayment[]         @relation("SupplierPaymentCreatedBy")
-  supplierPaymentRefundsCreated SupplierPaymentRefund[]   @relation("SupplierPaymentRefundCreatedBy")
-  revenuePoliciesCreated        PackageRevenuePolicy[]    @relation("RevenuePolicyCreatedBy")
-  approvalInstancesMade         ApprovalInstance[]        @relation("ApprovalInstanceMaker")
-  approvalDecisions             ApprovalDecision[]        @relation("ApprovalDecisionApprover")
-  approvalAuditLogs             ApprovalAuditLog[]        @relation("ApprovalAuditActor")
-  stockOpnamesCreated           StockOpname[]             @relation("StockOpnameCreatedBy")
-  zohoConnectionsCreated        ZohoConnection[]          @relation("ZohoConnectionCreatedBy")
-  zohoConnectionsUpdated        ZohoConnection[]          @relation("ZohoConnectionUpdatedBy")
+  staffBranches                 StaffBranch[]              @relation("StaffBranches")
+  permissionOverrides           UserPermissionOverride[]   @relation("PermissionOverrideUser")
+  permissionOverridesCreated    UserPermissionOverride[]   @relation("PermissionOverrideCreatedBy")
+  journalEntriesCreated         JournalEntry[]             @relation("JournalEntryCreatedBy")
+  journalEntriesPosted          JournalEntry[]             @relation("JournalEntryPostedBy")
+  accountingPeriodsCreated      AccountingPeriod[]         @relation("AccountingPeriodCreatedBy")
+  accountingPeriodsClosed       AccountingPeriod[]         @relation("AccountingPeriodClosedBy")
+  paymentsVerified              InvoicePayment[]           @relation("PaymentVerifiedBy")
+  invoicePaymentRefundsCreated  InvoicePaymentRefund[]     @relation("InvoicePaymentRefundCreatedBy")
+  cashBankAccountsCreated       CashBankAccount[]          @relation("CashBankAccountCreatedBy")
+  cashBankTransactionsCreated   CashBankTransaction[]      @relation("CashBankTransactionCreatedBy")
+  openingBalancesCreated        OpeningBalance[]           @relation("OpeningBalanceCreatedBy")
+  openingBalancesReviewed       OpeningBalance[]           @relation("OpeningBalanceReviewedBy")
+  expensesCreated               Expense[]                  @relation("ExpenseCreatedBy")
+  expensesReviewed              Expense[]                  @relation("ExpenseReviewedBy")
+  expensesPaid                  Expense[]                  @relation("ExpensePaidBy")
+  reimbursementsClaimed         Reimbursement[]            @relation("ReimbursementClaimant")
+  reimbursementsReviewed        Reimbursement[]            @relation("ReimbursementReviewedBy")
+  reimbursementsPaid            Reimbursement[]            @relation("ReimbursementPaidBy")
+  socialProgramsRequested       SocialProgramRequest[]     @relation("SocialProgramRequestedBy")
+  suppliersCreated              Supplier[]                 @relation("SupplierCreatedBy")
+  purchaseRequestsCreated       PurchaseRequest[]          @relation("PurchaseRequestCreatedBy")
+  purchaseRequestsReviewed      PurchaseRequest[]          @relation("PurchaseRequestReviewedBy")
+  purchaseOrdersCreated         PurchaseOrder[]            @relation("PurchaseOrderCreatedBy")
+  goodsReceiptsCreated          GoodsReceipt[]             @relation("GoodsReceiptCreatedBy")
+  supplierInvoicesCreated       SupplierInvoice[]          @relation("SupplierInvoiceCreatedBy")
+  supplierPaymentsCreated       SupplierPayment[]          @relation("SupplierPaymentCreatedBy")
+  supplierPaymentRefundsCreated SupplierPaymentRefund[]    @relation("SupplierPaymentRefundCreatedBy")
+  revenuePoliciesCreated        PackageRevenuePolicy[]     @relation("RevenuePolicyCreatedBy")
+  approvalInstancesMade         ApprovalInstance[]         @relation("ApprovalInstanceMaker")
+  approvalDecisions             ApprovalDecision[]         @relation("ApprovalDecisionApprover")
+  approvalAuditLogs             ApprovalAuditLog[]         @relation("ApprovalAuditActor")
+  stockOpnamesCreated           StockOpname[]              @relation("StockOpnameCreatedBy")
+  zohoConnectionsCreated        ZohoConnection[]           @relation("ZohoConnectionCreatedBy")
+  zohoConnectionsUpdated        ZohoConnection[]           @relation("ZohoConnectionUpdatedBy")
   voucherOperatorLocations      VoucherOperatorLocation[]
-  collaborationTeamsOwned       CollaborationTeam[]       @relation("CollaborationTeamOwner")
+  collaborationTeamsOwned       CollaborationTeam[]        @relation("CollaborationTeamOwner")
   collaborationMemberships      TeamMembership[]
-  collaborationMembershipsMade  TeamMembership[]          @relation("TeamMembershipAssignedBy")
-  collaborationTasksCreated     TeamTask[]                @relation("TeamTaskCreatedBy")
-  collaborationTasksReviewed    TeamTask[]                @relation("TeamTaskReviewedBy")
-  collaborationAssignments      TaskAssignment[]          @relation("TaskAssignmentUser")
-  collaborationAssignmentsMade  TaskAssignment[]          @relation("TaskAssignmentAssignedBy")
+  collaborationMembershipsMade  TeamMembership[]           @relation("TeamMembershipAssignedBy")
+  collaborationTasksCreated     TeamTask[]                 @relation("TeamTaskCreatedBy")
+  collaborationTasksReviewed    TeamTask[]                 @relation("TeamTaskReviewedBy")
+  collaborationAssignments      TaskAssignment[]           @relation("TaskAssignmentUser")
+  collaborationAssignmentsMade  TaskAssignment[]           @relation("TaskAssignmentAssignedBy")
   collaborationComments         TaskComment[]
   collaborationActivities       TaskActivity[]
+  chsCoordinatorAssignments     ChsCoordinatorAssignment[] @relation("ChsCoordinatorUser")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -1017,10 +1019,10 @@ model RuntimeZohoApiProfile {
   accountsBaseUrl       String
   apiBaseUrl            String
   isActive              Boolean  @default(false)
-  createdBy              String
-  updatedBy              String
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdBy             String
+  updatedBy             String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   organizationBindings RuntimeZohoOrganizationBinding[]
 
@@ -5079,15 +5081,40 @@ model HomecareTeam {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       HomecareTeamMember[]
-  bags          HomecareBag[]
-  stockRequests HomecareBagStockRequest[]
-  loansGiven    HomecareTeamLoan[]        @relation("HomecareTeamLoansGiven")
-  loansReceived HomecareTeamLoan[]        @relation("HomecareTeamLoansReceived")
+  members                   HomecareTeamMember[]
+  bags                      HomecareBag[]
+  stockRequests             HomecareBagStockRequest[]
+  loansGiven                HomecareTeamLoan[]         @relation("HomecareTeamLoansGiven")
+  loansReceived             HomecareTeamLoan[]         @relation("HomecareTeamLoansReceived")
+  chsCoordinatorAssignments ChsCoordinatorAssignment[]
 
   @@index([branchId, isActive])
   @@index([teamCode])
   @@map("homecare_teams")
+}
+
+model ChsCoordinatorAssignment {
+  id                String    @id @default(cuid())
+  scope             String    @db.VarChar(16)
+  coordinatorUserId String
+  branchId          String
+  homecareTeamId    String?
+  effectiveFrom     DateTime  @db.Date
+  effectiveUntil    DateTime? @db.Date
+  isActive          Boolean   @default(true)
+  notes             String?   @db.Text
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  coordinator  User          @relation("ChsCoordinatorUser", fields: [coordinatorUserId], references: [id], onDelete: Restrict)
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  homecareTeam HomecareTeam? @relation(fields: [homecareTeamId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, scope, isActive])
+  @@index([homecareTeamId, isActive])
+  @@index([coordinatorUserId, effectiveFrom, effectiveUntil])
+  @@map("chs_coordinator_assignments")
 }
 
 model HomecareTeamMember {
