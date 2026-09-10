@@ -183,6 +183,7 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
           <p className="text-sm text-neutral-500">
             Pilih orang terlebih dahulu, kemudian tetapkan satu atau beberapa cabang yang dikoordinasikan.
           </p>
+          <p className="text-xs text-neutral-500">Satu cabang dapat ditangani oleh lebih dari satu Koordinator CHS.</p>
           <p className="text-xs text-violet-500">Filter cabang pada laporan tidak membatasi panel pengaturan ini.</p>
         </div>
       </div>

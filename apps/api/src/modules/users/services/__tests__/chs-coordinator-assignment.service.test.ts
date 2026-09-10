@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import {
   createChsCoordinatorBranchAssignmentsService,
+  deactivateChsCoordinatorAssignmentService,
   updateChsCoordinatorAssignmentService,
 } from '../chs-coordinator-assignment.service';
 
@@ -12,6 +13,7 @@ jest.mock('@lib/prisma', () => ({
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
+      delete: jest.fn(),
       update: jest.fn(),
     },
     user: { findFirst: jest.fn() },
@@ -49,6 +51,7 @@ describe('CHS coordinator assignment update', () => {
       Promise.resolve({ id: `assignment-${data.branchId}`, ...data })
     ));
     mockPrisma.chsCoordinatorAssignment.update.mockResolvedValue({ id: 'assignment-1' });
+    mockPrisma.chsCoordinatorAssignment.delete.mockResolvedValue({ id: 'assignment-1' });
     mockPrisma.branch.findMany.mockResolvedValue([{ id: 'branch-1' }, { id: 'branch-2' }]);
     mockPrisma.$transaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
   });
@@ -63,6 +66,9 @@ describe('CHS coordinator assignment update', () => {
 
     expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ id: 'coordinator-1', isActive: true }),
+    }));
+    expect(mockPrisma.chsCoordinatorAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ coordinatorUserId: 'coordinator-1' }),
     }));
     expect(mockPrisma.chsCoordinatorAssignment.create).toHaveBeenCalledTimes(2);
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -96,7 +102,10 @@ describe('CHS coordinator assignment update', () => {
 
     expect(mockPrisma.chsCoordinatorAssignment.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: { not: 'assignment-1' } }),
+        where: expect.objectContaining({
+          id: { not: 'assignment-1' },
+          coordinatorUserId: 'coordinator-1',
+        }),
       }),
     );
     expect(mockPrisma.chsCoordinatorAssignment.update).toHaveBeenCalledWith(
@@ -125,5 +134,20 @@ describe('CHS coordinator assignment update', () => {
       branchId: 'branch-1',
       effectiveFrom: '2026-09-01',
     }, caller)).rejects.toMatchObject({ code: 'INACTIVE_CHS_ASSIGNMENT' });
+  });
+
+  it('allows Super Admin to delete a future coordinator assignment', async () => {
+    mockPrisma.chsCoordinatorAssignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      branchId: 'branch-1',
+      effectiveFrom: new Date('2099-01-01T00:00:00.000Z'),
+      effectiveUntil: null,
+    });
+
+    await deactivateChsCoordinatorAssignmentService('assignment-1', caller);
+
+    expect(mockPrisma.chsCoordinatorAssignment.delete).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+    });
   });
 });

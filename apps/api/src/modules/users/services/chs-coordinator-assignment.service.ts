@@ -158,6 +158,7 @@ export async function createChsCoordinatorBranchAssignmentsService(
     }),
     prisma.chsCoordinatorAssignment.findMany({
       where: {
+        coordinatorUserId: input.coordinatorUserId,
         scope: 'BRANCH',
         branchId: { in: branchIds },
         homecareTeamId: null,
@@ -176,7 +177,7 @@ export async function createChsCoordinatorBranchAssignmentsService(
     const names = overlaps.map((overlap) => overlap.branch.name).join(', ');
     throw errors.conflict(
       'CHS_ASSIGNMENT_OVERLAP',
-      `Cabang berikut sudah memiliki Koordinator CHS pada periode yang beririsan: ${names}.`,
+      `Koordinator tersebut sudah menangani cabang berikut pada periode yang beririsan: ${names}.`,
     );
   }
 
@@ -228,6 +229,7 @@ export async function createChsCoordinatorAssignmentService(input: AssignmentInp
 
   const overlap = await prisma.chsCoordinatorAssignment.findFirst({
     where: {
+      coordinatorUserId: input.coordinatorUserId,
       scope: input.scope,
       branchId: input.branchId,
       homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
@@ -237,7 +239,7 @@ export async function createChsCoordinatorAssignmentService(input: AssignmentInp
     select: { id: true },
   });
   if (overlap) {
-    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Scope ini sudah memiliki Koordinator CHS pada periode yang beririsan.');
+    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Koordinator tersebut sudah memiliki scope ini pada periode yang beririsan.');
   }
 
   return prisma.chsCoordinatorAssignment.create({
@@ -306,6 +308,7 @@ export async function updateChsCoordinatorAssignmentService(
   const overlap = await prisma.chsCoordinatorAssignment.findFirst({
     where: {
       id: { not: assignmentId },
+      coordinatorUserId: input.coordinatorUserId,
       scope: input.scope,
       branchId: input.branchId,
       homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
@@ -315,7 +318,7 @@ export async function updateChsCoordinatorAssignmentService(
     select: { id: true },
   });
   if (overlap) {
-    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Scope ini sudah memiliki Koordinator CHS pada periode yang beririsan.');
+    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Koordinator tersebut sudah memiliki scope ini pada periode yang beririsan.');
   }
 
   return prisma.chsCoordinatorAssignment.update({
