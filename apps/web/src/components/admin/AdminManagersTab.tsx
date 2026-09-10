@@ -7,7 +7,7 @@ import { adminManagersApi, AdminManager } from '@/lib/api/adminManagersApi';
 import { CreateAdminManagerModal } from './CreateAdminManagerModal';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
-import { Search, Filter, ChevronLeft, ChevronRight, Users, Building2, Eye } from 'lucide-react';
+import { BadgeDollarSign, ChevronLeft, ChevronRight, Eye, Filter, Loader2, Search, Users, Building2 } from 'lucide-react';
 import styles from './AdminManagersTab.module.css';
 
 export const AdminManagersTab: React.FC = () => {
@@ -20,6 +20,7 @@ export const AdminManagersTab: React.FC = () => {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [convertingManagerId, setConvertingManagerId] = useState<string | null>(null);
   const limit = 10;
 
   const loadManagers = useCallback(async () => {
@@ -73,6 +74,29 @@ export const AdminManagersTab: React.FC = () => {
   const handleStatusFilterChange = (value: 'all' | 'active' | 'inactive') => {
     setStatusFilter(value);
     setPage(1); // Reset to first page on filter change
+  };
+
+  const setAsFinanceLogistics = async (manager: AdminManager) => {
+    if (!window.confirm(
+      `Tetapkan ${manager.fullName} sebagai Finance & Logistics Controller? Assignment Admin Manager akan diganti dengan akses Finance dan Logistik seluruh cabang.`,
+    )) return;
+
+    try {
+      setConvertingManagerId(manager.id);
+      const response = await adminManagersApi.convertAdminManagerRole(
+        manager.id,
+        'FINANCE_LOGISTICS_CONTROLLER',
+      );
+      showToast.success(
+        `${manager.fullName} berhasil ditetapkan sebagai Finance & Logistik untuk ${response.data.assignedBranchCount} cabang. Pengguna perlu login ulang.`,
+      );
+      await loadManagers();
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.message || 'Gagal menetapkan Finance & Logistik.');
+    } finally {
+      setConvertingManagerId(null);
+    }
   };
 
   // Pagination
@@ -248,6 +272,19 @@ export const AdminManagersTab: React.FC = () => {
                     </td>
                     <td>
                       <div className={styles.actionButtons}>
+                        <button
+                          type="button"
+                          className={styles.financeRoleBtn}
+                          onClick={() => void setAsFinanceLogistics(manager)}
+                          title="Tetapkan sebagai Finance & Logistics Controller"
+                          aria-label={`Set Finance & Logistik untuk ${manager.fullName}`}
+                          disabled={!manager.isActive || convertingManagerId !== null}
+                        >
+                          {convertingManagerId === manager.id
+                            ? <Loader2 size={16} className={styles.spinningIcon} />
+                            : <BadgeDollarSign size={16} />}
+                          <span>Set Finance &amp; Logistik</span>
+                        </button>
                         <button
                           className={styles.viewDetailBtn}
                           onClick={() => router.push(`/admin/managers/${manager.id}`)}

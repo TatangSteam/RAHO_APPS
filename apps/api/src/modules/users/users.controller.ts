@@ -39,6 +39,7 @@ import {
   deactivateChsCoordinatorAssignmentService,
   getChsCoordinatorAssignmentOptionsService,
   listChsCoordinatorAssignmentsService,
+  updateChsCoordinatorAssignmentService,
 } from './services/chs-coordinator-assignment.service';
 import { chsCoordinatorAssignmentSchema } from './staff-incentive.schema';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
@@ -656,6 +657,22 @@ export async function createChsCoordinatorAssignment(req: Request, res: Response
       },
     );
     sendCreated(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function updateChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = chsCoordinatorAssignmentSchema.parse(req.body);
+    const result = await updateChsCoordinatorAssignmentService(
+      req.params.assignmentId,
+      input as Parameters<typeof updateChsCoordinatorAssignmentService>[1],
+      {
+        role: req.user.role as Role,
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+      },
+    );
+    sendSuccess(res, result);
   } catch (err) { next(err); }
 }
 

@@ -169,6 +169,85 @@ export async function createChsCoordinatorAssignmentService(input: AssignmentInp
   });
 }
 
+export async function updateChsCoordinatorAssignmentService(
+  assignmentId: string,
+  input: AssignmentInput,
+  caller: Caller,
+) {
+  const existingAssignment = await prisma.chsCoordinatorAssignment.findUnique({
+    where: { id: assignmentId },
+    select: { id: true, branchId: true, isActive: true },
+  });
+  if (!existingAssignment) throw errors.notFound('Assignment Koordinator CHS tidak ditemukan.');
+  if (!existingAssignment.isActive) {
+    throw errors.badRequest('INACTIVE_CHS_ASSIGNMENT', 'Assignment yang sudah dinonaktifkan tidak dapat diedit.');
+  }
+
+  await assertManageAccess(caller, existingAssignment.branchId);
+  if (input.branchId !== existingAssignment.branchId) {
+    await assertManageAccess(caller, input.branchId);
+  }
+
+  const effectiveFrom = dateOnly(input.effectiveFrom);
+  const effectiveUntil = input.effectiveUntil ? dateOnly(input.effectiveUntil) : null;
+  if (effectiveUntil && effectiveUntil < effectiveFrom) {
+    throw errors.badRequest('INVALID_ASSIGNMENT_PERIOD', 'Tanggal selesai tidak boleh sebelum tanggal mulai.');
+  }
+
+  const [coordinator, branch, team] = await Promise.all([
+    prisma.user.findFirst({
+      where: {
+        id: input.coordinatorUserId,
+        isActive: true,
+        role: { in: [Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
+        OR: [{ branchId: input.branchId }, { staffBranches: { some: { branchId: input.branchId } } }],
+      },
+      select: { id: true },
+    }),
+    prisma.branch.findUnique({ where: { id: input.branchId }, select: { id: true, isActive: true } }),
+    input.scope === 'TEAM' && input.homecareTeamId
+      ? prisma.homecareTeam.findUnique({
+          where: { id: input.homecareTeamId },
+          select: { id: true, branchId: true, isActive: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  if (!coordinator) throw errors.badRequest('INVALID_CHS_COORDINATOR', 'Koordinator harus merupakan akun internal aktif pada cabang yang dipilih.');
+  if (!branch?.isActive) throw errors.badRequest('INVALID_CHS_BRANCH', 'Cabang tidak ditemukan atau tidak aktif.');
+  if (input.scope === 'TEAM' && (!team?.isActive || team.branchId !== input.branchId)) {
+    throw errors.badRequest('INVALID_HOMECARE_TEAM', 'Tim Homecare harus aktif dan berada di cabang yang dipilih.');
+  }
+
+  const overlap = await prisma.chsCoordinatorAssignment.findFirst({
+    where: {
+      id: { not: assignmentId },
+      scope: input.scope,
+      branchId: input.branchId,
+      homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
+      effectiveFrom: effectiveUntil ? { lte: effectiveUntil } : undefined,
+      OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: effectiveFrom } }],
+    },
+    select: { id: true },
+  });
+  if (overlap) {
+    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Scope ini sudah memiliki Koordinator CHS pada periode yang beririsan.');
+  }
+
+  return prisma.chsCoordinatorAssignment.update({
+    where: { id: assignmentId },
+    data: {
+      scope: input.scope,
+      coordinatorUserId: input.coordinatorUserId,
+      branchId: input.branchId,
+      homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
+      effectiveFrom,
+      effectiveUntil,
+      notes: input.notes?.trim() || null,
+    },
+    select: assignmentSelect,
+  });
+}
+
 export async function deactivateChsCoordinatorAssignmentService(assignmentId: string, caller: Caller) {
   const assignment = await prisma.chsCoordinatorAssignment.findUnique({
     where: { id: assignmentId },

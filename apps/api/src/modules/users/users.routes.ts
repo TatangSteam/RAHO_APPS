@@ -28,6 +28,7 @@ import {
   listChsCoordinatorAssignments,
   getChsCoordinatorAssignmentOptions,
   createChsCoordinatorAssignment,
+  updateChsCoordinatorAssignment,
   deactivateChsCoordinatorAssignment,
   getStaffSessionHistory,
   exportStaffPerformanceDetail,
@@ -97,6 +98,13 @@ usersRouter.post(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   createChsCoordinatorAssignment,
+);
+
+usersRouter.patch(
+  '/incentives/coordinator/assignments/:assignmentId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  updateChsCoordinatorAssignment,
 );
 
 usersRouter.delete(

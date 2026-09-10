@@ -240,6 +240,16 @@ export interface ChsCoordinatorAssignmentOptions {
   teams: Array<{ id: string; teamCode: string; name: string }>;
 }
 
+export interface ChsCoordinatorAssignmentInput {
+  scope: 'TEAM' | 'BRANCH';
+  coordinatorUserId: string;
+  branchId: string;
+  homecareTeamId?: string;
+  effectiveFrom: string;
+  effectiveUntil?: string;
+  notes?: string;
+}
+
 export interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
@@ -305,16 +315,16 @@ export const usersApi = {
     return response.data.data;
   },
 
-  createChsCoordinatorAssignment: async (input: {
-    scope: 'TEAM' | 'BRANCH';
-    coordinatorUserId: string;
-    branchId: string;
-    homecareTeamId?: string;
-    effectiveFrom: string;
-    effectiveUntil?: string;
-    notes?: string;
-  }): Promise<ChsCoordinatorAssignment> => {
+  createChsCoordinatorAssignment: async (input: ChsCoordinatorAssignmentInput): Promise<ChsCoordinatorAssignment> => {
     const response = await api.post('/users/incentives/coordinator/assignments', input);
+    return response.data.data;
+  },
+
+  updateChsCoordinatorAssignment: async (
+    assignmentId: string,
+    input: ChsCoordinatorAssignmentInput,
+  ): Promise<ChsCoordinatorAssignment> => {
+    const response = await api.patch(`/users/incentives/coordinator/assignments/${assignmentId}`, input);
     return response.data.data;
   },
 

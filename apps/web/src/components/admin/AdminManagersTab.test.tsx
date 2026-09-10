@@ -26,6 +26,8 @@ jest.mock('lucide-react', () => ({
   Users: () => <div data-testid="users-icon">Users</div>,
   Building2: () => <div data-testid="building-icon">Building2</div>,
   Eye: () => <div data-testid="eye-icon">Eye</div>,
+  BadgeDollarSign: () => <div data-testid="finance-icon">Finance</div>,
+  Loader2: () => <div data-testid="loader-icon">Loading</div>,
 }));
 
 // ── Test Data ─────────────────────────────────────────────────
@@ -82,6 +84,10 @@ describe('AdminManagersTab', () => {
     typeof adminManagersApi.getAdminManagers
   >;
   const mockShowToastError = showToast.error as jest.MockedFunction<typeof showToast.error>;
+  const mockShowToastSuccess = showToast.success as jest.MockedFunction<typeof showToast.success>;
+  const mockConvertAdminManagerRole = adminManagersApi.convertAdminManagerRole as jest.MockedFunction<
+    typeof adminManagersApi.convertAdminManagerRole
+  >;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -90,6 +96,16 @@ describe('AdminManagersTab', () => {
     mockGetAdminManagers.mockResolvedValue({
       data: mockManagers,
       meta: mockPaginationMeta,
+    });
+    mockConvertAdminManagerRole.mockResolvedValue({
+      data: {
+        id: 'manager-1',
+        email: 'manager1@raho.id',
+        role: 'FINANCE_LOGISTICS_CONTROLLER',
+        assignedBranchCount: 3,
+        historyPreserved: true,
+        roleTemplate: null,
+      },
     });
   });
 
@@ -772,6 +788,30 @@ describe('AdminManagersTab', () => {
           })
         );
       });
+    });
+  });
+
+  describe('Finance and Logistics assignment', () => {
+    it('lets Super Admin convert an active manager directly from the list', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<AdminManagersTab />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Manager One')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Set Finance & Logistik untuk Manager One' }));
+
+      await waitFor(() => {
+        expect(mockConvertAdminManagerRole).toHaveBeenCalledWith(
+          'manager-1',
+          'FINANCE_LOGISTICS_CONTROLLER',
+        );
+      });
+      expect(mockShowToastSuccess).toHaveBeenCalledWith(
+        expect.stringContaining('berhasil ditetapkan sebagai Finance & Logistik'),
+      );
+      confirmSpy.mockRestore();
     });
   });
 });
