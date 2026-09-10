@@ -684,6 +684,11 @@ enum HomecareTeamMemberRole {
   OTHER
 }
 
+enum HomecareTeamIncentiveType {
+  HOMECARE
+  HO
+}
+
 enum HomecareBagRequestStatus {
   DRAFT
   PENDING
@@ -841,6 +846,7 @@ model Branch {
   whatsappDeliveries        WhatsAppDelivery[]
   voucherClaimLocations     VoucherClaimLocation[]
   chsCoordinatorAssignments ChsCoordinatorAssignment[]
+  doctorHeadAssignments     DoctorHeadAssignment[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -918,6 +924,7 @@ model User {
   collaborationComments         TaskComment[]
   collaborationActivities       TaskActivity[]
   chsCoordinatorAssignments     ChsCoordinatorAssignment[] @relation("ChsCoordinatorUser")
+  doctorHeadAssignments         DoctorHeadAssignment[]     @relation("DoctorHeadUser")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -5070,12 +5077,13 @@ model OverstockUsage {
 // ============================================================
 
 model HomecareTeam {
-  id          String  @id @default(cuid())
-  teamCode    String  @unique
-  name        String
-  branchId    String
-  description String? @db.Text
-  isActive    Boolean @default(true)
+  id            String                    @id @default(cuid())
+  teamCode      String                    @unique
+  name          String
+  branchId      String
+  description   String?                   @db.Text
+  isActive      Boolean                   @default(true)
+  incentiveType HomecareTeamIncentiveType @default(HOMECARE)
 
   createdBy String?
   createdAt DateTime @default(now())
@@ -5091,6 +5099,26 @@ model HomecareTeam {
   @@index([branchId, isActive])
   @@index([teamCode])
   @@map("homecare_teams")
+}
+
+model DoctorHeadAssignment {
+  id               String    @id @default(cuid())
+  doctorHeadUserId String
+  branchId         String
+  effectiveFrom    DateTime  @db.Date
+  effectiveUntil   DateTime? @db.Date
+  isActive         Boolean   @default(true)
+  notes            String?   @db.Text
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  doctorHead User   @relation("DoctorHeadUser", fields: [doctorHeadUserId], references: [id], onDelete: Restrict)
+  branch     Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, isActive])
+  @@index([doctorHeadUserId, effectiveFrom, effectiveUntil])
+  @@map("doctor_head_assignments")
 }
 
 model ChsCoordinatorAssignment {

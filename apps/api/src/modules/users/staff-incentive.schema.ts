@@ -26,3 +26,15 @@ export const chsCoordinatorBranchAssignmentsSchema = z.object({
   effectiveUntil: z.string().regex(dateOnly, 'Tanggal selesai harus berformat YYYY-MM-DD.').optional(),
   notes: z.string().max(500).optional(),
 });
+
+export const doctorHeadAssignmentSchema = z.object({
+  doctorHeadUserId: z.string().min(1),
+  branchId: z.string().min(1),
+  effectiveFrom: z.string().regex(dateOnly, 'Tanggal mulai harus berformat YYYY-MM-DD.'),
+  effectiveUntil: z.string().regex(dateOnly, 'Tanggal selesai harus berformat YYYY-MM-DD.').optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const doctorHeadBranchAssignmentsSchema = doctorHeadAssignmentSchema
+  .omit({ branchId: true })
+  .extend({ branchIds: z.array(z.string().min(1)).min(1, 'Minimal satu cabang wajib dipilih.') });

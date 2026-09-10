@@ -266,7 +266,7 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
               className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal normal-case dark:border-neutral-700 dark:bg-neutral-950"
             >
               <option value="">Pilih tim</option>
-              {availableTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+              {availableTeams.map((team) => <option key={team.id} value={team.id}>{team.name} ({team.incentiveType === 'HO' ? 'Team HO' : 'Homecare'})</option>)}
             </select>
           </label>
         )}

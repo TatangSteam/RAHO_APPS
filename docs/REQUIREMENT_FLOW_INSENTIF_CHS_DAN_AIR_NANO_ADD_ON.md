@@ -117,7 +117,11 @@ Super Admin tetap dapat melihat dan mengelola seluruh scope.
 | Koordinator CHS | Tusukan pribadi | Sesi valid yang dilakukan sendiri; boleh berbayar, gratis, atau sosial | Rp10.000/infus |
 | Koordinator CHS | Bonus tusukan pribadi | Tusukan pribadi minimal 100 dalam satu bulan | Rp2.000.000 satu kali |
 | Koordinator CHS | Infus tim HO | Infus berbayar yang dikreditkan ke tim HO dalam scope | Rp10.000/infus berbayar |
-| Koordinator merangkap Dokter Tim Homecare | Omzet tim Homecare | Tim mencapai minimal 100 sesi dan infus sudah lunas/terverifikasi | Rp5.000/infus berbayar |
+| Dokter Head | Target tim Homecare | Setiap tim dalam cabang assignment mencapai minimal 100 sesi valid | Rp500.000/tim yang lolos |
+| Dokter Head | Target cabang | Cabang tanpa tim Homecare mencapai 200 sesi, atau cabang dengan tim Homecare mencapai 300 sesi | Rp500.000/cabang yang lolos |
+| Dokter Head merangkap Dokter Tim Homecare | Omzet tim Homecare | Tim mencapai minimal 100 sesi dan infus sudah lunas/terverifikasi | Rp5.000/infus berbayar |
+| Dokter Head | Omzet Partnership | Total aktivitas Partnership mencapai minimal 1.500 sesi | Rp2.000/infus berbayar Partnership |
+| Dokter Head | Treatment Review | Mengikuti ketentuan Treatment Review yang akan dikonfigurasi | Belum ditetapkan |
 
 ### 5.2 Aturan Dokter Cabang
 
@@ -243,25 +247,44 @@ bonus_pribadi = jumlah_tusukan_pribadi >= 100 ? Rp2.000.000 : Rp0
 insentif_tim_ho = jumlah_infus_berbayar_tim_ho × Rp10.000
 ```
 
-### 5.10 Koordinator merangkap Dokter Tim Homecare
+### 5.10 Dokter Head merangkap Dokter Tim Homecare
 
-1. Aturan ini hanya berlaku jika Koordinator CHS juga memiliki assignment efektif sebagai Dokter Tim Homecare pada tim yang sama.
+1. Aturan ini hanya berlaku jika Dokter Head juga memiliki membership efektif sebagai Dokter Tim Homecare pada tim yang sama.
 2. Tim Homecare harus mencapai minimal 100 sesi valid dalam bulan tersebut.
 3. Jika target tim tidak tercapai, komponen Rp5.000 tidak dibayarkan.
-4. Jika target tercapai, koordinator memperoleh Rp5.000 untuk setiap infus berbayar dari tim Homecare tersebut pada bulan yang sama.
+4. Jika target tercapai, Dokter Head memperoleh Rp5.000 untuk setiap infus berbayar dari tim Homecare tersebut pada bulan yang sama.
 5. Dasar nominal adalah seluruh infus berbayar tim, bukan hanya sesi yang ditangani secara pribadi oleh koordinator.
 6. Sesi gratis, sosial, belum lunas, dibatalkan, atau direfund tidak dihitung.
 7. Target hanya menjadi gerbang; ketika lolos, seluruh infus berbayar dalam periode dihitung.
-8. Komponen Rp5.000 ini dapat terakumulasi dengan bonus target tim Rp500.000 dan komponen Rp1.000 per infus berbayar karena ketiganya merupakan hak yang berbeda.
+8. Komponen Rp5.000 ini dapat terakumulasi dengan bonus target tim Dokter Head Rp500.000. Komponen Rp1.000 tetap merupakan hak Koordinator CHS jika orang yang sama juga memiliki assignment Koordinator CHS.
 
 ```text
-eligible_dokter_tim_hc = coordinator_is_team_doctor AND jumlah_infus_valid_tim >= 100
+eligible_dokter_tim_hc = doctor_head_is_team_doctor AND jumlah_infus_valid_tim >= 100
 insentif_dokter_tim_hc = eligible_dokter_tim_hc
   ? jumlah_infus_berbayar_tim × Rp5.000
   : Rp0
 ```
 
-### 5.11 Pencegahan hitung ganda
+### 5.11 Aturan Dokter Head
+
+1. Super Admin menetapkan seorang Dokter Head ke satu atau beberapa cabang menggunakan rentang tanggal efektif.
+2. Setiap tim Homecare dalam cabang assignment yang mencapai minimal 100 sesi valid menghasilkan bonus Rp500.000.
+3. Setiap cabang assignment yang mencapai target menghasilkan bonus Rp500.000. Targetnya 200 sesi untuk cabang tanpa tim Homecare dan 300 sesi untuk cabang dengan tim Homecare.
+4. Apabila Dokter Head juga menjadi Dokter pada tim Homecare yang lolos target, seluruh infus berbayar dan lunas pada tim tersebut menghasilkan Rp5.000 per infus.
+5. Total aktivitas Partnership dihitung dari seluruh cabang bertipe `PARTNERSHIP` dalam assignment Dokter Head. Setelah mencapai minimal 1.500 sesi valid, seluruh infus berbayar dan lunas pada scope tersebut menghasilkan Rp2.000 per infus.
+6. Bonus tim dan cabang dihitung per scope yang lolos dan tidak berlaku kelipatan target.
+7. Treatment Review belum dimasukkan ke total sampai sumber event, tarif, dan aturan eligibility ditetapkan.
+
+```text
+bonus_tim_dokter_head = jumlah_tim_hc_lolos × Rp500.000
+bonus_cabang_dokter_head = jumlah_cabang_lolos × Rp500.000
+insentif_dokter_tim_hc = jumlah_infus_berbayar_tim_lolos × Rp5.000
+insentif_partnership = total_aktivitas_partnership >= 1.500
+  ? jumlah_infus_berbayar_partnership × Rp2.000
+  : Rp0
+```
+
+### 5.12 Pencegahan hitung ganda
 
 - Gunakan `sessionId` sebagai identitas unik per komponen insentif.
 - Target tim Homecare dan target cabang boleh sama-sama tercapai karena merupakan dua komponen berbeda.

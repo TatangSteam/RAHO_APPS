@@ -146,6 +146,16 @@ export interface StaffMonthlyIncentiveResponse {
       ratePerPersonalInfusion: number;
       personalTarget: number;
       personalTargetBonus: number;
+      homecareTeamTargetBonus: number;
+      branchTargetBonus: number;
+      ratePerHoPaidInfusion: number;
+    };
+    doctorHead: {
+      homecareTeamTargetBonus: number;
+      branchTargetBonus: number;
+      ratePerHomecareDoctorPaidInfusion: number;
+      partnershipTarget: number;
+      ratePerPartnershipPaidInfusion: number;
     };
   };
   nakes: Array<{
@@ -195,6 +205,13 @@ export interface StaffMonthlyIncentiveResponse {
     personalTarget: number;
     personalTargetReached: boolean;
     personalTargetBonus: number;
+    qualifiedHomecareTeams: number;
+    homecareTeamTargetBonus: number;
+    qualifiedBranches: number;
+    branchTargetBonus: number;
+    hoPaidInfusions: number;
+    ratePerHoPaidInfusion: number;
+    hoInfusionAmount: number;
     totalAmount: number;
     scopes: Array<{
       assignmentId: string;
@@ -207,6 +224,42 @@ export interface StaffMonthlyIncentiveResponse {
       totalInfusions: number;
       qualifierPassed: boolean;
       eligiblePaidInfusions: number;
+      targetBonus: number;
+      incentiveType: 'HOMECARE' | 'HO' | 'BRANCH';
+    }>;
+  }>;
+  doctorHeads: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    staffCode: string | null;
+    role: string;
+    qualifiedHomecareTeams: number;
+    homecareTeamTargetBonus: number;
+    qualifiedBranches: number;
+    branchTargetBonus: number;
+    homecareDoctorPaidInfusions: number;
+    ratePerHomecareDoctorPaidInfusion: number;
+    homecareDoctorAmount: number;
+    partnershipTotalInfusions: number;
+    partnershipTarget: number;
+    partnershipTargetReached: boolean;
+    partnershipPaidInfusions: number;
+    ratePerPartnershipPaidInfusion: number;
+    partnershipAmount: number;
+    treatmentReviewAmount: number;
+    treatmentReviewStatus: 'PENDING_RULE_CONFIGURATION';
+    totalAmount: number;
+    scopes: Array<{
+      assignmentId: string;
+      branchId: string;
+      branchName: string;
+      branchType: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
+      qualifierTarget: number;
+      totalInfusions: number;
+      qualifierPassed: boolean;
+      targetBonus: number;
+      qualifiedHomecareTeams: number;
     }>;
   }>;
   summary: {
@@ -216,6 +269,8 @@ export interface StaffMonthlyIncentiveResponse {
     msoTotalAmount: number;
     coordinatorRecipients: number;
     coordinatorTotalAmount: number;
+    doctorHeadRecipients: number;
+    doctorHeadTotalAmount: number;
     grandTotalAmount: number;
   };
 }
@@ -232,12 +287,12 @@ export interface ChsCoordinatorAssignment {
   notes: string | null;
   coordinator: { email: string; staffCode: string | null; role: string; profile: { fullName: string } | null };
   branch: { branchCode: string; name: string };
-  homecareTeam: { teamCode: string; name: string } | null;
+  homecareTeam: { teamCode: string; name: string; incentiveType: 'HOMECARE' | 'HO' } | null;
 }
 
 export interface ChsCoordinatorAssignmentOptions {
   staff: Array<{ id: string; fullName: string; email: string; staffCode: string | null; role: string }>;
-  teams: Array<{ id: string; teamCode: string; name: string; branchId: string }>;
+  teams: Array<{ id: string; teamCode: string; name: string; branchId: string; incentiveType: 'HOMECARE' | 'HO' }>;
   branches: Array<{ id: string; branchCode: string; name: string }>;
 }
 
@@ -257,6 +312,35 @@ export interface ChsCoordinatorAssignmentInput {
   effectiveFrom: string;
   effectiveUntil?: string;
   notes?: string;
+}
+
+export interface DoctorHeadAssignment {
+  id: string;
+  doctorHeadUserId: string;
+  branchId: string;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  isActive: boolean;
+  notes: string | null;
+  doctorHead: { email: string; staffCode: string | null; role: string; profile: { fullName: string } | null };
+  branch: { branchCode: string; name: string; type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' };
+}
+
+export interface DoctorHeadAssignmentOptions {
+  doctors: Array<{ id: string; fullName: string; email: string; staffCode: string | null; role: string }>;
+  branches: Array<{ id: string; branchCode: string; name: string; type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' }>;
+}
+
+export interface DoctorHeadAssignmentInput {
+  doctorHeadUserId: string;
+  branchId: string;
+  effectiveFrom: string;
+  effectiveUntil?: string;
+  notes?: string;
+}
+
+export interface DoctorHeadBranchAssignmentsInput extends Omit<DoctorHeadAssignmentInput, 'branchId'> {
+  branchIds: string[];
 }
 
 export interface StaffSessionHistoryQuery {
@@ -348,6 +432,35 @@ export const usersApi = {
 
   deactivateChsCoordinatorAssignment: async (assignmentId: string): Promise<void> => {
     await api.delete(`/users/incentives/coordinator/assignments/${assignmentId}`);
+  },
+
+  getDoctorHeadAssignments: async (query: { month: string; branchId?: string }): Promise<DoctorHeadAssignment[]> => {
+    const response = await api.get('/users/incentives/doctor-head/assignments', { params: query });
+    return response.data.data;
+  },
+
+  getDoctorHeadAssignmentOptions: async (): Promise<DoctorHeadAssignmentOptions> => {
+    const response = await api.get('/users/incentives/doctor-head/assignment-options');
+    return response.data.data;
+  },
+
+  createDoctorHeadBranchAssignments: async (
+    input: DoctorHeadBranchAssignmentsInput,
+  ): Promise<DoctorHeadAssignment[]> => {
+    const response = await api.post('/users/incentives/doctor-head/assignments/bulk-branches', input);
+    return response.data.data;
+  },
+
+  updateDoctorHeadAssignment: async (
+    assignmentId: string,
+    input: DoctorHeadAssignmentInput,
+  ): Promise<DoctorHeadAssignment> => {
+    const response = await api.patch(`/users/incentives/doctor-head/assignments/${assignmentId}`, input);
+    return response.data.data;
+  },
+
+  deactivateDoctorHeadAssignment: async (assignmentId: string): Promise<void> => {
+    await api.delete(`/users/incentives/doctor-head/assignments/${assignmentId}`);
   },
 
   exportStaffPerformance: async (query: StaffPerformanceQuery = {}): Promise<Blob> => {

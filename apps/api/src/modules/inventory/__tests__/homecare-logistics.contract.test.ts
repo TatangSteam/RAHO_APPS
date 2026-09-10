@@ -85,6 +85,8 @@ describe('homecare logistics operational contract', () => {
   it('rejects empty or invalid team and bag edits', () => {
     expect(updateHomecareTeamSchema.safeParse({}).success).toBe(false);
     expect(updateHomecareTeamSchema.safeParse({ name: 'Tim Batavia', isActive: true }).success).toBe(true);
+    expect(updateHomecareTeamSchema.safeParse({ incentiveType: 'HO' }).success).toBe(true);
+    expect(updateHomecareTeamSchema.safeParse({ incentiveType: 'INVALID' }).success).toBe(false);
     expect(updateHomecareBagSchema.safeParse({}).success).toBe(false);
     expect(updateHomecareBagSchema.safeParse({ status: 'UNKNOWN' }).success).toBe(false);
     expect(updateHomecareBagSchema.safeParse({ status: 'IN_CHECKING' }).success).toBe(true);

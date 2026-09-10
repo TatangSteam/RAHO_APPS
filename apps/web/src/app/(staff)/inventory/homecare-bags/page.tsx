@@ -149,6 +149,7 @@ export default function HomecareBagsPage() {
     adminLayananUserId: '',
     nakesUserId: '',
     description: '',
+    incentiveType: 'HOMECARE' as 'HOMECARE' | 'HO',
   });
   const [manageMemberState, setManageMemberState] = useState<{
     teamId: string;
@@ -438,6 +439,7 @@ export default function HomecareBagsPage() {
         nakesUserId: teamForm.nakesUserId,
         teamCode: teamForm.teamCode.trim() || undefined,
         description: teamForm.description.trim() || undefined,
+        incentiveType: teamForm.incentiveType,
       });
       setTeamForm((current) => ({
         ...current,
@@ -446,6 +448,7 @@ export default function HomecareBagsPage() {
         adminLayananUserId: '',
         nakesUserId: '',
         description: '',
+        incentiveType: 'HOMECARE',
       }));
       await resetAfterAction('Tim homecare berhasil dibuat');
     } catch (error) {
@@ -506,6 +509,19 @@ export default function HomecareBagsPage() {
     } catch (error) {
       assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menghapus tim homecare'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateTeamIncentiveType = async (teamId: string, incentiveType: 'HOMECARE' | 'HO') => {
+    try {
+      setActionLoading(true);
+      await inventoryApi.updateHomecareTeam(teamId, { incentiveType });
+      await resetAfterAction(`Jenis insentif tim diubah menjadi ${incentiveType === 'HO' ? 'Team HO' : 'Homecare'}`);
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(getErrorMessage(error, 'Gagal mengubah jenis insentif tim'));
     } finally {
       setActionLoading(false);
     }
@@ -1443,6 +1459,10 @@ export default function HomecareBagsPage() {
                   <div className="font-semibold text-neutral-900 dark:text-white">Tim Baru</div>
                   <InputField label="Nama Tim" value={teamForm.name} onChange={(value) => setTeamForm((current) => ({ ...current, name: value }))} />
                   <InputField label="Kode Tim" value={teamForm.teamCode} onChange={(value) => setTeamForm((current) => ({ ...current, teamCode: value }))} placeholder="Auto jika kosong" />
+                  <SelectField label="Jenis Insentif Tim" value={teamForm.incentiveType} onChange={(value) => setTeamForm((current) => ({ ...current, incentiveType: value as 'HOMECARE' | 'HO' }))}>
+                    <option value="HOMECARE">Team Homecare</option>
+                    <option value="HO">Team HO</option>
+                  </SelectField>
                   <SelectField label="Cabang" value={teamForm.branchId} onChange={(value) => setTeamForm((current) => ({
                     ...current,
                     branchId: value,
@@ -1482,6 +1502,20 @@ export default function HomecareBagsPage() {
                     <div>
                       <div className="font-semibold text-neutral-900 dark:text-white">{team.name}</div>
                       <div className="text-xs text-neutral-500">{team.teamCode} · {team.branchName || '-'}</div>
+                      {canManageSetup ? (
+                        <select
+                          value={team.incentiveType}
+                          onChange={(event) => void handleUpdateTeamIncentiveType(team.id, event.target.value as 'HOMECARE' | 'HO')}
+                          disabled={actionLoading}
+                          aria-label={`Jenis insentif ${team.name}`}
+                          className="mt-2 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                        >
+                          <option value="HOMECARE">Team Homecare</option>
+                          <option value="HO">Team HO</option>
+                        </select>
+                      ) : (
+                        <div className="mt-2 text-xs font-semibold text-cyan-600">{team.incentiveType === 'HO' ? 'Team HO' : 'Team Homecare'}</div>
+                      )}
                       <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${team.isOperational ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>
                         {team.isOperational ? 'Tim lengkap' : `Belum lengkap: ${team.missingRoles.join(' & ')}`}
                       </div>

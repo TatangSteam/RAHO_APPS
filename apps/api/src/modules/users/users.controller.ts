@@ -42,7 +42,19 @@ import {
   listChsCoordinatorAssignmentsService,
   updateChsCoordinatorAssignmentService,
 } from './services/chs-coordinator-assignment.service';
-import { chsCoordinatorAssignmentSchema, chsCoordinatorBranchAssignmentsSchema } from './staff-incentive.schema';
+import {
+  createDoctorHeadBranchAssignmentsService,
+  deactivateDoctorHeadAssignmentService,
+  getDoctorHeadAssignmentOptionsService,
+  listDoctorHeadAssignmentsService,
+  updateDoctorHeadAssignmentService,
+} from './services/doctor-head-assignment.service';
+import {
+  chsCoordinatorAssignmentSchema,
+  chsCoordinatorBranchAssignmentsSchema,
+  doctorHeadAssignmentSchema,
+  doctorHeadBranchAssignmentsSchema,
+} from './staff-incentive.schema';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
@@ -693,6 +705,69 @@ export async function updateChsCoordinatorAssignment(req: Request, res: Response
 export async function deactivateChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const result = await deactivateChsCoordinatorAssignmentService(req.params.assignmentId, {
+      role: req.user.role as Role,
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function listDoctorHeadAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await listDoctorHeadAssignmentsService(
+      { month: req.query.month as string | undefined, branchId: req.query.branchId as string | undefined },
+      { role: req.user.role as Role, userId: req.user.userId, branchId: req.user.branchId },
+    );
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function getDoctorHeadAssignmentOptions(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getDoctorHeadAssignmentOptionsService({
+      role: req.user.role as Role,
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function createDoctorHeadBranchAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = doctorHeadBranchAssignmentsSchema.parse(req.body);
+    const result = await createDoctorHeadBranchAssignmentsService(
+      input as Parameters<typeof createDoctorHeadBranchAssignmentsService>[0],
+      {
+        role: req.user.role as Role,
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+      },
+    );
+    sendCreated(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function updateDoctorHeadAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = doctorHeadAssignmentSchema.parse(req.body);
+    const result = await updateDoctorHeadAssignmentService(
+      req.params.assignmentId,
+      input as Parameters<typeof updateDoctorHeadAssignmentService>[1],
+      {
+        role: req.user.role as Role,
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+      },
+    );
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function deactivateDoctorHeadAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await deactivateDoctorHeadAssignmentService(req.params.assignmentId, {
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,

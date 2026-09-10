@@ -31,6 +31,11 @@ import {
   createChsCoordinatorBranchAssignments,
   updateChsCoordinatorAssignment,
   deactivateChsCoordinatorAssignment,
+  listDoctorHeadAssignments,
+  getDoctorHeadAssignmentOptions,
+  createDoctorHeadBranchAssignments,
+  updateDoctorHeadAssignment,
+  deactivateDoctorHeadAssignment,
   getStaffSessionHistory,
   exportStaffPerformanceDetail,
   exportStaffPerformance,
@@ -120,6 +125,47 @@ usersRouter.delete(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   deactivateChsCoordinatorAssignment,
+);
+
+usersRouter.get(
+  '/incentives/doctor-head/assignment-options',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  getDoctorHeadAssignmentOptions,
+);
+
+usersRouter.get(
+  '/incentives/doctor-head/assignments',
+  authenticate,
+  authorize([
+    Role.SUPER_ADMIN,
+    Role.ADMIN_MANAGER,
+    Role.ADMIN_CABANG,
+    Role.DOCTOR,
+    Role.FINANCE_LOGISTICS_CONTROLLER,
+  ]),
+  listDoctorHeadAssignments,
+);
+
+usersRouter.post(
+  '/incentives/doctor-head/assignments/bulk-branches',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  createDoctorHeadBranchAssignments,
+);
+
+usersRouter.patch(
+  '/incentives/doctor-head/assignments/:assignmentId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  updateDoctorHeadAssignment,
+);
+
+usersRouter.delete(
+  '/incentives/doctor-head/assignments/:assignmentId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  deactivateDoctorHeadAssignment,
 );
 
 usersRouter.get(

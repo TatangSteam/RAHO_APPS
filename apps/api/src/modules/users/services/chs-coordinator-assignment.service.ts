@@ -64,7 +64,7 @@ const assignmentSelect = {
     select: { email: true, staffCode: true, role: true, profile: { select: { fullName: true } } },
   },
   branch: { select: { branchCode: true, name: true } },
-  homecareTeam: { select: { teamCode: true, name: true } },
+  homecareTeam: { select: { teamCode: true, name: true, incentiveType: true } },
 } as const;
 
 export async function listChsCoordinatorAssignmentsService(
@@ -105,7 +105,7 @@ export async function getChsCoordinatorAssignmentOptionsService(branchId: string
     }),
     prisma.homecareTeam.findMany({
       where: { isActive: true, ...(branchIds ? { branchId: { in: branchIds } } : {}) },
-      select: { id: true, teamCode: true, name: true, branchId: true },
+      select: { id: true, teamCode: true, name: true, branchId: true, incentiveType: true },
       orderBy: { name: 'asc' },
     }),
     prisma.branch.findMany({

@@ -4,6 +4,7 @@ import {
   HomecareBagOpnameStatus,
   HomecareBagStatus,
   HomecareBagUsageStatus,
+  HomecareTeamIncentiveType,
   HomecareTeamMemberRole,
 } from '@prisma/client';
 
@@ -94,6 +95,7 @@ export const createHomecareTeamSchema = z.object({
   adminLayananUserId: idSchema,
   nakesUserId: idSchema,
   description: optionalText,
+  incentiveType: z.nativeEnum(HomecareTeamIncentiveType).default(HomecareTeamIncentiveType.HOMECARE),
 }).refine((input) => input.adminLayananUserId !== input.nakesUserId, {
   message: 'Admin Layanan dan Nakes harus dua akun yang berbeda',
   path: ['nakesUserId'],
@@ -113,6 +115,7 @@ export const updateHomecareTeamSchema = z.object({
   name: z.string().trim().min(1, 'Nama tim wajib diisi').optional(),
   description: optionalText,
   isActive: z.boolean().optional(),
+  incentiveType: z.nativeEnum(HomecareTeamIncentiveType).optional(),
 }).refine((input) => Object.keys(input).length > 0, {
   message: 'Minimal satu perubahan wajib dikirim',
 });

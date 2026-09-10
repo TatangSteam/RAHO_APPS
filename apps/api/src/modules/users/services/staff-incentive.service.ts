@@ -1,5 +1,8 @@
 import {
   AddOnType,
+  BranchType,
+  HomecareTeamIncentiveType,
+  HomecareTeamMemberRole,
   InvoiceStatus,
   PackageStatus,
   PaymentVerificationStatus,
@@ -24,6 +27,14 @@ export const CHS_PERSONAL_TARGET_BONUS = 2_000_000;
 export const CHS_HOMECARE_TEAM_TARGET = 100;
 export const CHS_BRANCH_WITHOUT_HOMECARE_TARGET = 200;
 export const CHS_BRANCH_WITH_HOMECARE_TARGET = 300;
+export const CHS_HOMECARE_TEAM_TARGET_BONUS = 500_000;
+export const CHS_BRANCH_TARGET_BONUS = 250_000;
+export const CHS_HO_RATE_PER_PAID_INFUSION = 10_000;
+export const DOCTOR_HEAD_HOMECARE_TEAM_TARGET_BONUS = 500_000;
+export const DOCTOR_HEAD_BRANCH_TARGET_BONUS = 500_000;
+export const DOCTOR_HEAD_HOMECARE_DOCTOR_RATE = 5_000;
+export const DOCTOR_HEAD_PARTNERSHIP_TARGET = 1_500;
+export const DOCTOR_HEAD_PARTNERSHIP_RATE = 2_000;
 
 const INCENTIVE_ROLES = new Set<Role>([
   Role.SUPER_ADMIN,
@@ -79,6 +90,11 @@ export function calculateMsoMonthlyIncentive(visitCount: number, paidAirNanoBoxe
 export function calculateChsCoordinatorMonthlyIncentive(
   eligiblePaidInfusions: number,
   personalInfusions: number,
+  components: {
+    qualifiedHomecareTeams?: number;
+    qualifiedBranches?: number;
+    hoPaidInfusions?: number;
+  } = {},
 ) {
   const safePaidInfusions = Math.max(0, Math.trunc(eligiblePaidInfusions));
   const safePersonalInfusions = Math.max(0, Math.trunc(personalInfusions));
@@ -86,6 +102,12 @@ export function calculateChsCoordinatorMonthlyIncentive(
   const personalInfusionAmount = safePersonalInfusions * CHS_RATE_PER_PERSONAL_INFUSION;
   const personalTargetReached = safePersonalInfusions >= CHS_PERSONAL_TARGET;
   const personalTargetBonus = personalTargetReached ? CHS_PERSONAL_TARGET_BONUS : 0;
+  const qualifiedHomecareTeams = Math.max(0, Math.trunc(components.qualifiedHomecareTeams || 0));
+  const qualifiedBranches = Math.max(0, Math.trunc(components.qualifiedBranches || 0));
+  const hoPaidInfusions = Math.max(0, Math.trunc(components.hoPaidInfusions || 0));
+  const homecareTeamTargetBonus = qualifiedHomecareTeams * CHS_HOMECARE_TEAM_TARGET_BONUS;
+  const branchTargetBonus = qualifiedBranches * CHS_BRANCH_TARGET_BONUS;
+  const hoInfusionAmount = hoPaidInfusions * CHS_HO_RATE_PER_PAID_INFUSION;
   return {
     eligiblePaidInfusions: safePaidInfusions,
     ratePerEligiblePaidInfusion: CHS_RATE_PER_ELIGIBLE_PAID_INFUSION,
@@ -96,7 +118,57 @@ export function calculateChsCoordinatorMonthlyIncentive(
     personalTarget: CHS_PERSONAL_TARGET,
     personalTargetReached,
     personalTargetBonus,
-    totalAmount: paidInfusionAmount + personalInfusionAmount + personalTargetBonus,
+    qualifiedHomecareTeams,
+    homecareTeamTargetBonus,
+    qualifiedBranches,
+    branchTargetBonus,
+    hoPaidInfusions,
+    ratePerHoPaidInfusion: CHS_HO_RATE_PER_PAID_INFUSION,
+    hoInfusionAmount,
+    totalAmount: paidInfusionAmount + personalInfusionAmount + personalTargetBonus
+      + homecareTeamTargetBonus + branchTargetBonus + hoInfusionAmount,
+  };
+}
+
+export function calculateDoctorHeadMonthlyIncentive(components: {
+  qualifiedHomecareTeams?: number;
+  qualifiedBranches?: number;
+  homecareDoctorPaidInfusions?: number;
+  partnershipTotalInfusions?: number;
+  partnershipPaidInfusions?: number;
+  treatmentReviewAmount?: number;
+}) {
+  const qualifiedHomecareTeams = Math.max(0, Math.trunc(components.qualifiedHomecareTeams || 0));
+  const qualifiedBranches = Math.max(0, Math.trunc(components.qualifiedBranches || 0));
+  const homecareDoctorPaidInfusions = Math.max(0, Math.trunc(components.homecareDoctorPaidInfusions || 0));
+  const partnershipTotalInfusions = Math.max(0, Math.trunc(components.partnershipTotalInfusions || 0));
+  const partnershipPaidInfusions = Math.max(0, Math.trunc(components.partnershipPaidInfusions || 0));
+  const treatmentReviewAmount = Math.max(0, Math.trunc(components.treatmentReviewAmount || 0));
+  const homecareTeamTargetBonus = qualifiedHomecareTeams * DOCTOR_HEAD_HOMECARE_TEAM_TARGET_BONUS;
+  const branchTargetBonus = qualifiedBranches * DOCTOR_HEAD_BRANCH_TARGET_BONUS;
+  const homecareDoctorAmount = homecareDoctorPaidInfusions * DOCTOR_HEAD_HOMECARE_DOCTOR_RATE;
+  const partnershipTargetReached = partnershipTotalInfusions >= DOCTOR_HEAD_PARTNERSHIP_TARGET;
+  const partnershipAmount = partnershipTargetReached
+    ? partnershipPaidInfusions * DOCTOR_HEAD_PARTNERSHIP_RATE
+    : 0;
+  return {
+    qualifiedHomecareTeams,
+    homecareTeamTargetBonus,
+    qualifiedBranches,
+    branchTargetBonus,
+    homecareDoctorPaidInfusions,
+    ratePerHomecareDoctorPaidInfusion: DOCTOR_HEAD_HOMECARE_DOCTOR_RATE,
+    homecareDoctorAmount,
+    partnershipTotalInfusions,
+    partnershipTarget: DOCTOR_HEAD_PARTNERSHIP_TARGET,
+    partnershipTargetReached,
+    partnershipPaidInfusions,
+    ratePerPartnershipPaidInfusion: DOCTOR_HEAD_PARTNERSHIP_RATE,
+    partnershipAmount,
+    treatmentReviewAmount,
+    treatmentReviewStatus: 'PENDING_RULE_CONFIGURATION' as const,
+    totalAmount: homecareTeamTargetBonus + branchTargetBonus + homecareDoctorAmount
+      + partnershipAmount + treatmentReviewAmount,
   };
 }
 
@@ -216,6 +288,13 @@ function assignmentAppliesOn(
   return date >= from && (!until || date <= until);
 }
 
+function membershipAppliesOn(treatmentDate: Date, joinedAt: Date, leftAt: Date | null) {
+  const date = jakartaDateKey(treatmentDate);
+  const from = jakartaDateKey(joinedAt);
+  const until = leftAt ? jakartaDateKey(leftAt) : null;
+  return date >= from && (!until || date <= until);
+}
+
 export function isEligiblePaidChsInfusion(input: {
   finalPrice: number;
   discountPercent: number | null;
@@ -224,9 +303,19 @@ export function isEligiblePaidChsInfusion(input: {
   refundedAt: Date | null;
   invoices: Array<{ status: InvoiceStatus; paymentVerificationStatus: PaymentVerificationStatus }>;
 }) {
+  return isPaidInfusion(input)
+    && (input.discountPercent ?? 0) <= 40;
+}
+
+export function isPaidInfusion(input: {
+  finalPrice: number;
+  socialProgramRequestId: string | null;
+  paymentPlanStatus: string | null;
+  refundedAt: Date | null;
+  invoices: Array<{ status: InvoiceStatus; paymentVerificationStatus: PaymentVerificationStatus }>;
+}) {
   return input.finalPrice > 0
     && input.socialProgramRequestId === null
-    && (input.discountPercent ?? 0) <= 40
     && input.paymentPlanStatus === 'PAID'
     && input.refundedAt === null
     && areAllPurchaseInvoicesPaid(input.invoices);
@@ -289,7 +378,15 @@ export async function getMonthlyStaffIncentivesService(
   const revenuePackageIds = sessions.flatMap((session) => (
     session.revenuePackage ? [session.revenuePackage.id] : []
   ));
-  const [invoiceItems, packageInvoiceItems, multiBagUsages, homecareTeams, coordinatorAssignments] = await Promise.all([
+  const [
+    invoiceItems,
+    packageInvoiceItems,
+    multiBagUsages,
+    homecareTeams,
+    coordinatorAssignments,
+    doctorHeadAssignments,
+    homecareDoctorMemberships,
+  ] = await Promise.all([
     airNanoSales.length > 0
       ? prisma.invoiceItem.findMany({
         where: {
@@ -325,7 +422,7 @@ export async function getMonthlyStaffIncentivesService(
         createdAt: { lt: period.end },
         ...(branchIds ? { branchId: { in: branchIds } } : {}),
       },
-      select: { id: true, branchId: true },
+      select: { id: true, name: true, branchId: true, incentiveType: true },
     }),
     prisma.chsCoordinatorAssignment.findMany({
       where: {
@@ -352,8 +449,42 @@ export async function getMonthlyStaffIncentivesService(
           },
         },
         branch: { select: { name: true } },
-        homecareTeam: { select: { name: true } },
+        homecareTeam: { select: { name: true, incentiveType: true } },
       },
+    }),
+    prisma.doctorHeadAssignment.findMany({
+      where: {
+        effectiveFrom: { lt: period.end },
+        OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: period.start } }],
+        ...(branchIds ? { branchId: { in: branchIds } } : {}),
+        ...(selfOnly ? { doctorHeadUserId: callerUserId } : {}),
+      },
+      select: {
+        id: true,
+        doctorHeadUserId: true,
+        branchId: true,
+        effectiveFrom: true,
+        effectiveUntil: true,
+        doctorHead: {
+          select: {
+            id: true,
+            email: true,
+            staffCode: true,
+            role: true,
+            profile: { select: { fullName: true } },
+          },
+        },
+        branch: { select: { name: true, type: true } },
+      },
+    }),
+    prisma.homecareTeamMember.findMany({
+      where: {
+        role: HomecareTeamMemberRole.DOCTOR,
+        joinedAt: { lt: period.end },
+        OR: [{ leftAt: null }, { leftAt: { gte: period.start } }],
+        ...(branchIds ? { team: { branchId: { in: branchIds } } } : {}),
+      },
+      select: { userId: true, teamId: true, joinedAt: true, leftAt: true },
     }),
   ]);
   const invoicesByAddOn = new Map<string, Array<{
@@ -377,7 +508,9 @@ export async function getMonthlyStaffIncentivesService(
   const teamBySession = new Map(multiBagUsages.map((usage) => (
     [usage.treatmentSessionId, usage.teamId] as const
   )));
-  const branchesWithHomecare = new Set(homecareTeams.map((team) => team.branchId));
+  const branchesWithHomecare = new Set(homecareTeams
+    .filter((team) => team.incentiveType === HomecareTeamIncentiveType.HOMECARE)
+    .map((team) => team.branchId));
 
   const infusionCounts = new Map<string, number>();
   const visitCounts = new Map<string, number>();
@@ -432,6 +565,29 @@ export async function getMonthlyStaffIncentivesService(
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
 
+  const isEligiblePaidSession = (session: typeof sessions[number]) => {
+    const pkg = session.revenuePackage;
+    return Boolean(pkg && isEligiblePaidChsInfusion({
+      finalPrice: Number(pkg!.finalPrice),
+      discountPercent: pkg!.discountPercent === null ? null : Number(pkg!.discountPercent),
+      socialProgramRequestId: pkg!.socialProgramRequestId,
+      paymentPlanStatus: pkg!.paymentPlanStatus,
+      refundedAt: pkg!.refundedAt,
+      invoices: invoicesByPackage.get(pkg!.id) || [],
+    }));
+  };
+  const isPaidSession = (session: typeof sessions[number]) => {
+    const pkg = session.revenuePackage;
+    return Boolean(pkg && isPaidInfusion({
+      finalPrice: Number(pkg!.finalPrice),
+      socialProgramRequestId: pkg!.socialProgramRequestId,
+      paymentPlanStatus: pkg!.paymentPlanStatus,
+      refundedAt: pkg!.refundedAt,
+      invoices: invoicesByPackage.get(pkg!.id) || [],
+    }));
+  };
+  const teamById = new Map(homecareTeams.map((team) => [team.id, team]));
+
   type CoordinatorAggregate = {
     id: string;
     fullName: string;
@@ -440,6 +596,9 @@ export async function getMonthlyStaffIncentivesService(
     role: Role;
     eligibleSessionIds: Set<string>;
     personalSessionIds: Set<string>;
+    hoPaidSessionIds: Set<string>;
+    qualifiedHomecareTeamIds: Set<string>;
+    qualifiedBranchIds: Set<string>;
     scopes: Array<{
       assignmentId: string;
       scope: string;
@@ -451,6 +610,8 @@ export async function getMonthlyStaffIncentivesService(
       totalInfusions: number;
       qualifierPassed: boolean;
       eligiblePaidInfusions: number;
+      targetBonus: number;
+      incentiveType: HomecareTeamIncentiveType | 'BRANCH';
     }>;
   };
   const coordinatorMap = new Map<string, CoordinatorAggregate>();
@@ -463,22 +624,16 @@ export async function getMonthlyStaffIncentivesService(
         ? teamBySession.get(session.id) === assignment.homecareTeamId
         : session.branchId === assignment.branchId)
     ));
-    const qualifierTarget = getChsQualifierTarget(
+    const teamType = isTeamScope
+      ? assignment.homecareTeam?.incentiveType || HomecareTeamIncentiveType.HOMECARE
+      : null;
+    const isHoScope = teamType === HomecareTeamIncentiveType.HO;
+    const qualifierTarget = isHoScope ? 0 : getChsQualifierTarget(
       isTeamScope ? 'TEAM' : 'BRANCH',
       branchesWithHomecare.has(assignment.branchId),
     );
-    const qualifierPassed = scopeSessions.length >= qualifierTarget;
-    const eligibleScopeSessions = scopeSessions.filter((session) => {
-      const pkg = session.revenuePackage;
-      return Boolean(pkg && isEligiblePaidChsInfusion({
-        finalPrice: Number(pkg!.finalPrice),
-        discountPercent: pkg!.discountPercent === null ? null : Number(pkg!.discountPercent),
-        socialProgramRequestId: pkg!.socialProgramRequestId,
-        paymentPlanStatus: pkg!.paymentPlanStatus,
-        refundedAt: pkg!.refundedAt,
-        invoices: invoicesByPackage.get(pkg!.id) || [],
-      }));
-    });
+    const qualifierPassed = isHoScope || scopeSessions.length >= qualifierTarget;
+    const eligibleScopeSessions = scopeSessions.filter(isHoScope ? isPaidSession : isEligiblePaidSession);
     const existing = coordinatorMap.get(assignment.coordinatorUserId) || {
       id: assignment.coordinator.id,
       fullName: assignment.coordinator.profile?.fullName || assignment.coordinator.email,
@@ -487,11 +642,35 @@ export async function getMonthlyStaffIncentivesService(
       role: assignment.coordinator.role,
       eligibleSessionIds: new Set<string>(),
       personalSessionIds: new Set<string>(),
+      hoPaidSessionIds: new Set<string>(),
+      qualifiedHomecareTeamIds: new Set<string>(),
+      qualifiedBranchIds: new Set<string>(),
       scopes: [],
     };
 
-    if (qualifierPassed) {
-      eligibleScopeSessions.forEach((session) => existing.eligibleSessionIds.add(session.id));
+    if (isTeamScope) {
+      if (isHoScope) {
+        eligibleScopeSessions.forEach((session) => existing.hoPaidSessionIds.add(session.id));
+      } else {
+        eligibleScopeSessions.forEach((session) => existing.eligibleSessionIds.add(session.id));
+        if (qualifierPassed) existing.qualifiedHomecareTeamIds.add(assignment.homecareTeamId!);
+      }
+    } else {
+      eligibleScopeSessions.forEach((session) => {
+        const team = teamById.get(teamBySession.get(session.id) || '');
+        if (team?.incentiveType === HomecareTeamIncentiveType.HO) {
+          existing.hoPaidSessionIds.add(session.id);
+        } else {
+          existing.eligibleSessionIds.add(session.id);
+        }
+      });
+      if (qualifierPassed) existing.qualifiedBranchIds.add(assignment.branchId);
+      homecareTeams
+        .filter((team) => team.branchId === assignment.branchId && team.incentiveType === HomecareTeamIncentiveType.HOMECARE)
+        .forEach((team) => {
+          const teamTotal = scopeSessions.filter((session) => teamBySession.get(session.id) === team.id).length;
+          if (teamTotal >= CHS_HOMECARE_TEAM_TARGET) existing.qualifiedHomecareTeamIds.add(team.id);
+        });
     }
     scopeSessions
       .filter((session) => session.nurseId === assignment.coordinatorUserId)
@@ -507,20 +686,146 @@ export async function getMonthlyStaffIncentivesService(
       totalInfusions: scopeSessions.length,
       qualifierPassed,
       eligiblePaidInfusions: eligibleScopeSessions.length,
+      targetBonus: isHoScope
+        ? 0
+        : qualifierPassed
+          ? (isTeamScope ? CHS_HOMECARE_TEAM_TARGET_BONUS : CHS_BRANCH_TARGET_BONUS)
+          : 0,
+      incentiveType: isTeamScope ? teamType! : 'BRANCH',
     });
     coordinatorMap.set(assignment.coordinatorUserId, existing);
   });
 
   const coordinators = Array.from(coordinatorMap.values())
-    .map(({ eligibleSessionIds, personalSessionIds, ...coordinator }) => ({
+    .map(({
+      eligibleSessionIds,
+      personalSessionIds,
+      hoPaidSessionIds,
+      qualifiedHomecareTeamIds,
+      qualifiedBranchIds,
+      ...coordinator
+    }) => ({
       ...coordinator,
-      ...calculateChsCoordinatorMonthlyIncentive(eligibleSessionIds.size, personalSessionIds.size),
+      ...calculateChsCoordinatorMonthlyIncentive(eligibleSessionIds.size, personalSessionIds.size, {
+        qualifiedHomecareTeams: qualifiedHomecareTeamIds.size,
+        qualifiedBranches: qualifiedBranchIds.size,
+        hoPaidInfusions: hoPaidSessionIds.size,
+      }),
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
+
+  type DoctorHeadAggregate = {
+    id: string;
+    fullName: string;
+    email: string;
+    staffCode: string | null;
+    role: Role;
+    qualifiedHomecareTeamIds: Set<string>;
+    qualifiedBranchIds: Set<string>;
+    homecareDoctorPaidSessionIds: Set<string>;
+    partnershipSessionIds: Set<string>;
+    partnershipPaidSessionIds: Set<string>;
+    scopes: Array<{
+      assignmentId: string;
+      branchId: string;
+      branchName: string;
+      branchType: BranchType;
+      qualifierTarget: number;
+      totalInfusions: number;
+      qualifierPassed: boolean;
+      targetBonus: number;
+      qualifiedHomecareTeams: number;
+    }>;
+  };
+  const doctorHeadMap = new Map<string, DoctorHeadAggregate>();
+
+  doctorHeadAssignments.forEach((assignment) => {
+    const branchSessions = sessions.filter((session) => (
+      session.branchId === assignment.branchId
+      && assignmentAppliesOn(session.treatmentDate, assignment.effectiveFrom, assignment.effectiveUntil)
+    ));
+    const branchTarget = branchesWithHomecare.has(assignment.branchId)
+      ? CHS_BRANCH_WITH_HOMECARE_TARGET
+      : CHS_BRANCH_WITHOUT_HOMECARE_TARGET;
+    const branchPassed = branchSessions.length >= branchTarget;
+    const existing = doctorHeadMap.get(assignment.doctorHeadUserId) || {
+      id: assignment.doctorHead.id,
+      fullName: assignment.doctorHead.profile?.fullName || assignment.doctorHead.email,
+      email: assignment.doctorHead.email,
+      staffCode: assignment.doctorHead.staffCode,
+      role: assignment.doctorHead.role,
+      qualifiedHomecareTeamIds: new Set<string>(),
+      qualifiedBranchIds: new Set<string>(),
+      homecareDoctorPaidSessionIds: new Set<string>(),
+      partnershipSessionIds: new Set<string>(),
+      partnershipPaidSessionIds: new Set<string>(),
+      scopes: [],
+    };
+    if (branchPassed) existing.qualifiedBranchIds.add(assignment.branchId);
+
+    let qualifiedHomecareTeams = 0;
+    homecareTeams
+      .filter((team) => team.branchId === assignment.branchId && team.incentiveType === HomecareTeamIncentiveType.HOMECARE)
+      .forEach((team) => {
+        const teamSessions = branchSessions.filter((session) => teamBySession.get(session.id) === team.id);
+        if (teamSessions.length < CHS_HOMECARE_TEAM_TARGET) return;
+        qualifiedHomecareTeams += 1;
+        existing.qualifiedHomecareTeamIds.add(team.id);
+        const doctorMemberships = homecareDoctorMemberships.filter((member) => (
+          member.userId === assignment.doctorHeadUserId && member.teamId === team.id
+        ));
+        teamSessions
+          .filter((session) => doctorMemberships.some((membership) => (
+            membershipAppliesOn(session.treatmentDate, membership.joinedAt, membership.leftAt)
+          )))
+          .filter(isPaidSession)
+          .forEach((session) => existing.homecareDoctorPaidSessionIds.add(session.id));
+      });
+
+    if (assignment.branch.type === BranchType.PARTNERSHIP) {
+      branchSessions.forEach((session) => {
+        existing.partnershipSessionIds.add(session.id);
+        if (isPaidSession(session)) existing.partnershipPaidSessionIds.add(session.id);
+      });
+    }
+    existing.scopes.push({
+      assignmentId: assignment.id,
+      branchId: assignment.branchId,
+      branchName: assignment.branch.name,
+      branchType: assignment.branch.type,
+      qualifierTarget: branchTarget,
+      totalInfusions: branchSessions.length,
+      qualifierPassed: branchPassed,
+      targetBonus: branchPassed ? DOCTOR_HEAD_BRANCH_TARGET_BONUS : 0,
+      qualifiedHomecareTeams,
+    });
+    doctorHeadMap.set(assignment.doctorHeadUserId, existing);
+  });
+
+  const doctorHeads = Array.from(doctorHeadMap.values())
+    .map(({
+      qualifiedHomecareTeamIds,
+      qualifiedBranchIds,
+      homecareDoctorPaidSessionIds,
+      partnershipSessionIds,
+      partnershipPaidSessionIds,
+      ...doctorHead
+    }) => ({
+      ...doctorHead,
+      ...calculateDoctorHeadMonthlyIncentive({
+        qualifiedHomecareTeams: qualifiedHomecareTeamIds.size,
+        qualifiedBranches: qualifiedBranchIds.size,
+        homecareDoctorPaidInfusions: homecareDoctorPaidSessionIds.size,
+        partnershipTotalInfusions: partnershipSessionIds.size,
+        partnershipPaidInfusions: partnershipPaidSessionIds.size,
+      }),
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
 
   const nakesTotalAmount = nakes.reduce((sum, row) => sum + row.totalAmount, 0);
   const msoTotalAmount = mso.reduce((sum, row) => sum + row.totalAmount, 0);
   const coordinatorTotalAmount = coordinators.reduce((sum, row) => sum + row.totalAmount, 0);
+  const doctorHeadTotalAmount = doctorHeads.reduce((sum, row) => sum + row.totalAmount, 0);
 
   return {
     period: { month: period.month, timezone: 'Asia/Jakarta', start: period.start, endExclusive: period.end },
@@ -540,11 +845,25 @@ export async function getMonthlyStaffIncentivesService(
         ratePerPersonalInfusion: CHS_RATE_PER_PERSONAL_INFUSION,
         personalTarget: CHS_PERSONAL_TARGET,
         personalTargetBonus: CHS_PERSONAL_TARGET_BONUS,
+        homecareTeamTargetBonus: CHS_HOMECARE_TEAM_TARGET_BONUS,
+        branchTargetBonus: CHS_BRANCH_TARGET_BONUS,
+        ratePerHoPaidInfusion: CHS_HO_RATE_PER_PAID_INFUSION,
+      },
+      doctorHead: {
+        homecareTeamTarget: CHS_HOMECARE_TEAM_TARGET,
+        homecareTeamTargetBonus: DOCTOR_HEAD_HOMECARE_TEAM_TARGET_BONUS,
+        branchWithoutHomecareTarget: CHS_BRANCH_WITHOUT_HOMECARE_TARGET,
+        branchWithHomecareTarget: CHS_BRANCH_WITH_HOMECARE_TARGET,
+        branchTargetBonus: DOCTOR_HEAD_BRANCH_TARGET_BONUS,
+        ratePerHomecareDoctorPaidInfusion: DOCTOR_HEAD_HOMECARE_DOCTOR_RATE,
+        partnershipTarget: DOCTOR_HEAD_PARTNERSHIP_TARGET,
+        ratePerPartnershipPaidInfusion: DOCTOR_HEAD_PARTNERSHIP_RATE,
       },
     },
     nakes,
     mso,
     coordinators,
+    doctorHeads,
     summary: {
       nakesRecipients: nakes.length,
       nakesTotalAmount,
@@ -552,7 +871,9 @@ export async function getMonthlyStaffIncentivesService(
       msoTotalAmount,
       coordinatorRecipients: coordinators.length,
       coordinatorTotalAmount,
-      grandTotalAmount: nakesTotalAmount + msoTotalAmount + coordinatorTotalAmount,
+      doctorHeadRecipients: doctorHeads.length,
+      doctorHeadTotalAmount,
+      grandTotalAmount: nakesTotalAmount + msoTotalAmount + coordinatorTotalAmount + doctorHeadTotalAmount,
     },
   };
 }

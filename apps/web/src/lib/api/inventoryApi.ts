@@ -470,6 +470,7 @@ export interface HomecareTeam {
   branchType?: string | null;
   description?: string | null;
   isActive: boolean;
+  incentiveType: 'HOMECARE' | 'HO';
   memberCount: number;
   bagCount: number;
   hasAdminLayanan: boolean;
@@ -1224,6 +1225,7 @@ export const inventoryApi = {
     adminLayananUserId: string;
     nakesUserId: string;
     description?: string;
+    incentiveType?: 'HOMECARE' | 'HO';
   }) => {
     return api.post('/inventory/logistics/homecare-teams', data);
   },
@@ -1280,7 +1282,7 @@ export const inventoryApi = {
     });
   },
 
-  updateHomecareTeam: (teamId: string, data: { name?: string; description?: string; isActive?: boolean }) => {
+  updateHomecareTeam: (teamId: string, data: { name?: string; description?: string; isActive?: boolean; incentiveType?: 'HOMECARE' | 'HO' }) => {
     return api.patch(`/inventory/logistics/homecare-teams/${teamId}`, data);
   },
 

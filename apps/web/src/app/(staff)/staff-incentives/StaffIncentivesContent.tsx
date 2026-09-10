@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BadgeDollarSign, Building2, CalendarDays, CheckCircle2, Download, Droplets, Loader2, Target, Users } from 'lucide-react';
+import { BadgeDollarSign, Building2, CalendarDays, CheckCircle2, Download, Droplets, Loader2, Stethoscope, Target, Users } from 'lucide-react';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi, type ManagedBranch } from '@/lib/api/doctorBranchApi';
 import { assertCaughtError } from '@/lib/caughtError';
@@ -10,9 +10,10 @@ import { showToast } from '@/lib/toast';
 import { usersApi, type StaffMonthlyIncentiveResponse } from '@/lib/usersApi';
 import { useAuthStore } from '@/stores/authStore';
 import { CoordinatorAssignmentManager } from './CoordinatorAssignmentManager';
+import { DoctorHeadAssignmentManager } from './DoctorHeadAssignmentManager';
 
 type Branch = { id: string; name: string; branchCode: string };
-type IncentiveView = 'all' | 'nakes' | 'mso' | 'coordinator';
+type IncentiveView = 'all' | 'nakes' | 'mso' | 'coordinator' | 'doctor-head';
 
 interface StaffIncentivesPageProps {
   view?: IncentiveView;
@@ -145,7 +146,9 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                     ? 'Insentif MSO'
                     : view === 'coordinator'
                       ? 'Insentif Koordinator CHS'
-                      : 'Insentif Nakes, MSO & Koordinator CHS'}
+                      : view === 'doctor-head'
+                        ? 'Insentif Dokter Head'
+                        : 'Insentif Nakes, MSO, Koordinator CHS & Dokter Head'}
               </h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 {view === 'nakes'
@@ -153,8 +156,10 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                   : view === 'mso'
                     ? 'Perhitungan bulanan berdasarkan visit dan penjualan Air Nano yang sudah lunas.'
                     : view === 'coordinator'
-                      ? 'Qualifier tim/cabang, infus berbayar eligible, dan tusukan pribadi Koordinator CHS.'
-                      : 'Perhitungan bulanan berdasarkan sesi selesai, penjualan Air Nano lunas, dan qualifier CHS.'}
+                      ? 'Target tim/cabang, infus berbayar, Team HO, dan tusukan pribadi Koordinator CHS.'
+                      : view === 'doctor-head'
+                        ? 'Target tim/cabang, dokter Homecare, partnership, dan Treatment Review Dokter Head.'
+                        : 'Perhitungan bulanan berdasarkan sesi selesai, penjualan lunas, dan target organisasi.'}
               </p>
             </div>
           </div>
@@ -187,6 +192,9 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
         {view === 'coordinator' && canManageCoordinator && (
           <CoordinatorAssignmentManager month={month} onChanged={() => void load()} />
         )}
+        {view === 'doctor-head' && isSuperAdmin && (
+          <DoctorHeadAssignmentManager month={month} onChanged={() => void load()} />
+        )}
 
         {loading && !data ? (
           <div className="flex min-h-72 items-center justify-center gap-3 text-neutral-500"><Loader2 className="animate-spin" /> Menghitung insentif...</div>
@@ -197,6 +205,7 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                 ...((view === 'all' || view === 'nakes') ? [{ label: 'Total Nakes', value: data.summary.nakesTotalAmount, detail: `${data.summary.nakesRecipients} penerima`, icon: Droplets, tone: 'text-emerald-500' }] : []),
                 ...((view === 'all' || view === 'mso') ? [{ label: 'Total MSO', value: data.summary.msoTotalAmount, detail: `${data.summary.msoRecipients} penerima`, icon: Users, tone: 'text-blue-500' }] : []),
                 ...((view === 'all' || view === 'coordinator') ? [{ label: 'Total Koordinator CHS', value: data.summary.coordinatorTotalAmount, detail: `${data.summary.coordinatorRecipients} penerima`, icon: Target, tone: 'text-violet-500' }] : []),
+                ...((view === 'all' || view === 'doctor-head') ? [{ label: 'Total Dokter Head', value: data.summary.doctorHeadTotalAmount, detail: `${data.summary.doctorHeadRecipients} penerima`, icon: Stethoscope, tone: 'text-cyan-500' }] : []),
                 ...(view === 'all' ? [{ label: 'Total Keseluruhan', value: data.summary.grandTotalAmount, detail: `Periode ${data.period.month}`, icon: BadgeDollarSign, tone: 'text-amber-500' }] : []),
               ].map(({ label, value, detail, icon: Icon, tone }) => (
                 <article key={label} className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
@@ -234,21 +243,49 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
             {(view === 'all' || view === 'coordinator') && <section className="rounded-2xl border border-violet-200 bg-white dark:border-violet-500/20 dark:bg-neutral-900">
               <div className="border-b border-neutral-200 p-5 dark:border-neutral-800">
                 <h2 className="font-bold text-neutral-900 dark:text-white">Insentif Koordinator CHS</h2>
-                <p className="text-sm text-neutral-500">Rp1.000 per infus berbayar eligible setelah qualifier scope PASS, ditambah Rp10.000 per tusukan pribadi dan bonus Rp2.000.000 saat mencapai minimal 100 tusukan.</p>
+                <p className="text-sm text-neutral-500">Bonus Rp500.000 per tim HC dan Rp250.000 per cabang yang mencapai target; Rp1.000 per infus berbayar, Rp10.000 per infus Team HO, serta tusukan pribadi.</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Koordinator</th><th className="px-5 py-3 text-left">Qualifier scope</th><th className="px-5 py-3 text-right">Eligible</th><th className="px-5 py-3 text-right">Tusukan pribadi</th><th className="px-5 py-3 text-center">Bonus pribadi</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
+                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Koordinator</th><th className="px-5 py-3 text-left">Target scope</th><th className="px-5 py-3 text-right">Bonus tim</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Infus Rp1.000</th><th className="px-5 py-3 text-right">Team HO</th><th className="px-5 py-3 text-right">Tusukan pribadi</th><th className="px-5 py-3 text-center">Bonus pribadi</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                     {data.coordinators.map((row) => <tr key={row.id}>
                       <td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td>
-                      <td className="px-5 py-4"><div className="space-y-1">{row.scopes.map((scope) => <div key={scope.assignmentId} className="flex items-center gap-2"><StatusBadge reached={scope.qualifierPassed}>{scope.qualifierPassed ? 'PASS' : 'BELUM'}</StatusBadge><span className="text-xs text-neutral-500">{scope.scopeName} · {scope.totalInfusions}/{scope.qualifierTarget}</span></div>)}</div></td>
+                      <td className="px-5 py-4"><div className="space-y-1">{row.scopes.map((scope) => <div key={scope.assignmentId} className="flex items-center gap-2"><StatusBadge reached={scope.qualifierPassed}>{scope.incentiveType === 'HO' ? 'TEAM HO' : scope.qualifierPassed ? 'PASS' : 'BELUM'}</StatusBadge><span className="text-xs text-neutral-500">{scope.scopeName} · {scope.totalInfusions}{scope.qualifierTarget ? `/${scope.qualifierTarget}` : ''}</span></div>)}</div></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.qualifiedHomecareTeams}</strong><small className="block text-neutral-500">{formatCurrency(row.homecareTeamTargetBonus)}</small></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.qualifiedBranches}</strong><small className="block text-neutral-500">{formatCurrency(row.branchTargetBonus)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.eligiblePaidInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.paidInfusionAmount)}</small></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.hoPaidInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.hoInfusionAmount)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.personalInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.personalInfusionAmount)}</small></td>
                       <td className="px-5 py-4 text-center"><StatusBadge reached={row.personalTargetReached}>{row.personalTargetReached ? formatCurrency(row.personalTargetBonus) : `${row.personalInfusions}/100`}</StatusBadge></td>
                       <td className="px-5 py-4 text-right font-bold text-violet-600 dark:text-violet-400">{formatCurrency(row.totalAmount)}</td>
                     </tr>)}
-                    {data.coordinators.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Koordinator CHS aktif pada periode ini.</td></tr>}
+                    {data.coordinators.length === 0 && <tr><td colSpan={9} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Koordinator CHS aktif pada periode ini.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </section>}
+
+            {(view === 'all' || view === 'doctor-head') && <section className="rounded-2xl border border-cyan-200 bg-white dark:border-cyan-500/20 dark:bg-neutral-900">
+              <div className="border-b border-neutral-200 p-5 dark:border-neutral-800">
+                <h2 className="font-bold text-neutral-900 dark:text-white">Insentif Dokter Head</h2>
+                <p className="text-sm text-neutral-500">Bonus target tim dan cabang, omzet tim HC saat merangkap dokter, serta omzet Partnership. Treatment Review ditampilkan terpisah karena ketentuan nominalnya belum dikonfigurasi.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Dokter Head</th><th className="px-5 py-3 text-left">Target cabang</th><th className="px-5 py-3 text-right">Bonus tim HC</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Dokter tim HC</th><th className="px-5 py-3 text-right">Partnership</th><th className="px-5 py-3 text-center">Treatment Review</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                    {data.doctorHeads.map((row) => <tr key={row.id}>
+                      <td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td>
+                      <td className="px-5 py-4"><div className="space-y-1">{row.scopes.map((scope) => <div key={scope.assignmentId} className="flex items-center gap-2"><StatusBadge reached={scope.qualifierPassed}>{scope.qualifierPassed ? 'PASS' : 'BELUM'}</StatusBadge><span className="text-xs text-neutral-500">{scope.branchName} · {scope.totalInfusions}/{scope.qualifierTarget}</span></div>)}</div></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.qualifiedHomecareTeams} tim</strong><small className="block text-neutral-500">{formatCurrency(row.homecareTeamTargetBonus)}</small></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.qualifiedBranches} cabang</strong><small className="block text-neutral-500">{formatCurrency(row.branchTargetBonus)}</small></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.homecareDoctorPaidInfusions} infus lunas</strong><small className="block text-neutral-500">{formatCurrency(row.homecareDoctorAmount)}</small></td>
+                      <td className="px-5 py-4 text-right"><StatusBadge reached={row.partnershipTargetReached}>{row.partnershipTargetReached ? 'PASS' : `${row.partnershipTotalInfusions}/1500`}</StatusBadge><small className="mt-1 block text-neutral-500">{row.partnershipPaidInfusions} lunas · {formatCurrency(row.partnershipAmount)}</small></td>
+                      <td className="px-5 py-4 text-center"><StatusBadge reached={false}>Belum dikonfigurasi</StatusBadge></td>
+                      <td className="px-5 py-4 text-right font-bold text-cyan-600 dark:text-cyan-400">{formatCurrency(row.totalAmount)}</td>
+                    </tr>)}
+                    {data.doctorHeads.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Dokter Head aktif pada periode ini.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -263,7 +300,9 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                     ? 'Bonus visit MSO dibayar satu kali per bulan setelah syarat visit dan penjualan lunas terpenuhi.'
                     : view === 'coordinator'
                       ? 'Free, sosial, dan diskon di atas 40% tidak masuk komponen Rp1.000, tetapi tetap masuk tusukan pribadi. Semua bonus target hanya satu kali per bulan.'
-                      : 'Bonus target Nakes, MSO, dan tusukan pribadi Koordinator dibayar satu kali per bulan dan tidak berlaku kelipatan.'}{' '}
+                      : view === 'doctor-head'
+                        ? 'Bonus tim dan cabang dihitung per scope yang mencapai target. Treatment Review belum masuk total sampai ketentuannya dikonfigurasi.'
+                        : 'Bonus target dihitung satu kali untuk setiap scope yang memenuhi ketentuan dan tidak berlaku kelipatan.'}{' '}
                 Halaman ini merupakan kalkulasi operasional; pencairan tetap mengikuti verifikasi dan proses Finance.
               </p>
             </aside>

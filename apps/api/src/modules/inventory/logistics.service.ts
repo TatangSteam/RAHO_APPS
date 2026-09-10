@@ -877,6 +877,7 @@ export class LogisticsService {
         branchCode: branch?.branchCode || null,
         branchType: branch?.type || null,
         description: team.description,
+        incentiveType: team.incentiveType,
         isActive: team.isActive,
         memberCount: team.members.length,
         bagCount: team.bags.length,
@@ -918,6 +919,7 @@ export class LogisticsService {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.description !== undefined ? { description: input.description || null } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.incentiveType !== undefined ? { incentiveType: input.incentiveType } : {}),
       },
     });
 
@@ -929,8 +931,8 @@ export class LogisticsService {
       resourceId: teamId,
       meta: {
         action: 'UPDATE_HOMECARE_TEAM',
-        before: { name: team.name, description: team.description, isActive: team.isActive },
-        after: { name: updated.name, description: updated.description, isActive: updated.isActive },
+        before: { name: team.name, description: team.description, isActive: team.isActive, incentiveType: team.incentiveType },
+        after: { name: updated.name, description: updated.description, isActive: updated.isActive, incentiveType: updated.incentiveType },
       },
     });
     return updated;
@@ -1882,6 +1884,7 @@ export class LogisticsService {
         name: input.name,
         branchId: input.branchId,
         description: input.description,
+        incentiveType: input.incentiveType,
         createdBy: actor.userId,
         members: {
           create: [

@@ -45,9 +45,10 @@ export async function buildStaffIncentiveWorkbook(report: MonthlyIncentiveReport
     { period: report.period.month, category: 'NAKES', recipients: report.summary.nakesRecipients, amount: report.summary.nakesTotalAmount },
     { period: report.period.month, category: 'MSO', recipients: report.summary.msoRecipients, amount: report.summary.msoTotalAmount },
     { period: report.period.month, category: 'KOORDINATOR CHS', recipients: report.summary.coordinatorRecipients, amount: report.summary.coordinatorTotalAmount },
-    { period: report.period.month, category: 'TOTAL', recipients: report.summary.nakesRecipients + report.summary.msoRecipients + report.summary.coordinatorRecipients, amount: report.summary.grandTotalAmount },
+    { period: report.period.month, category: 'DOKTER HEAD', recipients: report.summary.doctorHeadRecipients, amount: report.summary.doctorHeadTotalAmount },
+    { period: report.period.month, category: 'TOTAL', recipients: report.summary.nakesRecipients + report.summary.msoRecipients + report.summary.coordinatorRecipients + report.summary.doctorHeadRecipients, amount: report.summary.grandTotalAmount },
   ]);
-  summary.getRow(5).font = { bold: true };
+  summary.getRow(6).font = { bold: true };
   styleSheet(summary);
 
   const nakes = workbook.addWorksheet('NAKES');
@@ -87,6 +88,12 @@ export async function buildStaffIncentiveWorkbook(report: MonthlyIncentiveReport
     { header: 'Email', key: 'email', width: 30 },
     { header: 'Infus Eligible', key: 'eligiblePaidInfusions', width: 18 },
     { header: 'Insentif Rp1.000', key: 'paidInfusionAmount', width: 22, style: { numFmt: rupiahFormat } },
+    { header: 'Tim HC Lolos Target', key: 'qualifiedHomecareTeams', width: 21 },
+    { header: 'Bonus Tim HC', key: 'homecareTeamTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Cabang Lolos Target', key: 'qualifiedBranches', width: 21 },
+    { header: 'Bonus Cabang', key: 'branchTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Infus Team HO Lunas', key: 'hoPaidInfusions', width: 21 },
+    { header: 'Insentif Team HO', key: 'hoInfusionAmount', width: 21, style: { numFmt: rupiahFormat } },
     { header: 'Tusukan Pribadi', key: 'personalInfusions', width: 18 },
     { header: 'Insentif Pribadi', key: 'personalInfusionAmount', width: 22, style: { numFmt: rupiahFormat } },
     { header: 'Bonus Pribadi >=100', key: 'personalTargetBonus', width: 23, style: { numFmt: rupiahFormat } },
@@ -113,6 +120,51 @@ export async function buildStaffIncentiveWorkbook(report: MonthlyIncentiveReport
   }))));
   styleSheet(scopes);
 
+  const doctorHeads = workbook.addWorksheet('DOKTER HEAD');
+  doctorHeads.columns = [
+    { header: 'Kode Staff', key: 'staffCode', width: 16 },
+    { header: 'Nama Lengkap', key: 'fullName', width: 30 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Tim HC Lolos Target', key: 'qualifiedHomecareTeams', width: 21 },
+    { header: 'Bonus Tim HC', key: 'homecareTeamTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Cabang Lolos Target', key: 'qualifiedBranches', width: 21 },
+    { header: 'Bonus Cabang', key: 'branchTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Infus HC Sebagai Dokter', key: 'homecareDoctorPaidInfusions', width: 23 },
+    { header: 'Insentif Dokter HC', key: 'homecareDoctorAmount', width: 22, style: { numFmt: rupiahFormat } },
+    { header: 'Total Partnership', key: 'partnershipTotalInfusions', width: 20 },
+    { header: 'Partnership Lunas', key: 'partnershipPaidInfusions', width: 20 },
+    { header: 'Target Partnership', key: 'partnershipTargetReached', width: 20 },
+    { header: 'Insentif Partnership', key: 'partnershipAmount', width: 23, style: { numFmt: rupiahFormat } },
+    { header: 'Treatment Review', key: 'treatmentReviewAmount', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Status Treatment Review', key: 'treatmentReviewStatus', width: 28 },
+    { header: 'Total Insentif', key: 'totalAmount', width: 22, style: { numFmt: rupiahFormat } },
+  ];
+  doctorHeads.addRows(report.doctorHeads.map((row) => ({
+    ...row,
+    staffCode: row.staffCode || '-',
+    partnershipTargetReached: row.partnershipTargetReached ? 'PASS' : 'BELUM',
+    treatmentReviewStatus: 'BELUM DIKONFIGURASI',
+  })));
+  styleSheet(doctorHeads);
+
+  const doctorHeadScopes = workbook.addWorksheet('DETAIL DOKTER HEAD');
+  doctorHeadScopes.columns = [
+    { header: 'Dokter Head', key: 'doctorHead', width: 30 },
+    { header: 'Cabang', key: 'branchName', width: 28 },
+    { header: 'Jenis Cabang', key: 'branchType', width: 18 },
+    { header: 'Target Cabang', key: 'qualifierTarget', width: 16 },
+    { header: 'Total Infus', key: 'totalInfusions', width: 16 },
+    { header: 'Target Tercapai', key: 'qualifierPassed', width: 18 },
+    { header: 'Bonus Cabang', key: 'targetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Tim HC Lolos Target', key: 'qualifiedHomecareTeams', width: 22 },
+  ];
+  doctorHeadScopes.addRows(report.doctorHeads.flatMap((row) => row.scopes.map((scope) => ({
+    ...scope,
+    doctorHead: row.fullName,
+    qualifierPassed: scope.qualifierPassed ? 'PASS' : 'BELUM',
+  }))));
+  styleSheet(doctorHeadScopes);
+
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
@@ -126,6 +178,6 @@ export async function exportMonthlyStaffIncentivesService(
   const report = await getMonthlyStaffIncentivesService(query, callerRole, callerUserId, callerBranchId);
   return {
     buffer: await buildStaffIncentiveWorkbook(report),
-    filename: `insentif-nakes-mso-koordinator-chs-${report.period.month}.xlsx`,
+    filename: `insentif-nakes-mso-koordinator-chs-dokter-head-${report.period.month}.xlsx`,
   };
 }

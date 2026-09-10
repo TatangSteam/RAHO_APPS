@@ -93,6 +93,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/reimbursements',
     '/notifications',
     '/chat',
+    '/staff-incentives/doctor-head',
     ...COLLABORATION_MENU,
   ]),
 };
@@ -303,6 +304,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/staff-incentives/coordinator',
         icon: <Users size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR', 'NURSE', 'FINANCE_LOGISTICS_CONTROLLER'],
+      },
+      {
+        label: 'Dokter Head',
+        href: '/staff-incentives/doctor-head',
+        icon: <UserCog size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR', 'FINANCE_LOGISTICS_CONTROLLER'],
       },
     ],
   },
