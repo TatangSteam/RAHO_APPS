@@ -237,7 +237,16 @@ export interface ChsCoordinatorAssignment {
 
 export interface ChsCoordinatorAssignmentOptions {
   staff: Array<{ id: string; fullName: string; email: string; staffCode: string | null; role: string }>;
-  teams: Array<{ id: string; teamCode: string; name: string }>;
+  teams: Array<{ id: string; teamCode: string; name: string; branchId: string }>;
+  branches: Array<{ id: string; branchCode: string; name: string }>;
+}
+
+export interface ChsCoordinatorBranchAssignmentsInput {
+  coordinatorUserId: string;
+  branchIds: string[];
+  effectiveFrom: string;
+  effectiveUntil?: string;
+  notes?: string;
 }
 
 export interface ChsCoordinatorAssignmentInput {
@@ -310,13 +319,22 @@ export const usersApi = {
     return response.data.data;
   },
 
-  getChsCoordinatorAssignmentOptions: async (branchId: string): Promise<ChsCoordinatorAssignmentOptions> => {
-    const response = await api.get('/users/incentives/coordinator/assignment-options', { params: { branchId } });
+  getChsCoordinatorAssignmentOptions: async (branchId?: string): Promise<ChsCoordinatorAssignmentOptions> => {
+    const response = await api.get('/users/incentives/coordinator/assignment-options', {
+      params: branchId && branchId !== 'all' ? { branchId } : undefined,
+    });
     return response.data.data;
   },
 
   createChsCoordinatorAssignment: async (input: ChsCoordinatorAssignmentInput): Promise<ChsCoordinatorAssignment> => {
     const response = await api.post('/users/incentives/coordinator/assignments', input);
+    return response.data.data;
+  },
+
+  createChsCoordinatorBranchAssignments: async (
+    input: ChsCoordinatorBranchAssignmentsInput,
+  ): Promise<ChsCoordinatorAssignment[]> => {
+    const response = await api.post('/users/incentives/coordinator/assignments/bulk-branches', input);
     return response.data.data;
   },
 

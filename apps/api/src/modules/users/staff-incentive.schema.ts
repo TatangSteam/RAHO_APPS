@@ -18,3 +18,11 @@ export const chsCoordinatorAssignmentSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['homecareTeamId'], message: 'Scope cabang tidak menggunakan tim Homecare.' });
   }
 });
+
+export const chsCoordinatorBranchAssignmentsSchema = z.object({
+  coordinatorUserId: z.string().min(1),
+  branchIds: z.array(z.string().min(1)).min(1, 'Minimal satu cabang wajib dipilih.'),
+  effectiveFrom: z.string().regex(dateOnly, 'Tanggal mulai harus berformat YYYY-MM-DD.'),
+  effectiveUntil: z.string().regex(dateOnly, 'Tanggal selesai harus berformat YYYY-MM-DD.').optional(),
+  notes: z.string().max(500).optional(),
+});

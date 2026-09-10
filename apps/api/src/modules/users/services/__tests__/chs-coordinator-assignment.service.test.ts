@@ -1,17 +1,23 @@
 import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
-import { updateChsCoordinatorAssignmentService } from '../chs-coordinator-assignment.service';
+import {
+  createChsCoordinatorBranchAssignmentsService,
+  updateChsCoordinatorAssignmentService,
+} from '../chs-coordinator-assignment.service';
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
     chsCoordinatorAssignment: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
       update: jest.fn(),
     },
     user: { findFirst: jest.fn() },
-    branch: { findUnique: jest.fn() },
+    branch: { findUnique: jest.fn(), findMany: jest.fn() },
     homecareTeam: { findUnique: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -38,7 +44,43 @@ describe('CHS coordinator assignment update', () => {
       isActive: true,
     });
     mockPrisma.chsCoordinatorAssignment.findFirst.mockResolvedValue(null);
+    mockPrisma.chsCoordinatorAssignment.findMany.mockResolvedValue([]);
+    mockPrisma.chsCoordinatorAssignment.create.mockImplementation(({ data }: { data: { branchId: string } }) => (
+      Promise.resolve({ id: `assignment-${data.branchId}`, ...data })
+    ));
     mockPrisma.chsCoordinatorAssignment.update.mockResolvedValue({ id: 'assignment-1' });
+    mockPrisma.branch.findMany.mockResolvedValue([{ id: 'branch-1' }, { id: 'branch-2' }]);
+    mockPrisma.$transaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
+  });
+
+  it('atomically assigns one coordinator to multiple branches', async () => {
+    const result = await createChsCoordinatorBranchAssignmentsService({
+      coordinatorUserId: 'coordinator-1',
+      branchIds: ['branch-1', 'branch-2'],
+      effectiveFrom: '2026-09-01',
+      notes: 'Koordinator dua cabang',
+    }, caller);
+
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'coordinator-1', isActive: true }),
+    }));
+    expect(mockPrisma.chsCoordinatorAssignment.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(2);
+  });
+
+  it('rejects all selected branches when one branch has an overlapping coordinator', async () => {
+    mockPrisma.chsCoordinatorAssignment.findMany.mockResolvedValue([
+      { branchId: 'branch-2', branch: { name: 'Cabang Bandung' } },
+    ]);
+
+    await expect(createChsCoordinatorBranchAssignmentsService({
+      coordinatorUserId: 'coordinator-1',
+      branchIds: ['branch-1', 'branch-2'],
+      effectiveFrom: '2026-09-01',
+    }, caller)).rejects.toMatchObject({ code: 'CHS_ASSIGNMENT_OVERLAP' });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('updates coordinator, scope, dates, and notes while excluding itself from overlap checks', async () => {

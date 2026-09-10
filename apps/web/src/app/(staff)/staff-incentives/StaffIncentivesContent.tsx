@@ -185,7 +185,7 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
         </header>
 
         {view === 'coordinator' && canManageCoordinator && (
-          <CoordinatorAssignmentManager branchId={branchId} month={month} onChanged={() => void load()} />
+          <CoordinatorAssignmentManager month={month} onChanged={() => void load()} />
         )}
 
         {loading && !data ? (

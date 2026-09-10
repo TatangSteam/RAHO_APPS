@@ -28,6 +28,7 @@ import {
   listChsCoordinatorAssignments,
   getChsCoordinatorAssignmentOptions,
   createChsCoordinatorAssignment,
+  createChsCoordinatorBranchAssignments,
   updateChsCoordinatorAssignment,
   deactivateChsCoordinatorAssignment,
   getStaffSessionHistory,
@@ -98,6 +99,13 @@ usersRouter.post(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   createChsCoordinatorAssignment,
+);
+
+usersRouter.post(
+  '/incentives/coordinator/assignments/bulk-branches',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  createChsCoordinatorBranchAssignments,
 );
 
 usersRouter.patch(

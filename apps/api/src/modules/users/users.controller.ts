@@ -36,16 +36,16 @@ import { getMonthlyStaffIncentivesService } from './services/staff-incentive.ser
 import { exportMonthlyStaffIncentivesService } from './services/staff-incentive-export.service';
 import {
   createChsCoordinatorAssignmentService,
+  createChsCoordinatorBranchAssignmentsService,
   deactivateChsCoordinatorAssignmentService,
   getChsCoordinatorAssignmentOptionsService,
   listChsCoordinatorAssignmentsService,
   updateChsCoordinatorAssignmentService,
 } from './services/chs-coordinator-assignment.service';
-import { chsCoordinatorAssignmentSchema } from './staff-incentive.schema';
+import { chsCoordinatorAssignmentSchema, chsCoordinatorBranchAssignmentsSchema } from './staff-incentive.schema';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
-import { errors } from '@middleware/errorHandler';
 import { AuditAction, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import {
@@ -635,13 +635,27 @@ export async function listChsCoordinatorAssignments(req: Request, res: Response,
 
 export async function getChsCoordinatorAssignmentOptions(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    if (!req.query.branchId) throw errors.badRequest('BRANCH_REQUIRED', 'Cabang wajib dipilih.');
-    const result = await getChsCoordinatorAssignmentOptionsService(String(req.query.branchId), {
+    const result = await getChsCoordinatorAssignmentOptionsService(req.query.branchId as string | undefined, {
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,
     });
     sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function createChsCoordinatorBranchAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = chsCoordinatorBranchAssignmentsSchema.parse(req.body);
+    const result = await createChsCoordinatorBranchAssignmentsService(
+      input as Parameters<typeof createChsCoordinatorBranchAssignmentsService>[0],
+      {
+        role: req.user.role as Role,
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+      },
+    );
+    sendCreated(res, result);
   } catch (err) { next(err); }
 }
 
