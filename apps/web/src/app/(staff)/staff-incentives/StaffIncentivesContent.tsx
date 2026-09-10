@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BadgeDollarSign, Building2, CalendarDays, CheckCircle2, Download, Droplets, Loader2, Stethoscope, Target, Users } from 'lucide-react';
+import { BadgeDollarSign, Building2, Calculator, CalendarDays, CheckCircle2, Download, Droplets, Loader2, Stethoscope, Target, Users } from 'lucide-react';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi, type ManagedBranch } from '@/lib/api/doctorBranchApi';
 import { assertCaughtError } from '@/lib/caughtError';
@@ -38,6 +38,33 @@ function StatusBadge({ reached, children }: { reached: boolean; children: React.
       {reached && <CheckCircle2 size={12} />}
       {children}
     </span>
+  );
+}
+
+type CalculationItem = {
+  title: string;
+  formula: string;
+  description: string;
+};
+
+function CalculationGuide({ items, note }: { items: CalculationItem[]; note: string }) {
+  return (
+    <details open className="border-b border-neutral-200 bg-neutral-50/70 px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950/40">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-neutral-800 dark:text-neutral-100">
+        <Calculator className="h-4 w-4 text-amber-500" />
+        Cara perhitungan
+      </summary>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <article key={item.title} className="rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{item.title}</h3>
+            <code className="mt-1 block whitespace-normal text-xs font-semibold text-amber-600 dark:text-amber-400">{item.formula}</code>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">{item.description}</p>
+          </article>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400"><strong>Data yang dipakai:</strong> {note}</p>
+    </details>
   );
 }
 
@@ -216,11 +243,31 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
 
             {(view === 'all' || view === 'nakes') && <section className="rounded-2xl border border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-neutral-900">
               <div className="border-b border-neutral-200 p-5 dark:border-neutral-800"><h2 className="font-bold text-neutral-900 dark:text-white">Insentif Nakes</h2><p className="text-sm text-neutral-500">Rp10.000 per infus selesai + bonus Rp2.000.000 satu kali jika mencapai minimal 100 infus.</p></div>
+              <CalculationGuide
+                items={[
+                  {
+                    title: 'Insentif per infus',
+                    formula: `Jumlah infus valid × ${formatCurrency(data.rules.nakes.ratePerInfusion)}`,
+                    description: 'Setiap infus valid yang dikreditkan kepada Nakes dihitung, termasuk layanan berbayar, gratis, atau sosial.',
+                  },
+                  {
+                    title: 'Bonus target bulanan',
+                    formula: `Infus ≥${data.rules.nakes.target} → ${formatCurrency(data.rules.nakes.bonus)}`,
+                    description: `Bonus diberikan satu kali. Melebihi ${data.rules.nakes.target} infus tidak membuat bonus menjadi kelipatan.`,
+                  },
+                  {
+                    title: 'Total Nakes',
+                    formula: `(Infus × ${formatCurrency(data.rules.nakes.ratePerInfusion)}) + bonus target`,
+                    description: `Jika belum mencapai ${data.rules.nakes.target} infus, total hanya berasal dari komponen per infus.`,
+                  },
+                ]}
+                note="sesi pada bulan dan cabang terpilih, berstatus selesai, tidak dibatalkan, dan Nakes tercatat sebagai pelaksana utama."
+              />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Nakes</th><th className="px-5 py-3 text-right">Infus</th><th className="px-5 py-3 text-right">Per Infus</th><th className="px-5 py-3 text-center">Bonus &gt;=100</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                    {data.nakes.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td><td className="px-5 py-4 text-right font-semibold">{row.infusionCount}</td><td className="px-5 py-4 text-right">{formatCurrency(row.baseAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.targetReached}>{row.targetReached ? formatCurrency(row.targetBonus) : `${row.infusionCount}/100`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.totalAmount)}</td></tr>)}
+                    {data.nakes.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td><td className="px-5 py-4 text-right font-semibold">{row.infusionCount}</td><td className="px-5 py-4 text-right">{formatCurrency(row.baseAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.targetReached}>{row.targetReached ? formatCurrency(row.targetBonus) : `${row.infusionCount}/${row.target}`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.totalAmount)}</td></tr>)}
                     {data.nakes.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-neutral-500">Belum ada infus selesai pada periode ini.</td></tr>}
                   </tbody>
                 </table>
@@ -229,11 +276,31 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
 
             {(view === 'all' || view === 'mso') && <section className="rounded-2xl border border-blue-200 bg-white dark:border-blue-500/20 dark:bg-neutral-900">
               <div className="border-b border-neutral-200 p-5 dark:border-neutral-800"><h2 className="font-bold text-neutral-900 dark:text-white">Insentif MSO</h2><p className="text-sm text-neutral-500">Bonus visit Rp2.000.000 jika visit &gt;=100 dan Air Nano lunas &gt;=5 dus, ditambah Rp90.000 untuk setiap dus lunas.</p></div>
+              <CalculationGuide
+                items={[
+                  {
+                    title: 'Insentif Air Nano',
+                    formula: `Jumlah dus lunas × ${formatCurrency(data.rules.mso.ratePerPaidAirNanoBox)}`,
+                    description: 'Seluruh dus Air Nano yang berhasil dijual dan telah lunas memperoleh insentif tanpa batas jumlah.',
+                  },
+                  {
+                    title: 'Bonus pencapaian visit',
+                    formula: `Visit ≥${data.rules.mso.visitTarget} DAN Air Nano lunas ≥${data.rules.mso.minimumPaidAirNanoBoxes} dus → ${formatCurrency(data.rules.mso.visitBonus)}`,
+                    description: 'Kedua syarat wajib terpenuhi pada MSO dan bulan yang sama. Bonus dibayar satu kali dan tidak berlaku kelipatan.',
+                  },
+                  {
+                    title: 'Total MSO',
+                    formula: `(Dus lunas × ${formatCurrency(data.rules.mso.ratePerPaidAirNanoBox)}) + bonus visit`,
+                    description: 'Insentif per dus tetap dibayar walaupun syarat bonus visit belum terpenuhi.',
+                  },
+                ]}
+                note="visit berasal dari sesi selesai milik MSO. Air Nano harus berupa produk dus, transaksi aktif dan terverifikasi, serta seluruh invoice aktif berstatus lunas dan terverifikasi."
+              />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">MSO</th><th className="px-5 py-3 text-right">Visit</th><th className="px-5 py-3 text-right">Dus lunas</th><th className="px-5 py-3 text-right">Air Nano</th><th className="px-5 py-3 text-center">Bonus visit</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                    {data.mso.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td><td className="px-5 py-4 text-right font-semibold">{row.visitCount}</td><td className="px-5 py-4 text-right font-semibold">{row.paidAirNanoBoxes}</td><td className="px-5 py-4 text-right">{formatCurrency(row.airNanoAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.visitBonusEligible}>{row.visitBonusEligible ? formatCurrency(row.visitBonus) : `${row.visitCount}/100 | ${row.paidAirNanoBoxes}/5 dus`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-blue-600 dark:text-blue-400">{formatCurrency(row.totalAmount)}</td></tr>)}
+                    {data.mso.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td><td className="px-5 py-4 text-right font-semibold">{row.visitCount}</td><td className="px-5 py-4 text-right font-semibold">{row.paidAirNanoBoxes}</td><td className="px-5 py-4 text-right">{formatCurrency(row.airNanoAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.visitBonusEligible}>{row.visitBonusEligible ? formatCurrency(row.visitBonus) : `${row.visitCount}/${row.visitTarget} | ${row.paidAirNanoBoxes}/${row.minimumPaidAirNanoBoxes} dus`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-blue-600 dark:text-blue-400">{formatCurrency(row.totalAmount)}</td></tr>)}
                     {data.mso.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-neutral-500">Belum ada visit atau penjualan Air Nano lunas pada periode ini.</td></tr>}
                   </tbody>
                 </table>
@@ -245,6 +312,41 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                 <h2 className="font-bold text-neutral-900 dark:text-white">Insentif Koordinator CHS</h2>
                 <p className="text-sm text-neutral-500">Bonus Rp500.000 per tim HC dan Rp250.000 per cabang yang mencapai target; Rp1.000 per infus berbayar, Rp10.000 per infus Team HO, serta tusukan pribadi.</p>
               </div>
+              <CalculationGuide
+                items={[
+                  {
+                    title: 'Bonus tim Homecare',
+                    formula: `Tim HC dengan ≥${data.rules.coordinator.homecareTeamTarget} infus × ${formatCurrency(data.rules.coordinator.homecareTeamTargetBonus)}`,
+                    description: 'Setiap tim Homecare dalam scope Koordinator yang mencapai target menghasilkan satu bonus, bukan bonus per kelipatan 100.',
+                  },
+                  {
+                    title: 'Bonus target cabang',
+                    formula: `Cabang lolos target × ${formatCurrency(data.rules.coordinator.branchTargetBonus)}`,
+                    description: `Target cabang tanpa tim HC adalah ${data.rules.coordinator.branchWithoutHomecareTarget} infus. Jika memiliki tim HC, targetnya menjadi ${data.rules.coordinator.branchWithHomecareTarget} infus.`,
+                  },
+                  {
+                    title: 'Omzet HC dan cabang',
+                    formula: `Infus berbayar eligible × ${formatCurrency(data.rules.coordinator.ratePerEligiblePaidInfusion)}`,
+                    description: 'Hanya infus lunas. Layanan gratis, sosial, diskon di atas 40%, belum lunas, dibatalkan, atau direfund tidak dihitung.',
+                  },
+                  {
+                    title: 'Omzet Team HO',
+                    formula: `Infus Team HO berbayar dan lunas × ${formatCurrency(data.rules.coordinator.ratePerHoPaidInfusion)}`,
+                    description: 'Sesi Team HO dihitung pada komponen ini dan tidak dihitung kembali pada komponen Rp1.000.',
+                  },
+                  {
+                    title: 'Tusukan pribadi',
+                    formula: `(Tusukan × ${formatCurrency(data.rules.coordinator.ratePerPersonalInfusion)}) + ${formatCurrency(data.rules.coordinator.personalTargetBonus)} jika ≥${data.rules.coordinator.personalTarget}`,
+                    description: 'Tusukan yang dilakukan sendiri tetap dihitung meskipun berbayar, gratis, atau sosial. Bonus ≥100 hanya satu kali.',
+                  },
+                  {
+                    title: 'Total Koordinator CHS',
+                    formula: 'Bonus tim + bonus cabang + omzet HC/cabang + Team HO + tusukan pribadi',
+                    description: 'Session ID yang sama tidak dihitung dua kali di dalam komponen omzet yang sama.',
+                  },
+                ]}
+                note="sesi harus selesai, tidak dibatalkan, berada dalam periode assignment Koordinator, dan sesuai tim atau cabang yang ditetapkan."
+              />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Koordinator</th><th className="px-5 py-3 text-left">Target scope</th><th className="px-5 py-3 text-right">Bonus tim</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Infus Rp1.000</th><th className="px-5 py-3 text-right">Team HO</th><th className="px-5 py-3 text-right">Tusukan pribadi</th><th className="px-5 py-3 text-center">Bonus pribadi</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
@@ -257,7 +359,7 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                       <td className="px-5 py-4 text-right"><strong>{row.eligiblePaidInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.paidInfusionAmount)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.hoPaidInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.hoInfusionAmount)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.personalInfusions}</strong><small className="block text-neutral-500">{formatCurrency(row.personalInfusionAmount)}</small></td>
-                      <td className="px-5 py-4 text-center"><StatusBadge reached={row.personalTargetReached}>{row.personalTargetReached ? formatCurrency(row.personalTargetBonus) : `${row.personalInfusions}/100`}</StatusBadge></td>
+                      <td className="px-5 py-4 text-center"><StatusBadge reached={row.personalTargetReached}>{row.personalTargetReached ? formatCurrency(row.personalTargetBonus) : `${row.personalInfusions}/${row.personalTarget}`}</StatusBadge></td>
                       <td className="px-5 py-4 text-right font-bold text-violet-600 dark:text-violet-400">{formatCurrency(row.totalAmount)}</td>
                     </tr>)}
                     {data.coordinators.length === 0 && <tr><td colSpan={9} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Koordinator CHS aktif pada periode ini.</td></tr>}
@@ -271,6 +373,41 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                 <h2 className="font-bold text-neutral-900 dark:text-white">Insentif Dokter Head</h2>
                 <p className="text-sm text-neutral-500">Bonus target tim dan cabang, omzet tim HC saat merangkap dokter, serta omzet Partnership. Treatment Review ditampilkan terpisah karena ketentuan nominalnya belum dikonfigurasi.</p>
               </div>
+              <CalculationGuide
+                items={[
+                  {
+                    title: 'Bonus tim Homecare',
+                    formula: `Tim HC dengan ≥${data.rules.doctorHead.homecareTeamTarget} infus × ${formatCurrency(data.rules.doctorHead.homecareTeamTargetBonus)}`,
+                    description: `Setiap tim Homecare pada cabang assignment yang mencapai minimal ${data.rules.doctorHead.homecareTeamTarget} infus valid menghasilkan satu bonus.`,
+                  },
+                  {
+                    title: 'Bonus target cabang',
+                    formula: `Cabang lolos target × ${formatCurrency(data.rules.doctorHead.branchTargetBonus)}`,
+                    description: `Targetnya ${data.rules.doctorHead.branchWithoutHomecareTarget} infus untuk cabang tanpa tim HC atau ${data.rules.doctorHead.branchWithHomecareTarget} infus untuk cabang yang memiliki tim HC.`,
+                  },
+                  {
+                    title: 'Merangkap Dokter tim HC',
+                    formula: `Infus berbayar tim yang lolos × ${formatCurrency(data.rules.doctorHead.ratePerHomecareDoctorPaidInfusion)}`,
+                    description: `Berlaku jika Dokter Head tercatat sebagai Dokter pada tim HC tersebut dan tim mencapai minimal ${data.rules.doctorHead.homecareTeamTarget} infus.`,
+                  },
+                  {
+                    title: 'Omzet Partnership',
+                    formula: `Jika aktivitas ≥${data.rules.doctorHead.partnershipTarget}: infus berbayar × ${formatCurrency(data.rules.doctorHead.ratePerPartnershipPaidInfusion)}`,
+                    description: 'Target 1.500 dihitung dari aktivitas valid pada seluruh cabang Partnership dalam assignment. Setelah lolos, infus berbayar dan lunas menjadi dasar nominal.',
+                  },
+                  {
+                    title: 'Treatment Review',
+                    formula: 'Mengikuti tarif dan ketentuan Treatment Review',
+                    description: 'Belum masuk total karena sumber aktivitas, tarif, dan syarat kelayakannya belum ditetapkan.',
+                  },
+                  {
+                    title: 'Total Dokter Head',
+                    formula: 'Bonus tim + bonus cabang + Dokter tim HC + Partnership + Treatment Review',
+                    description: 'Jika seluruh target belum tercapai dan belum ada infus lunas yang eligible, total secara benar akan bernilai Rp0.',
+                  },
+                ]}
+                note="sesi harus selesai, tidak dibatalkan, berada pada bulan serta cabang assignment yang aktif. Komponen omzet hanya menghitung paket berbayar, lunas, terverifikasi, bukan sosial, dan tidak direfund."
+              />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Dokter Head</th><th className="px-5 py-3 text-left">Target cabang</th><th className="px-5 py-3 text-right">Bonus tim HC</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Dokter tim HC</th><th className="px-5 py-3 text-right">Partnership</th><th className="px-5 py-3 text-center">Treatment Review</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
@@ -281,7 +418,7 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                       <td className="px-5 py-4 text-right"><strong>{row.qualifiedHomecareTeams} tim</strong><small className="block text-neutral-500">{formatCurrency(row.homecareTeamTargetBonus)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.qualifiedBranches} cabang</strong><small className="block text-neutral-500">{formatCurrency(row.branchTargetBonus)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.homecareDoctorPaidInfusions} infus lunas</strong><small className="block text-neutral-500">{formatCurrency(row.homecareDoctorAmount)}</small></td>
-                      <td className="px-5 py-4 text-right"><StatusBadge reached={row.partnershipTargetReached}>{row.partnershipTargetReached ? 'PASS' : `${row.partnershipTotalInfusions}/1500`}</StatusBadge><small className="mt-1 block text-neutral-500">{row.partnershipPaidInfusions} lunas · {formatCurrency(row.partnershipAmount)}</small></td>
+                      <td className="px-5 py-4 text-right"><StatusBadge reached={row.partnershipTargetReached}>{row.partnershipTargetReached ? 'PASS' : `${row.partnershipTotalInfusions}/${row.partnershipTarget}`}</StatusBadge><small className="mt-1 block text-neutral-500">{row.partnershipPaidInfusions} lunas · {formatCurrency(row.partnershipAmount)}</small></td>
                       <td className="px-5 py-4 text-center"><StatusBadge reached={false}>Belum dikonfigurasi</StatusBadge></td>
                       <td className="px-5 py-4 text-right font-bold text-cyan-600 dark:text-cyan-400">{formatCurrency(row.totalAmount)}</td>
                     </tr>)}

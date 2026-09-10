@@ -151,7 +151,10 @@ export interface StaffMonthlyIncentiveResponse {
       ratePerHoPaidInfusion: number;
     };
     doctorHead: {
+      homecareTeamTarget: number;
       homecareTeamTargetBonus: number;
+      branchWithoutHomecareTarget: number;
+      branchWithHomecareTarget: number;
       branchTargetBonus: number;
       ratePerHomecareDoctorPaidInfusion: number;
       partnershipTarget: number;
