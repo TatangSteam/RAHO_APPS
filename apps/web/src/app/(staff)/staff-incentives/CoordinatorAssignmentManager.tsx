@@ -159,13 +159,13 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
   const remove = async (assignment: ChsCoordinatorAssignment) => {
     const coordinatorName = assignment.coordinator.profile?.fullName || assignment.coordinator.email;
     if (!window.confirm(
-      `Hapus ${assignment.branch.name} dari koordinasi ${coordinatorName}? Assignment yang sudah berjalan akan diakhiri tanpa menghapus histori insentif.`,
+      `Hapus permanen ${assignment.branch.name} dari koordinasi ${coordinatorName}? Data ini tidak dapat dipulihkan.`,
     )) return;
 
     try {
-      await usersApi.deactivateChsCoordinatorAssignment(assignment.id);
+      await usersApi.deleteChsCoordinatorAssignment(assignment.id);
       if (editingAssignmentId === assignment.id) resetForm();
-      showToast.success('Assignment Koordinator CHS berhasil dihapus atau diakhiri.');
+      showToast.success('Assignment Koordinator CHS berhasil dihapus permanen.');
       await load();
       onChanged();
     } catch (error) {
@@ -321,12 +321,10 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
                   </span>
                   {assignment.notes && <small className="block text-neutral-400">{assignment.notes}</small>}
                 </div>
-                {assignment.isActive && (
-                  <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => edit(assignment)} title="Edit assignment" aria-label={`Edit assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10"><Pencil className="h-4 w-4" /></button>
-                    <button type="button" onClick={() => void remove(assignment)} title="Hapus assignment" aria-label={`Hapus assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  {assignment.isActive && <button type="button" onClick={() => edit(assignment)} title="Edit assignment" aria-label={`Edit assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10"><Pencil className="h-4 w-4" /></button>}
+                  <button type="button" onClick={() => void remove(assignment)} title="Hapus permanen assignment" aria-label={`Hapus permanen assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
+                </div>
               </div>
             );
           })}

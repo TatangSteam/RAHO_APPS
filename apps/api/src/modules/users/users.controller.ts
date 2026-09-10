@@ -37,14 +37,14 @@ import { exportMonthlyStaffIncentivesService } from './services/staff-incentive-
 import {
   createChsCoordinatorAssignmentService,
   createChsCoordinatorBranchAssignmentsService,
-  deactivateChsCoordinatorAssignmentService,
+  deleteChsCoordinatorAssignmentService,
   getChsCoordinatorAssignmentOptionsService,
   listChsCoordinatorAssignmentsService,
   updateChsCoordinatorAssignmentService,
 } from './services/chs-coordinator-assignment.service';
 import {
   createDoctorHeadBranchAssignmentsService,
-  deactivateDoctorHeadAssignmentService,
+  deleteDoctorHeadAssignmentService,
   getDoctorHeadAssignmentOptionsService,
   listDoctorHeadAssignmentsService,
   updateDoctorHeadAssignmentService,
@@ -702,9 +702,9 @@ export async function updateChsCoordinatorAssignment(req: Request, res: Response
   } catch (err) { next(err); }
 }
 
-export async function deactivateChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function deleteChsCoordinatorAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await deactivateChsCoordinatorAssignmentService(req.params.assignmentId, {
+    const result = await deleteChsCoordinatorAssignmentService(req.params.assignmentId, {
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,
@@ -765,9 +765,9 @@ export async function updateDoctorHeadAssignment(req: Request, res: Response, ne
   } catch (err) { next(err); }
 }
 
-export async function deactivateDoctorHeadAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function deleteDoctorHeadAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await deactivateDoctorHeadAssignmentService(req.params.assignmentId, {
+    const result = await deleteDoctorHeadAssignmentService(req.params.assignmentId, {
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,

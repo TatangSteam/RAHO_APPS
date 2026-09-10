@@ -9,7 +9,7 @@ jest.mock('@/lib/usersApi', () => ({
     createChsCoordinatorBranchAssignments: jest.fn(),
     createChsCoordinatorAssignment: jest.fn(),
     updateChsCoordinatorAssignment: jest.fn(),
-    deactivateChsCoordinatorAssignment: jest.fn(),
+    deleteChsCoordinatorAssignment: jest.fn(),
   },
 }));
 

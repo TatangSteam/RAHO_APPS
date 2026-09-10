@@ -23,14 +23,6 @@ function dateOnly(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-function todayInJakarta() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date());
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
-  return dateOnly(`${part('year')}-${part('month')}-${part('day')}`);
-}
-
 function assertSuperAdmin(caller: Caller) {
   if (caller.role !== Role.SUPER_ADMIN) {
     throw errors.forbidden('Hanya Super Admin yang dapat mengatur Dokter Head.');
@@ -199,26 +191,13 @@ export async function updateDoctorHeadAssignmentService(
   });
 }
 
-export async function deactivateDoctorHeadAssignmentService(assignmentId: string, caller: Caller) {
+export async function deleteDoctorHeadAssignmentService(assignmentId: string, caller: Caller) {
   assertSuperAdmin(caller);
   const assignment = await prisma.doctorHeadAssignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true, effectiveFrom: true, effectiveUntil: true },
+    select: { id: true },
   });
   if (!assignment) throw errors.notFound('Assignment Dokter Head tidak ditemukan.');
-  const today = todayInJakarta();
-  if (assignment.effectiveFrom > today) {
-    await prisma.doctorHeadAssignment.delete({ where: { id: assignment.id } });
-    return { id: assignment.id, deleted: true };
-  }
-  return prisma.doctorHeadAssignment.update({
-    where: { id: assignment.id },
-    data: {
-      isActive: false,
-      effectiveUntil: assignment.effectiveUntil && assignment.effectiveUntil < today
-        ? assignment.effectiveUntil
-        : today,
-    },
-    select: assignmentSelect,
-  });
+  await prisma.doctorHeadAssignment.delete({ where: { id: assignment.id } });
+  return { id: assignment.id, deleted: true };
 }

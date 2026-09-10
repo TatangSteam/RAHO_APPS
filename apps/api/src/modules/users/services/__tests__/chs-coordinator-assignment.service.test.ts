@@ -2,7 +2,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import {
   createChsCoordinatorBranchAssignmentsService,
-  deactivateChsCoordinatorAssignmentService,
+  deleteChsCoordinatorAssignmentService,
   updateChsCoordinatorAssignmentService,
 } from '../chs-coordinator-assignment.service';
 
@@ -136,18 +136,17 @@ describe('CHS coordinator assignment update', () => {
     }, caller)).rejects.toMatchObject({ code: 'INACTIVE_CHS_ASSIGNMENT' });
   });
 
-  it('allows Super Admin to delete a future coordinator assignment', async () => {
+  it('permanently deletes a coordinator assignment regardless of its period', async () => {
     mockPrisma.chsCoordinatorAssignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
       branchId: 'branch-1',
-      effectiveFrom: new Date('2099-01-01T00:00:00.000Z'),
-      effectiveUntil: null,
     });
 
-    await deactivateChsCoordinatorAssignmentService('assignment-1', caller);
+    await deleteChsCoordinatorAssignmentService('assignment-1', caller);
 
     expect(mockPrisma.chsCoordinatorAssignment.delete).toHaveBeenCalledWith({
       where: { id: 'assignment-1' },
     });
+    expect(mockPrisma.chsCoordinatorAssignment.update).not.toHaveBeenCalled();
   });
 });

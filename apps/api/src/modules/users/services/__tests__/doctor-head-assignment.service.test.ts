@@ -2,7 +2,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import {
   createDoctorHeadBranchAssignmentsService,
-  deactivateDoctorHeadAssignmentService,
+  deleteDoctorHeadAssignmentService,
   updateDoctorHeadAssignmentService,
 } from '../doctor-head-assignment.service';
 
@@ -74,9 +74,10 @@ describe('Doctor Head assignment management', () => {
     }));
   });
 
-  it('lets Super Admin delete a future assignment', async () => {
-    await deactivateDoctorHeadAssignmentService('assignment-1', superAdmin);
+  it('lets Super Admin permanently delete an assignment regardless of its period', async () => {
+    await deleteDoctorHeadAssignmentService('assignment-1', superAdmin);
     expect(mockPrisma.doctorHeadAssignment.delete).toHaveBeenCalledWith({ where: { id: 'assignment-1' } });
+    expect(mockPrisma.doctorHeadAssignment.update).not.toHaveBeenCalled();
   });
 
   it('rejects add, edit, and delete from non-Super Admin accounts', async () => {
@@ -87,6 +88,6 @@ describe('Doctor Head assignment management', () => {
     await expect(updateDoctorHeadAssignmentService('assignment-1', {
       doctorHeadUserId: 'doctor-1', branchId: 'branch-1', effectiveFrom: '2026-09-01',
     }, manager)).rejects.toMatchObject({ status: 403 });
-    await expect(deactivateDoctorHeadAssignmentService('assignment-1', manager)).rejects.toMatchObject({ status: 403 });
+    await expect(deleteDoctorHeadAssignmentService('assignment-1', manager)).rejects.toMatchObject({ status: 403 });
   });
 });

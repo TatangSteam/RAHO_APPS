@@ -33,14 +33,6 @@ function dateOnly(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-function todayInJakarta() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date());
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
-  return dateOnly(`${part('year')}-${part('month')}-${part('day')}`);
-}
-
 async function assertManageAccess(caller: Caller, branchId: string) {
   if (!MANAGER_ROLES.has(caller.role)) {
     throw errors.forbidden('Hanya administrator yang dapat mengatur Koordinator CHS.');
@@ -336,27 +328,13 @@ export async function updateChsCoordinatorAssignmentService(
   });
 }
 
-export async function deactivateChsCoordinatorAssignmentService(assignmentId: string, caller: Caller) {
+export async function deleteChsCoordinatorAssignmentService(assignmentId: string, caller: Caller) {
   const assignment = await prisma.chsCoordinatorAssignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true, branchId: true, effectiveFrom: true, effectiveUntil: true },
+    select: { id: true, branchId: true },
   });
   if (!assignment) throw errors.notFound('Assignment Koordinator CHS tidak ditemukan.');
   await assertManageAccess(caller, assignment.branchId);
-
-  const today = todayInJakarta();
-  if (assignment.effectiveFrom > today) {
-    await prisma.chsCoordinatorAssignment.delete({ where: { id: assignment.id } });
-    return { id: assignment.id, deleted: true };
-  }
-  return prisma.chsCoordinatorAssignment.update({
-    where: { id: assignment.id },
-    data: {
-      isActive: false,
-      effectiveUntil: assignment.effectiveUntil && assignment.effectiveUntil < today
-        ? assignment.effectiveUntil
-        : today,
-    },
-    select: assignmentSelect,
-  });
+  await prisma.chsCoordinatorAssignment.delete({ where: { id: assignment.id } });
+  return { id: assignment.id, deleted: true };
 }

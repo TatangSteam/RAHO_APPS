@@ -430,7 +430,7 @@ export const usersApi = {
     return response.data.data;
   },
 
-  deactivateChsCoordinatorAssignment: async (assignmentId: string): Promise<void> => {
+  deleteChsCoordinatorAssignment: async (assignmentId: string): Promise<void> => {
     await api.delete(`/users/incentives/coordinator/assignments/${assignmentId}`);
   },
 
@@ -459,7 +459,7 @@ export const usersApi = {
     return response.data.data;
   },
 
-  deactivateDoctorHeadAssignment: async (assignmentId: string): Promise<void> => {
+  deleteDoctorHeadAssignment: async (assignmentId: string): Promise<void> => {
     await api.delete(`/users/incentives/doctor-head/assignments/${assignmentId}`);
   },
 

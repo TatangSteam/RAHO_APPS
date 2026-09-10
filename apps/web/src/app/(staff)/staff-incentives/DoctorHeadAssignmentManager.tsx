@@ -107,10 +107,10 @@ export function DoctorHeadAssignmentManager({ month, onChanged }: Props) {
 
   const remove = async (assignment: DoctorHeadAssignment) => {
     const doctorName = assignment.doctorHead.profile?.fullName || assignment.doctorHead.email;
-    if (!window.confirm(`Hapus assignment ${doctorName} untuk ${assignment.branch.name}?`)) return;
+    if (!window.confirm(`Hapus permanen assignment ${doctorName} untuk ${assignment.branch.name}? Data ini tidak dapat dipulihkan.`)) return;
     try {
-      await usersApi.deactivateDoctorHeadAssignment(assignment.id);
-      showToast.success('Assignment Dokter Head berhasil dihapus.');
+      await usersApi.deleteDoctorHeadAssignment(assignment.id);
+      showToast.success('Assignment Dokter Head berhasil dihapus permanen.');
       if (editingId === assignment.id) resetForm();
       await load();
       onChanged();
@@ -172,7 +172,7 @@ export function DoctorHeadAssignmentManager({ month, onChanged }: Props) {
         <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
           {loading ? <p className="py-4 text-sm text-neutral-500">Memuat assignment...</p> : assignments.map((assignment) => {
             const doctorName = assignment.doctorHead.profile?.fullName || assignment.doctorHead.email;
-            return <div key={assignment.id} className="flex items-center justify-between gap-4 py-3 text-sm"><div><div className="flex flex-wrap items-center gap-2"><strong>{doctorName}</strong><span className="rounded-full bg-cyan-50 px-2 py-0.5 text-xs text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300">{assignment.branch.name}</span>{!assignment.isActive && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800">Nonaktif</span>}</div><span className="text-neutral-500">{assignment.effectiveFrom.slice(0, 10)} s/d {assignment.effectiveUntil?.slice(0, 10) || 'seterusnya'}</span>{assignment.notes && <small className="block text-neutral-400">{assignment.notes}</small>}</div>{assignment.isActive && <div className="flex"><button type="button" onClick={() => edit(assignment)} aria-label={`Edit ${doctorName}`} className="rounded-lg p-2 text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-500/10"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => void remove(assignment)} aria-label={`Hapus ${doctorName}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button></div>}</div>;
+            return <div key={assignment.id} className="flex items-center justify-between gap-4 py-3 text-sm"><div><div className="flex flex-wrap items-center gap-2"><strong>{doctorName}</strong><span className="rounded-full bg-cyan-50 px-2 py-0.5 text-xs text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300">{assignment.branch.name}</span>{!assignment.isActive && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800">Nonaktif</span>}</div><span className="text-neutral-500">{assignment.effectiveFrom.slice(0, 10)} s/d {assignment.effectiveUntil?.slice(0, 10) || 'seterusnya'}</span>{assignment.notes && <small className="block text-neutral-400">{assignment.notes}</small>}</div><div className="flex">{assignment.isActive && <button type="button" onClick={() => edit(assignment)} aria-label={`Edit ${doctorName}`} className="rounded-lg p-2 text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-500/10"><Pencil className="h-4 w-4" /></button>}<button type="button" onClick={() => void remove(assignment)} aria-label={`Hapus permanen ${doctorName}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button></div></div>;
           })}
           {!loading && assignments.length === 0 && <p className="py-4 text-sm text-neutral-500">Belum ada assignment Dokter Head pada periode ini.</p>}
         </div>

@@ -30,12 +30,12 @@ import {
   createChsCoordinatorAssignment,
   createChsCoordinatorBranchAssignments,
   updateChsCoordinatorAssignment,
-  deactivateChsCoordinatorAssignment,
+  deleteChsCoordinatorAssignment,
   listDoctorHeadAssignments,
   getDoctorHeadAssignmentOptions,
   createDoctorHeadBranchAssignments,
   updateDoctorHeadAssignment,
-  deactivateDoctorHeadAssignment,
+  deleteDoctorHeadAssignment,
   getStaffSessionHistory,
   exportStaffPerformanceDetail,
   exportStaffPerformance,
@@ -124,7 +124,7 @@ usersRouter.delete(
   '/incentives/coordinator/assignments/:assignmentId',
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
-  deactivateChsCoordinatorAssignment,
+  deleteChsCoordinatorAssignment,
 );
 
 usersRouter.get(
@@ -165,7 +165,7 @@ usersRouter.delete(
   '/incentives/doctor-head/assignments/:assignmentId',
   authenticate,
   authorize([Role.SUPER_ADMIN]),
-  deactivateDoctorHeadAssignment,
+  deleteDoctorHeadAssignment,
 );
 
 usersRouter.get(
