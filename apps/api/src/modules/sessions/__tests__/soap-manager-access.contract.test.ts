@@ -11,8 +11,8 @@ describe('SOAP manager access contract', () => {
     expect(service).toContain('Role.SUPER_ADMIN, Role.ADMIN_MANAGER');
     expect(service).toContain('actor.role === Role.ADMIN_LAYANAN || actor.role === Role.NURSE');
     expect(service).not.toContain('Evaluasi SOAP hanya dapat diedit oleh dokter yang ditugaskan.');
-    expect(service).toContain('beforeData: evaluation');
-    expect(service).toContain('afterData: updated');
+    expect(service).toContain('beforeData: stored.evaluation');
+    expect(service).toContain('afterData: stored.updated');
     expect(service).toContain("actor.role === Role.ADMIN_CABANG");
   });
 });
