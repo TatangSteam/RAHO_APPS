@@ -21,6 +21,11 @@ const s3Client = new S3Client({
 });
 
 let bucketInitialization: Promise<void> | null = null;
+const STORAGE_REQUEST_TIMEOUT_MS = 20_000;
+
+function storageRequestOptions() {
+  return { abortSignal: AbortSignal.timeout(STORAGE_REQUEST_TIMEOUT_MS) };
+}
 
 function getHttpStatusCode(error: unknown): number | undefined {
   if (typeof error !== 'object' || error === null || !('$metadata' in error)) {
@@ -40,14 +45,20 @@ export async function ensureBucketExists(): Promise<void> {
   if (!bucketInitialization) {
     bucketInitialization = (async () => {
       try {
-        await s3Client.send(new HeadBucketCommand({ Bucket: env.MINIO_BUCKET }));
+        await s3Client.send(
+          new HeadBucketCommand({ Bucket: env.MINIO_BUCKET }),
+          storageRequestOptions(),
+        );
       } catch (error) {
         if (getHttpStatusCode(error) !== 404) {
           throw error;
         }
 
         try {
-          await s3Client.send(new CreateBucketCommand({ Bucket: env.MINIO_BUCKET }));
+          await s3Client.send(
+            new CreateBucketCommand({ Bucket: env.MINIO_BUCKET }),
+            storageRequestOptions(),
+          );
         } catch (createError) {
           // Another process may have created it after the HEAD request.
           if (getHttpStatusCode(createError) !== 409) {
@@ -90,6 +101,7 @@ export async function uploadFile(
       Body: buffer,
       ContentType: mimeType,
     }),
+    storageRequestOptions(),
   );
 
   const presignedUrl = await getSignedUrl(

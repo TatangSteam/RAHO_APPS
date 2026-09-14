@@ -5,8 +5,11 @@ import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Image as ImageIcon, Check, File } from 'lucide-react';
-import { api } from '@/lib/api';
 import { showToast } from '@/lib/toast';
+import {
+  getMemberDocumentUploadError,
+  uploadMemberDocument,
+} from '@/lib/memberDocumentUpload';
 
 interface UploadDocumentsModalProps {
   isOpen: boolean;
@@ -110,19 +113,13 @@ export default function UploadDocumentsModal({
         documentType: activeTab === 'psp' ? 'PERSETUJUAN_SETELAH_PENJELASAN' : 'FOTO_PROFIL'
       });
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('documentType', 
-        activeTab === 'psp' ? 'PERSETUJUAN_SETELAH_PENJELASAN' : 'FOTO_PROFIL'
+      const response = await uploadMemberDocument(
+        memberId,
+        file,
+        activeTab === 'psp' ? 'PERSETUJUAN_SETELAH_PENJELASAN' : 'FOTO_PROFIL',
       );
 
-      const response = await api.post(`/members/${memberId}/documents`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      console.log('Upload success:', response.data);
+      console.log('Upload success:', response);
       showToast.success(`${activeTab === 'psp' ? 'Informed consent' : 'Foto profil'} berhasil diunggah.`);
       setFile(null);
       setPreview(null);
@@ -133,10 +130,9 @@ export default function UploadDocumentsModal({
       console.error('Upload error:', err);
       console.error('Error response:', err.response?.data);
       
-      const errorMessage = err.response?.data?.error?.message || err.message || 'Gagal upload file';
-      const errorCode = err.response?.data?.error?.code || 'UNKNOWN_ERROR';
+      const uploadError = getMemberDocumentUploadError(err);
       
-      showToast.error(`${errorMessage} (${errorCode})`);
+      showToast.error(`${uploadError.message} (${uploadError.code})`);
     } finally {
       setUploading(false);
     }

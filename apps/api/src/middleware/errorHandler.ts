@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import multer from 'multer';
 import { logger } from '@lib/logger';
 import { sendError } from '@utils/response';
 
@@ -79,6 +80,15 @@ export function errorHandler(
         ? err.errors.map((item) => typeof item === 'string' ? { message: item } : item)
         : undefined;
     sendError(res, err.status, err.code, err.message, details);
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      sendError(res, 400, 'FILE_TOO_LARGE', 'Ukuran file melebihi batas maksimal.');
+      return;
+    }
+    sendError(res, 400, 'UPLOAD_ERROR', `Upload gagal: ${err.message}`);
     return;
   }
 
