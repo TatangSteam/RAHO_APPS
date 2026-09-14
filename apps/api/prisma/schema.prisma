@@ -3941,6 +3941,7 @@ model DoctorEvaluation {
   plan               String?  @db.Text
   generalNotes       String?  @db.Text
   writtenBy          String
+  doctorEditedAt     DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

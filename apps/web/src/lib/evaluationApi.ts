@@ -11,6 +11,7 @@ export interface DoctorEvaluation {
   plan: string | null;
   generalNotes: string | null;
   writtenBy: string;
+  doctorEditedAt: string | null;
   writtenAt: string;
   updatedAt: string;
 }

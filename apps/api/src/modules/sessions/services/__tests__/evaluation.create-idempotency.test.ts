@@ -96,6 +96,33 @@ describe('EvaluationService idempotent create', () => {
     );
   });
 
+  it('rejects a stale create request after the doctor edit was already used', async () => {
+    transactionClient.doctorEvaluation.findUnique.mockResolvedValue({
+      id: 'evaluation-1',
+      evaluationCode: 'EVL-PST-0001',
+      treatmentSessionId: 'session-1',
+      keluhan: null,
+      rekomendasi: null,
+      subjective: 'Kondisi awal',
+      objective: null,
+      assessment: null,
+      plan: null,
+      generalNotes: null,
+      writtenBy: 'doctor-1',
+      doctorEditedAt: new Date('2026-09-14T05:00:00.000Z'),
+    });
+
+    await expect(new EvaluationService().createEvaluation(
+      'session-1',
+      { subjective: 'Percobaan edit berikutnya', writtenBy: 'doctor-1' },
+      'doctor-1',
+    )).rejects.toMatchObject({
+      status: 409,
+      code: 'DOCTOR_EVALUATION_EDIT_LIMIT_REACHED',
+    });
+    expect(transactionClient.doctorEvaluation.update).not.toHaveBeenCalled();
+  });
+
   it('creates a new serialized evaluation when the session has no evaluation row', async () => {
     transactionClient.doctorEvaluation.findUnique.mockResolvedValue(null);
     transactionClient.doctorEvaluation.findFirst.mockResolvedValue({
@@ -115,7 +142,7 @@ describe('EvaluationService idempotent create', () => {
       'doctor-1',
     );
 
-    expect(transactionClient.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(transactionClient.$executeRaw).toHaveBeenCalledTimes(2);
     expect(transactionClient.doctorEvaluation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         evaluationCode: expect.stringMatching(/^EVL-PST-\d{4}-00008$/),

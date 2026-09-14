@@ -9,6 +9,13 @@ describe('SOAP role access contract', () => {
     expect(component).not.toContain("const canEdit = user?.role === 'DOCTOR'");
   });
 
+  it('hides further edits from a doctor after the single correction was used', () => {
+    const component = readFileSync(resolve(__dirname, 'Step9Evaluation.tsx'), 'utf8');
+    expect(component).toContain("user?.role === 'DOCTOR' && Boolean(evaluation?.doctorEditedAt)");
+    expect(component).toContain('Evaluasi sudah pernah diedit satu kali dan kini terkunci untuk dokter.');
+    expect(component).toContain("'Edit (1x)'");
+  });
+
   it('lets session participants open every step while keeping non-owned steps read-only', () => {
     const page = readFileSync(resolve(__dirname, '../../app/(staff)/sessions/[sessionId]/page.tsx'), 'utf8');
     expect(page).toContain('Semua anggota sesi dapat membuka dan melihat setiap langkah');

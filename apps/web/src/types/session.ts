@@ -284,6 +284,7 @@ export interface SessionDetail {
     plan: string | null;
     generalNotes: string | null;
     writtenBy: string;
+    doctorEditedAt: string | null;
     createdAt: string;
   } | null;
   steps: StepCompletion;

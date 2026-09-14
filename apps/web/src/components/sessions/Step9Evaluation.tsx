@@ -19,6 +19,7 @@ interface Evaluation {
   plan: string | null;
   generalNotes: string | null;
   writtenBy: string;
+  doctorEditedAt: string | null;
   createdAt: string;
 }
 
@@ -60,7 +61,9 @@ export default function Step9Evaluation({
 
   // Semua staff sesi yang ditugaskan dapat membantu penyelesaian workflow;
   // perubahan tetap tercatat pada audit log berdasarkan akun pengisi.
-  const canEdit = ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '');
+  const doctorEditLimitReached = user?.role === 'DOCTOR' && Boolean(evaluation?.doctorEditedAt);
+  const canEdit = ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '')
+    && !doctorEditLimitReached;
 
   const hasDoctorEvaluation = !!evaluation && [
     evaluation.subjective,
@@ -208,10 +211,24 @@ export default function Step9Evaluation({
                 gap: '6px'
               }}
             >
-              ✏️ Edit
+              ✏️ {user?.role === 'DOCTOR' ? 'Edit (1x)' : 'Edit'}
             </button>
           )}
         </div>
+
+        {doctorEditLimitReached && (
+          <div style={{
+            padding: '10px 14px',
+            marginBottom: '16px',
+            border: '1px solid rgba(148,163,184,0.3)',
+            borderRadius: 'var(--radius-md)',
+            background: 'rgba(148,163,184,0.08)',
+            color: '#94a3b8',
+            fontSize: '13px',
+          }}>
+            Evaluasi sudah pernah diedit satu kali dan kini terkunci untuk dokter.
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {evaluation.subjective && (
@@ -364,7 +381,9 @@ export default function Step9Evaluation({
         }}>
           <span style={{ fontSize: '16px' }}>✏️</span>
           <span style={{ fontSize: '14px', color: '#60a5fa', fontWeight: '600' }}>
-            Mode Edit: Sedang mengedit evaluasi dokter
+            {user?.role === 'DOCTOR'
+              ? 'Mode Edit: Ini satu-satunya kesempatan edit. Setelah disimpan, evaluasi akan terkunci.'
+              : 'Mode Edit: Sedang mengedit evaluasi dokter'}
           </span>
         </div>
       )}

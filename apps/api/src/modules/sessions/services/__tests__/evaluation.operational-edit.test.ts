@@ -7,10 +7,7 @@ jest.mock('@lib/prisma', () => ({
   prisma: {
     treatmentSession: { findUnique: jest.fn() },
     user: { findUnique: jest.fn() },
-    doctorEvaluation: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -19,7 +16,15 @@ jest.mock('@utils/auditLog', () => ({ logAudit: jest.fn() }));
 const mockedPrisma = prisma as unknown as {
   treatmentSession: { findUnique: jest.Mock };
   user: { findUnique: jest.Mock };
-  doctorEvaluation: { findUnique: jest.Mock; update: jest.Mock };
+  $transaction: jest.Mock;
+};
+
+const transactionClient = {
+  $executeRaw: jest.fn(),
+  doctorEvaluation: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
 };
 
 const assignedSession = {
@@ -38,12 +43,21 @@ describe('EvaluationService operational SOAP access', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedPrisma.treatmentSession.findUnique.mockResolvedValue(assignedSession);
-    mockedPrisma.doctorEvaluation.findUnique.mockResolvedValue({
+    mockedPrisma.$transaction.mockImplementation(
+      (callback: (tx: typeof transactionClient) => unknown) => callback(transactionClient),
+    );
+    transactionClient.$executeRaw.mockResolvedValue(1);
+    transactionClient.doctorEvaluation.findUnique.mockResolvedValue({
       id: 'evaluation-1',
       treatmentSessionId: 'session-1',
       subjective: null,
+      objective: null,
+      assessment: null,
+      plan: null,
+      generalNotes: null,
+      doctorEditedAt: null,
     });
-    mockedPrisma.doctorEvaluation.update.mockImplementation(({ data }) => Promise.resolve({
+    transactionClient.doctorEvaluation.update.mockImplementation(({ data }) => Promise.resolve({
       id: 'evaluation-1',
       ...data,
     }));
@@ -79,6 +93,6 @@ describe('EvaluationService operational SOAP access', () => {
       { subjective: 'Tidak boleh' },
       'nurse-other',
     )).rejects.toMatchObject({ status: 403, code: 'SESSION_NOT_ASSIGNED' });
-    expect(mockedPrisma.doctorEvaluation.update).not.toHaveBeenCalled();
+    expect(transactionClient.doctorEvaluation.update).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,52 @@ function providedFields(data: Partial<CreateEvaluationInput>, fields: readonly s
   return fields.filter((field) => data[field as keyof CreateEvaluationInput] !== undefined);
 }
 
+type StoredDoctorEvaluation = {
+  doctorEditedAt?: Date | null;
+  subjective: string | null;
+  objective: string | null;
+  assessment: string | null;
+  plan: string | null;
+  generalNotes: string | null;
+};
+
+function hasDoctorEvaluation(evaluation: StoredDoctorEvaluation) {
+  return DOCTOR_FIELDS.some((field) => {
+    const value = evaluation[field];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+}
+
+function changesDoctorEvaluation(
+  evaluation: StoredDoctorEvaluation,
+  data: Partial<CreateEvaluationInput>,
+) {
+  return DOCTOR_FIELDS.some((field) => (
+    data[field] !== undefined && (data[field] ?? null) !== evaluation[field]
+  ));
+}
+
+function getDoctorEditTimestamp(
+  evaluation: StoredDoctorEvaluation,
+  data: Partial<CreateEvaluationInput>,
+  actorRole: Role,
+) {
+  const isDoctorCorrection = actorRole === Role.DOCTOR
+    && hasDoctorEvaluation(evaluation)
+    && changesDoctorEvaluation(evaluation, data);
+
+  if (!isDoctorCorrection) return undefined;
+  if (evaluation.doctorEditedAt) {
+    throw {
+      status: 409,
+      code: 'DOCTOR_EVALUATION_EDIT_LIMIT_REACHED',
+      message: 'Evaluasi dokter hanya dapat diedit satu kali. Hubungi Admin Manager untuk koreksi lanjutan.',
+    };
+  }
+
+  return new Date();
+}
+
 export class EvaluationService {
   private async assertEditor(sessionId: string, data: Partial<CreateEvaluationInput>, userId: string) {
     const [session, actor] = await Promise.all([
@@ -30,7 +76,7 @@ export class EvaluationService {
 
     const operationalChanges = providedFields(data, OPERATIONAL_FIELDS);
     const doctorChanges = providedFields(data, DOCTOR_FIELDS);
-    if (SOAP_MANAGER_ROLES.includes(actor.role)) return session;
+    if (SOAP_MANAGER_ROLES.includes(actor.role)) return { session, actorRole: actor.role };
 
     if (actor.role === Role.ADMIN_CABANG) {
       if (doctorChanges.length > 0) {
@@ -40,7 +86,7 @@ export class EvaluationService {
           message: 'Evaluasi SOAP hanya dapat diedit oleh dokter, Admin Manager, atau Super Admin.',
         };
       }
-      return session;
+      return { session, actorRole: actor.role };
     }
 
     if (actor.role === Role.DOCTOR) {
@@ -50,7 +96,7 @@ export class EvaluationService {
       if (operationalChanges.length > 0) {
         throw { status: 403, code: 'FIELD_NOT_OWNED', message: 'Keluhan dan rekomendasi operasional diisi oleh MSO atau Nakes.' };
       }
-      return session;
+      return { session, actorRole: actor.role };
     }
 
     if (actor.role === Role.ADMIN_LAYANAN || actor.role === Role.NURSE) {
@@ -58,14 +104,14 @@ export class EvaluationService {
         ? session.adminLayananId === userId
         : session.nurseId === userId || session.sessionNurses.some((item) => item.nurseId === userId);
       if (!assigned) throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Anda hanya dapat mengedit sesi yang ditugaskan kepada Anda.' };
-      return session;
+      return { session, actorRole: actor.role };
     }
 
     throw { status: 403, code: 'FORBIDDEN', message: 'Anda tidak memiliki akses untuk mengedit bagian sesi ini.' };
   }
 
   async createEvaluation(sessionId: string, data: CreateEvaluationInput, userId: string) {
-    const authorizedSession = await this.assertEditor(sessionId, data, userId);
+    const { session: authorizedSession, actorRole } = await this.assertEditor(sessionId, data, userId);
     assertSessionEditWindow(authorizedSession);
 
     const session = await prisma.treatmentSession.findUnique({
@@ -87,6 +133,8 @@ export class EvaluationService {
       // rows or reuse the same human-readable evaluation code.
       const lockKey = `doctor-evaluation:${authorizedSession.branchId}`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const sessionLockKey = `doctor-evaluation-edit:${sessionId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${sessionLockKey}))`;
 
       const existing = await tx.doctorEvaluation.findUnique({
         where: { treatmentSessionId: sessionId },
@@ -103,9 +151,13 @@ export class EvaluationService {
       };
 
       if (existing) {
+        const doctorEditedAt = getDoctorEditTimestamp(existing, data, actorRole);
         const evaluation = await tx.doctorEvaluation.update({
           where: { treatmentSessionId: sessionId },
-          data: evaluationData,
+          data: {
+            ...evaluationData,
+            ...(doctorEditedAt ? { doctorEditedAt } : {}),
+          },
         });
         return { evaluation, previous: existing, action: AuditAction.UPDATE };
       }
@@ -148,32 +200,43 @@ export class EvaluationService {
   }
 
   async updateEvaluation(sessionId: string, data: Partial<CreateEvaluationInput>, userId: string) {
-    const session = await this.assertEditor(sessionId, data, userId);
-    const evaluation = await prisma.doctorEvaluation.findUnique({
-      where: { treatmentSessionId: sessionId },
-    });
-
-    if (!evaluation) {
-      throw {
-        status: 404,
-        code: 'EVALUATION_NOT_FOUND',
-        message: 'Evaluasi dokter tidak ditemukan',
-      };
-    }
+    const { session, actorRole } = await this.assertEditor(sessionId, data, userId);
     assertSessionEditWindow(session);
 
-    const updated = await prisma.doctorEvaluation.update({
-      where: { treatmentSessionId: sessionId },
-      data: {
-        keluhan: data.keluhan,
-        rekomendasi: data.rekomendasi,
-        subjective: data.subjective,
-        objective: data.objective,
-        assessment: data.assessment,
-        plan: data.plan,
-        generalNotes: data.generalNotes,
-        writtenBy: userId,
-      },
+    const stored = await prisma.$transaction(async (tx) => {
+      // Serialize edits for this session so parallel requests cannot both use
+      // the doctor's single correction opportunity.
+      const lockKey = `doctor-evaluation-edit:${sessionId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+      const evaluation = await tx.doctorEvaluation.findUnique({
+        where: { treatmentSessionId: sessionId },
+      });
+      if (!evaluation) {
+        throw {
+          status: 404,
+          code: 'EVALUATION_NOT_FOUND',
+          message: 'Evaluasi dokter tidak ditemukan',
+        };
+      }
+
+      const doctorEditedAt = getDoctorEditTimestamp(evaluation, data, actorRole);
+      const updated = await tx.doctorEvaluation.update({
+        where: { treatmentSessionId: sessionId },
+        data: {
+          keluhan: data.keluhan,
+          rekomendasi: data.rekomendasi,
+          subjective: data.subjective,
+          objective: data.objective,
+          assessment: data.assessment,
+          plan: data.plan,
+          generalNotes: data.generalNotes,
+          writtenBy: userId,
+          ...(doctorEditedAt ? { doctorEditedAt } : {}),
+        },
+      });
+
+      return { evaluation, updated };
     });
 
     await logAudit({
@@ -181,13 +244,13 @@ export class EvaluationService {
       branchId: session.branchId,
       action: AuditAction.UPDATE,
       resource: 'DoctorEvaluation',
-      resourceId: evaluation.id,
-      beforeData: evaluation,
-      afterData: updated,
+      resourceId: stored.evaluation.id,
+      beforeData: stored.evaluation,
+      afterData: stored.updated,
       meta: { sessionId, changedFields: Object.keys(data) },
     });
 
-    return updated;
+    return stored.updated;
   }
 
   async getEvaluation(sessionId: string) {
