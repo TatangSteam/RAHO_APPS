@@ -8,6 +8,9 @@ jest.mock('../../../../lib/prisma', () => ({
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
+    userProfile: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));
@@ -119,6 +122,55 @@ describe('MemberUpdateService duplicate checks', () => {
         },
         'manager-1',
         Role.ADMIN_MANAGER,
+      ),
+    ).rejects.toBe(transactionReached);
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows Admin Layanan to update a member phone number', async () => {
+    const transactionReached = new Error('TRANSACTION_REACHED');
+    prismaMock.userProfile.findFirst.mockResolvedValue(null);
+    prismaMock.$transaction.mockRejectedValue(transactionReached);
+
+    await expect(
+      new MemberUpdateService().updateMember(
+        'member-1',
+        { phone: '089999999999' },
+        'admin-layanan-1',
+        Role.ADMIN_LAYANAN,
+      ),
+    ).rejects.toBe(transactionReached);
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects Admin Layanan attempts to update other member profile fields', async () => {
+    await expect(
+      new MemberUpdateService().updateMember(
+        'member-1',
+        { fullName: 'Nama Baru', phone: '089999999999' },
+        'admin-layanan-1',
+        Role.ADMIN_LAYANAN,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: 'ADMIN_LAYANAN_MEMBER_FIELD_FORBIDDEN',
+    });
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing Admin Layanan permission to update life status', async () => {
+    const transactionReached = new Error('TRANSACTION_REACHED');
+    prismaMock.$transaction.mockRejectedValue(transactionReached);
+
+    await expect(
+      new MemberUpdateService().updateMember(
+        'member-1',
+        { isDeceased: true },
+        'admin-layanan-1',
+        Role.ADMIN_LAYANAN,
       ),
     ).rejects.toBe(transactionReached);
 

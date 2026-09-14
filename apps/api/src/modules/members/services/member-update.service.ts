@@ -77,6 +77,10 @@ export class MemberUpdateService {
       data = this.restrictAdminManagerToEmptyFields(member, data);
     }
 
+    if (actorRole === Role.ADMIN_LAYANAN) {
+      data = this.restrictAdminLayananFields(data);
+    }
+
     const requestedFullName = cleanMemberName(
       data.fullName ?? member.user.profile?.fullName ?? '',
     );
@@ -273,6 +277,22 @@ export class MemberUpdateService {
     await enqueueContactSafely('MEMBER', memberId);
 
     return this.formatMemberData(updated);
+  }
+
+  private restrictAdminLayananFields(input: MemberUpdateInput): MemberUpdateInput {
+    const allowedFields = new Set<keyof MemberUpdateInput>(['phone', 'isDeceased']);
+    const blockedFields = (Object.keys(input) as Array<keyof MemberUpdateInput>)
+      .filter((key) => !allowedFields.has(key));
+
+    if (blockedFields.length > 0) {
+      throw {
+        status: 403,
+        code: 'ADMIN_LAYANAN_MEMBER_FIELD_FORBIDDEN',
+        message: 'Admin Layanan hanya dapat mengubah nomor telepon dan status meninggal member.',
+      };
+    }
+
+    return input;
   }
 
   private restrictAdminManagerToEmptyFields(

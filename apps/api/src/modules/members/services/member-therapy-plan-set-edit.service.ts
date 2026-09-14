@@ -90,85 +90,90 @@ function generateEditedSetName(originalName: string | null, setCode: string): st
 
 export class MemberTherapyPlanSetEditService {
   async deleteTherapyPlanSet(memberId: string, setId: string) {
-    const set = await prisma.therapyPlanSet.findUnique({
+    const requestedSet = await prisma.therapyPlanSet.findUnique({
       where: { id: setId },
-      include: {
-        plans: {
-          select: {
-            id: true,
-            planCode: true,
-            planNumber: true,
-            treatmentSessionId: true,
-            supersededById: true,
-            _count: {
-              select: {
-                infusions: true,
-              },
-            },
-          },
-        },
-        supersedes: {
-          select: { id: true },
-        },
-      },
+      select: { id: true, memberId: true },
     });
 
-    if (!set || set.memberId !== memberId) {
+    if (!requestedSet || requestedSet.memberId !== memberId) {
       throw { status: 404, code: 'THERAPY_PLAN_SET_NOT_FOUND', message: 'Set therapy plan tidak ditemukan' };
     }
 
-    if (set.supersededById || set.supersedes.length > 0) {
-      throw {
-        status: 409,
-        code: 'THERAPY_PLAN_SET_HAS_HISTORY',
-        message: 'Set therapy plan yang memiliki riwayat versi tidak dapat dihapus',
-      };
+    const memberSets = await prisma.therapyPlanSet.findMany({
+      where: { memberId },
+      select: { id: true, supersededById: true },
+    });
+    const familySetIds = new Set<string>([setId]);
+
+    // Follow the version links in both directions so deleting v1, v2, or the
+    // active head always targets the complete set family.
+    let foundRelatedSet = true;
+    while (foundRelatedSet) {
+      foundRelatedSet = false;
+      for (const candidate of memberSets) {
+        if (
+          familySetIds.has(candidate.id) ||
+          (candidate.supersededById && familySetIds.has(candidate.supersededById))
+        ) {
+          if (!familySetIds.has(candidate.id)) {
+            familySetIds.add(candidate.id);
+            foundRelatedSet = true;
+          }
+          if (candidate.supersededById && !familySetIds.has(candidate.supersededById)) {
+            familySetIds.add(candidate.supersededById);
+            foundRelatedSet = true;
+          }
+        }
+      }
     }
 
-    const usedPlan = set.plans.find((plan) => plan.treatmentSessionId || plan._count.infusions > 0);
+    const setIds = Array.from(familySetIds);
+    const plans = await prisma.therapyPlan.findMany({
+      where: { therapyPlanSetId: { in: setIds } },
+      select: {
+        id: true,
+        planCode: true,
+        planNumber: true,
+        treatmentSessionId: true,
+        _count: { select: { infusions: true } },
+      },
+    });
+
+    const usedPlan = plans.find((plan) => plan.treatmentSessionId || plan._count.infusions > 0);
     if (usedPlan) {
       throw {
         status: 409,
         code: 'THERAPY_PLAN_SET_IN_USE',
-        message: `Terapi #${usedPlan.planNumber || usedPlan.planCode} sudah digunakan dalam sesi dan tidak dapat dihapus`,
+        message: `Terapi #${usedPlan.planNumber || usedPlan.planCode} pada salah satu versi set sudah digunakan dalam sesi dan tidak dapat dihapus`,
       };
     }
 
-    const planIds = set.plans.map((plan) => plan.id);
-    if (planIds.length > 0) {
-      const supersedingPlanCount = await prisma.therapyPlan.count({
-        where: {
-          supersededById: { in: planIds },
-        },
-      });
-
-      if (supersedingPlanCount > 0 || set.plans.some((plan) => plan.supersededById)) {
-        throw {
-          status: 409,
-          code: 'THERAPY_PLAN_SET_HAS_HISTORY',
-          message: 'Set therapy plan yang memiliki riwayat versi tidak dapat dihapus',
-        };
-      }
-    }
+    const planIds = plans.map((plan) => plan.id);
 
     await prisma.$transaction(async (tx) => {
-      await tx.therapyPlan.deleteMany({
-        where: {
-          therapyPlanSetId: setId,
-          memberId,
-        },
-      });
+      if (planIds.length > 0) {
+        await tx.therapyPlan.updateMany({
+          where: { id: { in: planIds } },
+          data: { supersededById: null },
+        });
+        await tx.therapyPlan.deleteMany({ where: { id: { in: planIds } } });
+      }
 
-      await tx.therapyPlanSet.delete({
-        where: { id: setId },
+      await tx.therapyPlanSet.updateMany({
+        where: { id: { in: setIds } },
+        data: { supersededById: null },
       });
+      await tx.therapyPlanSet.deleteMany({ where: { id: { in: setIds } } });
     });
 
     return {
-      message: 'Set therapy plan berhasil dihapus',
+      message: setIds.length > 1
+        ? `Set therapy plan beserta ${setIds.length - 1} versi riwayat berhasil dihapus`
+        : 'Set therapy plan berhasil dihapus',
       data: {
         setId,
-        deletedPlans: set.plans.length,
+        deletedSets: setIds.length,
+        deletedPlans: plans.length,
       },
     };
   }

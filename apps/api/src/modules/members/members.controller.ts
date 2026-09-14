@@ -534,8 +534,9 @@ export class MembersController {
         meta: {
           type: 'therapy_plan_set_delete',
           memberId,
+          deletedSets: result.data.deletedSets,
           deletedPlans: result.data.deletedPlans,
-          details: `Deleted unused therapy plan set with ${result.data.deletedPlans} plans`,
+          details: `Deleted unused therapy plan set family with ${result.data.deletedSets} sets and ${result.data.deletedPlans} plans`,
         },
       });
 

@@ -190,6 +190,7 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
   const [collapsedSets, setCollapsedSets] = useState<Set<string>>(new Set());
   const [collapsedHistory, setCollapsedHistory] = useState<Set<string>>(new Set());
   const [expandedHistoricalSets, setExpandedHistoricalSets] = useState<Set<string>>(new Set());
+  const [deletingSetId, setDeletingSetId] = useState<string | null>(null);
   const isMemberViewOnlyAdminManager =
     user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
   const openSession = (sessionId: string) => {
@@ -349,7 +350,11 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
     loadTherapyPlans();
   };
 
-  const handleDeleteSetClick = async (setId: string, setName: string) => {
+  const handleDeleteSetClick = async (
+    setId: string,
+    setName: string,
+    familyMembers: string[],
+  ) => {
     const setPlans = therapyPlans.filter((plan) => getPlanSetKey(plan) === setId);
     const actualSetId = setPlans[0]?.therapyPlanSetId;
 
@@ -358,24 +363,36 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
       return;
     }
 
-    const usedCount = setPlans.filter((plan) => plan.isUsed).length;
-    const historyCount = setPlans.filter((plan) => getPlanStatusKey(plan) === 'superseded').length;
+    const familyMemberIds = new Set(familyMembers);
+    const familyPlans = therapyPlans.filter((plan) => familyMemberIds.has(getPlanSetKey(plan)));
+    const usedCount = familyPlans.filter((plan) => plan.isUsed).length;
 
-    if (usedCount > 0 || historyCount > 0) {
-      showToast.error('Set yang sudah digunakan atau memiliki history tidak dapat dihapus');
+    if (usedCount > 0) {
+      showToast.error('Set tidak dapat dihapus karena salah satu versi sudah digunakan dalam sesi');
       return;
     }
 
-    const confirmed = window.confirm(`Hapus set therapy plan "${setName}"? Tindakan ini tidak dapat dibatalkan.`);
+    const historyWarning = familyMembers.length > 1
+      ? ` beserta ${familyMembers.length - 1} versi riwayatnya`
+      : '';
+    const confirmed = window.confirm(
+      `Hapus set therapy plan "${setName}"${historyWarning}? Tindakan ini tidak dapat dibatalkan.`,
+    );
     if (!confirmed) return;
 
+    setDeletingSetId(setId);
     try {
       const result = await therapyPlanApi.deleteTherapyPlanSet(memberId, actualSetId);
       showToast.success(result.message || 'Set therapy plan berhasil dihapus');
+      setFilters((currentFilters) => familyMemberIds.has(currentFilters.selectedSetId)
+        ? { ...currentFilters, selectedSetId: 'all' }
+        : currentFilters);
       await loadTherapyPlans();
     } catch (error) {
       assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menghapus set therapy plan');
+    } finally {
+      setDeletingSetId(null);
     }
   };
 
@@ -691,10 +708,13 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                 used: setPlans.filter((p) => getPlanStatusKey(p) === 'used').length,
                 history: setPlans.filter((p) => getPlanStatusKey(p) === 'superseded').length,
               };
+              const familyMemberIds = new Set(set.familyMembers);
+              const familyPlans = therapyPlans.filter((plan) =>
+                familyMemberIds.has(getPlanSetKey(plan)),
+              );
               const canDeleteSet =
                 user?.role === 'SUPER_ADMIN' &&
-                setStats.used === 0 &&
-                setStats.history === 0 &&
+                familyPlans.every((plan) => !plan.isUsed) &&
                 Boolean(set.firstPlan.therapyPlanSetId);
 
               return (
@@ -876,8 +896,9 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteSetClick(set.id, set.name);
+                          handleDeleteSetClick(set.id, set.name, set.familyMembers);
                         }}
+                        disabled={deletingSetId !== null}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -889,7 +910,8 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                           border: '1px solid rgba(239,68,68,0.4)',
                           background: 'rgba(239,68,68,0.10)',
                           color: '#ef4444',
-                          cursor: 'pointer',
+                          cursor: deletingSetId !== null ? 'not-allowed' : 'pointer',
+                          opacity: deletingSetId !== null ? 0.6 : 1,
                           flexShrink: 0,
                           transition: 'all 0.2s',
                         }}
@@ -904,7 +926,7 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                         title="Hapus set therapy plan yang belum digunakan"
                       >
                         <Trash2 size={14} />
-                        Hapus Set
+                        {deletingSetId === set.id ? 'Menghapus...' : 'Hapus Set'}
                       </button>
                     )}
                   </div>

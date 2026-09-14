@@ -38,6 +38,7 @@ import MemberCredentialsModal from '@/components/members/MemberCredentialsModal'
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 import MemberEditModal from '@/components/members/MemberEditModal';
+import MemberPhoneEditModal from '@/components/members/MemberPhoneEditModal';
 import MemberDestructionModal from '@/components/members/MemberDestructionModal';
 import { getActiveMemberPackagesByType } from '@/components/members/memberStatusPresentation';
 import {
@@ -243,6 +244,7 @@ export default function MemberDetailPage() {
 
   // Edit member modal state
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
+  const [showPhoneEditModal, setShowPhoneEditModal] = useState(false);
   const [deletingMember, setDeletingMember] = useState(false);
   const [showDestructionModal, setShowDestructionModal] = useState(false);
 
@@ -970,6 +972,8 @@ export default function MemberDetailPage() {
                 canEditLifeStatus={canEditLifeStatus}
                 updatingLifeStatus={updatingLifeStatus}
                 onToggleLifeStatus={handleToggleLifeStatus}
+                canEditPhone={user?.role === 'ADMIN_LAYANAN'}
+                onEditPhone={() => setShowPhoneEditModal(true)}
               />
             </section>
           )}
@@ -1355,6 +1359,15 @@ export default function MemberDetailPage() {
           }}
         />
       )}
+
+      <MemberPhoneEditModal
+        isOpen={showPhoneEditModal}
+        onClose={() => setShowPhoneEditModal(false)}
+        memberId={memberId}
+        memberName={member.profile.fullName}
+        currentPhone={member.profile.phone}
+        onSuccess={() => loadMemberDetail(false)}
+      />
     </>
   );
 }

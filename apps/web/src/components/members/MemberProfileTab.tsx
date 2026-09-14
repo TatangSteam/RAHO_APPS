@@ -7,12 +7,15 @@ import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { getReferralIncentivesApi } from '@/lib/membersApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { Pencil } from 'lucide-react';
 
 interface MemberProfileTabProps {
   member: MemberDetail;
   canEditLifeStatus?: boolean;
   updatingLifeStatus?: boolean;
   onToggleLifeStatus?: () => void;
+  canEditPhone?: boolean;
+  onEditPhone?: () => void;
 }
 
 interface IncentiveRecord {
@@ -51,6 +54,8 @@ export default function MemberProfileTab({
   canEditLifeStatus = false,
   updatingLifeStatus = false,
   onToggleLifeStatus,
+  canEditPhone = false,
+  onEditPhone,
 }: MemberProfileTabProps) {
   const [loadingDocUrl, setLoadingDocUrl] = useState<string | null>(null);
   const [incentiveData, setIncentiveData] = useState<{
@@ -150,9 +155,22 @@ export default function MemberProfileTab({
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Agama</p>
             <p style={{ fontWeight: '600' }}>🙏 {member.agama || '-'}</p>
           </div>
-          <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Telepon</p>
-            <p style={{ fontWeight: '600' }}>📞 {member.profile.phone}</p>
+          <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Telepon</p>
+              <p style={{ fontWeight: '600' }}>📞 {member.profile.phone || '-'}</p>
+            </div>
+            {canEditPhone && onEditPhone && (
+              <button
+                type="button"
+                onClick={onEditPhone}
+                title="Edit nomor telepon"
+                aria-label="Edit nomor telepon"
+                className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-amber-600 transition hover:bg-amber-500/20 dark:text-amber-400"
+              >
+                <Pencil size={15} />
+              </button>
+            )}
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Username Login</p>
