@@ -124,6 +124,14 @@ export interface StaffPerformanceQuery {
 }
 
 export interface StaffMonthlyIncentiveResponse {
+  workflow: {
+    periodId: string | null;
+    status: 'PREVIEW' | 'DRAFT' | 'REVIEWED' | 'APPROVED' | 'PAID';
+    generatedAt: string | null;
+    reviewedAt: string | null;
+    approvedAt: string | null;
+    paidAt: string | null;
+  };
   period: {
     month: string;
     timezone: string;
@@ -156,6 +164,7 @@ export interface StaffMonthlyIncentiveResponse {
       branchWithoutHomecareTarget: number;
       branchWithHomecareTarget: number;
       branchTargetBonus: number;
+      ratePerBranchDoctorPaidInfusion: number;
       ratePerHomecareDoctorPaidInfusion: number;
       partnershipTarget: number;
       ratePerPartnershipPaidInfusion: number;
@@ -173,6 +182,8 @@ export interface StaffMonthlyIncentiveResponse {
     target: number;
     targetReached: boolean;
     targetBonus: number;
+    coordinatorPersonalInfusionsExcluded: number;
+    targetBonusSuppressedByCoordinator: boolean;
     totalAmount: number;
   }>;
   mso: Array<{
@@ -241,6 +252,9 @@ export interface StaffMonthlyIncentiveResponse {
     homecareTeamTargetBonus: number;
     qualifiedBranches: number;
     branchTargetBonus: number;
+    branchDoctorPaidInfusions: number;
+    ratePerBranchDoctorPaidInfusion: number;
+    branchDoctorAmount: number;
     homecareDoctorPaidInfusions: number;
     ratePerHomecareDoctorPaidInfusion: number;
     homecareDoctorAmount: number;
@@ -264,6 +278,13 @@ export interface StaffMonthlyIncentiveResponse {
       targetBonus: number;
       qualifiedHomecareTeams: number;
     }>;
+  }>;
+  anomalies: Array<{
+    code: 'MISSING_BRANCH_DOCTOR' | 'CONFLICTING_BRANCH_DOCTOR';
+    branchId: string;
+    branchName: string;
+    affectedSessions: number;
+    message: string;
   }>;
   summary: {
     nakesRecipients: number;
@@ -391,6 +412,18 @@ export const usersApi = {
   getMonthlyStaffIncentives: async (query: { month: string; branchId?: string }): Promise<StaffMonthlyIncentiveResponse> => {
     const response = await api.get('/users/incentives/monthly', { params: query });
     return response.data.data;
+  },
+
+  saveStaffIncentiveDraft: async (query: { month: string; branchId?: string }): Promise<StaffMonthlyIncentiveResponse> => {
+    const response = await api.post('/users/incentives/monthly/draft', query);
+    return response.data.data;
+  },
+
+  transitionStaffIncentivePeriod: async (
+    periodId: string,
+    action: 'review' | 'approve' | 'mark-paid',
+  ): Promise<void> => {
+    await api.post(`/users/incentives/monthly/periods/${periodId}/${action}`);
   },
 
   exportMonthlyStaffIncentives: async (query: { month: string; branchId?: string }): Promise<Blob> => {

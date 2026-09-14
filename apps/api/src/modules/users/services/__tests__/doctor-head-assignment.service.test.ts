@@ -13,7 +13,6 @@ jest.mock('@lib/prisma', () => ({
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
-      delete: jest.fn(),
       update: jest.fn(),
     },
     user: { findFirst: jest.fn() },
@@ -41,7 +40,6 @@ describe('Doctor Head assignment management', () => {
     });
     mockPrisma.doctorHeadAssignment.create.mockImplementation(({ data }: { data: { branchId: string } }) => Promise.resolve({ id: `assignment-${data.branchId}`, ...data }));
     mockPrisma.doctorHeadAssignment.update.mockResolvedValue({ id: 'assignment-1' });
-    mockPrisma.doctorHeadAssignment.delete.mockResolvedValue({ id: 'assignment-1' });
     mockPrisma.$transaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
   });
 
@@ -74,10 +72,15 @@ describe('Doctor Head assignment management', () => {
     }));
   });
 
-  it('lets Super Admin permanently delete an assignment regardless of its period', async () => {
+  it('lets Super Admin deactivate an assignment while retaining its history', async () => {
     await deleteDoctorHeadAssignmentService('assignment-1', superAdmin);
-    expect(mockPrisma.doctorHeadAssignment.delete).toHaveBeenCalledWith({ where: { id: 'assignment-1' } });
-    expect(mockPrisma.doctorHeadAssignment.update).not.toHaveBeenCalled();
+    expect(mockPrisma.doctorHeadAssignment.update).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+      data: {
+        isActive: false,
+        effectiveUntil: new Date('2098-12-31T00:00:00.000Z'),
+      },
+    });
   });
 
   it('rejects add, edit, and delete from non-Super Admin accounts', async () => {

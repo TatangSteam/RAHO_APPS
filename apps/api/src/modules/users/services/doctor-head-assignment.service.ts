@@ -23,6 +23,20 @@ function dateOnly(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+function assignmentTerminationDate(effectiveFrom: Date, effectiveUntil: Date | null) {
+  const jakartaToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const today = dateOnly(jakartaToday);
+  const cutoff = effectiveFrom > today
+    ? new Date(effectiveFrom.getTime() - 24 * 60 * 60 * 1000)
+    : today;
+  return effectiveUntil && effectiveUntil < cutoff ? effectiveUntil : cutoff;
+}
+
 function assertSuperAdmin(caller: Caller) {
   if (caller.role !== Role.SUPER_ADMIN) {
     throw errors.forbidden('Hanya Super Admin yang dapat mengatur Dokter Head.');
@@ -123,7 +137,6 @@ export async function createDoctorHeadBranchAssignmentsService(input: BranchAssi
 
   const overlaps = await prisma.doctorHeadAssignment.findMany({
     where: {
-      doctorHeadUserId: input.doctorHeadUserId,
       branchId: { in: branchIds },
       effectiveFrom: effectiveUntil ? { lte: effectiveUntil } : undefined,
       OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: effectiveFrom } }],
@@ -133,7 +146,7 @@ export async function createDoctorHeadBranchAssignmentsService(input: BranchAssi
   if (overlaps.length > 0) {
     throw errors.conflict(
       'DOCTOR_HEAD_ASSIGNMENT_OVERLAP',
-      `Dokter tersebut sudah menjadi Dokter Head pada periode beririsan di: ${overlaps.map((row) => row.branch.name).join(', ')}.`,
+      `Cabang berikut sudah memiliki Dokter Head pada periode yang beririsan: ${overlaps.map((row) => row.branch.name).join(', ')}.`,
     );
   }
 
@@ -168,7 +181,6 @@ export async function updateDoctorHeadAssignmentService(
   const overlap = await prisma.doctorHeadAssignment.findFirst({
     where: {
       id: { not: assignmentId },
-      doctorHeadUserId: input.doctorHeadUserId,
       branchId: input.branchId,
       effectiveFrom: effectiveUntil ? { lte: effectiveUntil } : undefined,
       OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: effectiveFrom } }],
@@ -176,7 +188,7 @@ export async function updateDoctorHeadAssignmentService(
     select: { id: true },
   });
   if (overlap) {
-    throw errors.conflict('DOCTOR_HEAD_ASSIGNMENT_OVERLAP', 'Dokter tersebut sudah menjadi Dokter Head untuk cabang ini pada periode beririsan.');
+    throw errors.conflict('DOCTOR_HEAD_ASSIGNMENT_OVERLAP', 'Cabang ini sudah memiliki Dokter Head pada periode yang beririsan.');
   }
   return prisma.doctorHeadAssignment.update({
     where: { id: assignmentId },
@@ -195,9 +207,17 @@ export async function deleteDoctorHeadAssignmentService(assignmentId: string, ca
   assertSuperAdmin(caller);
   const assignment = await prisma.doctorHeadAssignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true },
+    select: { id: true, effectiveFrom: true, effectiveUntil: true, isActive: true },
   });
   if (!assignment) throw errors.notFound('Assignment Dokter Head tidak ditemukan.');
-  await prisma.doctorHeadAssignment.delete({ where: { id: assignment.id } });
-  return { id: assignment.id, deleted: true };
+  if (!assignment.isActive) return { id: assignment.id, deactivated: true };
+
+  await prisma.doctorHeadAssignment.update({
+    where: { id: assignment.id },
+    data: {
+      isActive: false,
+      effectiveUntil: assignmentTerminationDate(assignment.effectiveFrom, assignment.effectiveUntil),
+    },
+  });
+  return { id: assignment.id, deactivated: true };
 }

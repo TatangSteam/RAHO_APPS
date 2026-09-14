@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 
+export const staffIncentivePeriodQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Periode harus berformat YYYY-MM.'),
+  branchId: z.string().min(1).optional(),
+});
+
 export const chsCoordinatorAssignmentSchema = z.object({
   scope: z.enum(['TEAM', 'BRANCH']),
   coordinatorUserId: z.string().min(1),

@@ -70,6 +70,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/notifications',
     '/chat',
     '/staff-incentives/mso',
+    '/staff-incentives/coordinator',
     ...COLLABORATION_MENU,
   ]),
   NURSE: new Set([
@@ -83,6 +84,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/notifications',
     '/chat',
     '/staff-incentives/nakes',
+    '/staff-incentives/coordinator',
     ...COLLABORATION_MENU,
   ]),
   DOCTOR: new Set([
@@ -94,6 +96,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/notifications',
     '/chat',
     '/staff-incentives/doctor-head',
+    '/staff-incentives/coordinator',
     ...COLLABORATION_MENU,
   ]),
 };

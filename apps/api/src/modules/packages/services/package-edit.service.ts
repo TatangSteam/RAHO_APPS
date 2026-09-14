@@ -20,6 +20,7 @@ import {
   reserveAddOnStockInTransaction,
 } from './add-on-inventory.service';
 import { calculateCatalogPackageTotal } from './package-pricing-calculation';
+import { refreshIncentiveAfterPackageEdit } from '../../referrals/incentive-calculation.service';
 
 type EditableMemberPackage = Prisma.MemberPackageGetPayload<{
   include: {
@@ -717,6 +718,13 @@ export class PackageEditService {
 
     if (invoice) {
       await this.rebuildInvoiceItems(db, invoice, packageRecords, createdAddOns);
+    }
+
+    if (
+      memberPackage.member.referralCodeId
+      && (memberPackage.member.firstIncentiveType || memberPackage.member.nextIncentiveType)
+    ) {
+      await refreshIncentiveAfterPackageEdit(packageRecords[0]?.id || memberPackage.id, db);
     }
 
     return {

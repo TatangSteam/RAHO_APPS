@@ -129,6 +129,8 @@ export async function buildStaffIncentiveWorkbook(report: MonthlyIncentiveReport
     { header: 'Bonus Tim HC', key: 'homecareTeamTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
     { header: 'Cabang Lolos Target', key: 'qualifiedBranches', width: 21 },
     { header: 'Bonus Cabang', key: 'branchTargetBonus', width: 20, style: { numFmt: rupiahFormat } },
+    { header: 'Infus Cabang Lunas', key: 'branchDoctorPaidInfusions', width: 21 },
+    { header: 'Insentif Dokter Cabang', key: 'branchDoctorAmount', width: 24, style: { numFmt: rupiahFormat } },
     { header: 'Infus HC Sebagai Dokter', key: 'homecareDoctorPaidInfusions', width: 23 },
     { header: 'Insentif Dokter HC', key: 'homecareDoctorAmount', width: 22, style: { numFmt: rupiahFormat } },
     { header: 'Total Partnership', key: 'partnershipTotalInfusions', width: 20 },

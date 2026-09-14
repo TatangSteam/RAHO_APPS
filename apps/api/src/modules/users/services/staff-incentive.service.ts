@@ -8,6 +8,7 @@ import {
   PaymentVerificationStatus,
   Prisma,
   Role,
+  StaffIncentivePeriodStatus,
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
@@ -32,6 +33,7 @@ export const CHS_BRANCH_TARGET_BONUS = 250_000;
 export const CHS_HO_RATE_PER_PAID_INFUSION = 10_000;
 export const DOCTOR_HEAD_HOMECARE_TEAM_TARGET_BONUS = 500_000;
 export const DOCTOR_HEAD_BRANCH_TARGET_BONUS = 500_000;
+export const BRANCH_DOCTOR_RATE_PER_PAID_INFUSION = 2_500;
 export const DOCTOR_HEAD_HOMECARE_DOCTOR_RATE = 5_000;
 export const DOCTOR_HEAD_PARTNERSHIP_TARGET = 1_500;
 export const DOCTOR_HEAD_PARTNERSHIP_RATE = 2_000;
@@ -60,6 +62,25 @@ export function calculateNakesMonthlyIncentive(infusionCount: number) {
     targetReached,
     targetBonus,
     totalAmount: baseAmount + targetBonus,
+  };
+}
+
+export function calculateNakesAfterCoordinatorDedup(
+  totalNakesInfusions: number,
+  coordinatorPersonalInfusions: number,
+) {
+  const excluded = Math.min(
+    Math.max(0, Math.trunc(totalNakesInfusions)),
+    Math.max(0, Math.trunc(coordinatorPersonalInfusions)),
+  );
+  const calculated = calculateNakesMonthlyIncentive(totalNakesInfusions - excluded);
+  const targetBonusSuppressedByCoordinator = coordinatorPersonalInfusions >= CHS_PERSONAL_TARGET;
+  return {
+    ...calculated,
+    coordinatorPersonalInfusionsExcluded: excluded,
+    targetBonusSuppressedByCoordinator,
+    targetBonus: targetBonusSuppressedByCoordinator ? 0 : calculated.targetBonus,
+    totalAmount: calculated.baseAmount + (targetBonusSuppressedByCoordinator ? 0 : calculated.targetBonus),
   };
 }
 
@@ -136,6 +157,7 @@ export function calculateDoctorHeadMonthlyIncentive(components: {
   homecareDoctorPaidInfusions?: number;
   partnershipTotalInfusions?: number;
   partnershipPaidInfusions?: number;
+  branchDoctorPaidInfusions?: number;
   treatmentReviewAmount?: number;
 }) {
   const qualifiedHomecareTeams = Math.max(0, Math.trunc(components.qualifiedHomecareTeams || 0));
@@ -143,6 +165,7 @@ export function calculateDoctorHeadMonthlyIncentive(components: {
   const homecareDoctorPaidInfusions = Math.max(0, Math.trunc(components.homecareDoctorPaidInfusions || 0));
   const partnershipTotalInfusions = Math.max(0, Math.trunc(components.partnershipTotalInfusions || 0));
   const partnershipPaidInfusions = Math.max(0, Math.trunc(components.partnershipPaidInfusions || 0));
+  const branchDoctorPaidInfusions = Math.max(0, Math.trunc(components.branchDoctorPaidInfusions || 0));
   const treatmentReviewAmount = Math.max(0, Math.trunc(components.treatmentReviewAmount || 0));
   const homecareTeamTargetBonus = qualifiedHomecareTeams * DOCTOR_HEAD_HOMECARE_TEAM_TARGET_BONUS;
   const branchTargetBonus = qualifiedBranches * DOCTOR_HEAD_BRANCH_TARGET_BONUS;
@@ -151,6 +174,7 @@ export function calculateDoctorHeadMonthlyIncentive(components: {
   const partnershipAmount = partnershipTargetReached
     ? partnershipPaidInfusions * DOCTOR_HEAD_PARTNERSHIP_RATE
     : 0;
+  const branchDoctorAmount = branchDoctorPaidInfusions * BRANCH_DOCTOR_RATE_PER_PAID_INFUSION;
   return {
     qualifiedHomecareTeams,
     homecareTeamTargetBonus,
@@ -165,9 +189,12 @@ export function calculateDoctorHeadMonthlyIncentive(components: {
     partnershipPaidInfusions,
     ratePerPartnershipPaidInfusion: DOCTOR_HEAD_PARTNERSHIP_RATE,
     partnershipAmount,
+    branchDoctorPaidInfusions,
+    ratePerBranchDoctorPaidInfusion: BRANCH_DOCTOR_RATE_PER_PAID_INFUSION,
+    branchDoctorAmount,
     treatmentReviewAmount,
     treatmentReviewStatus: 'PENDING_RULE_CONFIGURATION' as const,
-    totalAmount: homecareTeamTargetBonus + branchTargetBonus + homecareDoctorAmount
+    totalAmount: homecareTeamTargetBonus + branchTargetBonus + branchDoctorAmount + homecareDoctorAmount
       + partnershipAmount + treatmentReviewAmount,
   };
 }
@@ -321,7 +348,7 @@ export function isPaidInfusion(input: {
     && areAllPurchaseInvoicesPaid(input.invoices);
 }
 
-export async function getMonthlyStaffIncentivesService(
+export async function calculateMonthlyStaffIncentivesService(
   query: { month?: string; branchId?: string },
   callerRole: Role,
   callerUserId: string,
@@ -354,6 +381,7 @@ export async function getMonthlyStaffIncentivesService(
       select: {
         id: true,
         branchId: true,
+        branch: { select: { name: true } },
         treatmentDate: true,
         nurseId: true,
         adminLayananId: true,
@@ -552,10 +580,6 @@ export async function getMonthlyStaffIncentivesService(
     role: user.role,
   }]));
 
-  const nakes = Array.from(infusionCounts.entries())
-    .filter(([userId]) => people.has(userId))
-    .map(([userId, count]) => ({ ...people.get(userId)!, ...calculateNakesMonthlyIncentive(count) }))
-    .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
   const msoIds = new Set([...visitCounts.keys(), ...paidBoxCounts.keys()]);
   const mso = Array.from(msoIds)
     .filter((userId) => people.has(userId))
@@ -714,6 +738,19 @@ export async function getMonthlyStaffIncentivesService(
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
 
+  // A personal infusion credited to a CHS coordinator must not also pay the
+  // NAKES per-infusion component or its monthly target bonus to the same user.
+  const nakes = Array.from(infusionCounts.entries())
+    .filter(([userId]) => people.has(userId))
+    .map(([userId, count]) => {
+      const coordinatorPersonalCount = coordinatorMap.get(userId)?.personalSessionIds.size || 0;
+      return {
+        ...people.get(userId)!,
+        ...calculateNakesAfterCoordinatorDedup(count, coordinatorPersonalCount),
+      };
+    })
+    .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
+
   type DoctorHeadAggregate = {
     id: string;
     fullName: string;
@@ -725,6 +762,7 @@ export async function getMonthlyStaffIncentivesService(
     homecareDoctorPaidSessionIds: Set<string>;
     partnershipSessionIds: Set<string>;
     partnershipPaidSessionIds: Set<string>;
+    branchDoctorPaidSessionIds: Set<string>;
     scopes: Array<{
       assignmentId: string;
       branchId: string;
@@ -759,9 +797,15 @@ export async function getMonthlyStaffIncentivesService(
       homecareDoctorPaidSessionIds: new Set<string>(),
       partnershipSessionIds: new Set<string>(),
       partnershipPaidSessionIds: new Set<string>(),
+      branchDoctorPaidSessionIds: new Set<string>(),
       scopes: [],
     };
-    if (branchPassed) existing.qualifiedBranchIds.add(assignment.branchId);
+    if (branchPassed) {
+      existing.qualifiedBranchIds.add(assignment.branchId);
+      branchSessions
+        .filter(isPaidSession)
+        .forEach((session) => existing.branchDoctorPaidSessionIds.add(session.id));
+    }
 
     let qualifiedHomecareTeams = 0;
     homecareTeams
@@ -809,6 +853,7 @@ export async function getMonthlyStaffIncentivesService(
       homecareDoctorPaidSessionIds,
       partnershipSessionIds,
       partnershipPaidSessionIds,
+      branchDoctorPaidSessionIds,
       ...doctorHead
     }) => ({
       ...doctorHead,
@@ -818,9 +863,58 @@ export async function getMonthlyStaffIncentivesService(
         homecareDoctorPaidInfusions: homecareDoctorPaidSessionIds.size,
         partnershipTotalInfusions: partnershipSessionIds.size,
         partnershipPaidInfusions: partnershipPaidSessionIds.size,
+        branchDoctorPaidInfusions: branchDoctorPaidSessionIds.size,
       }),
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount || a.fullName.localeCompare(b.fullName));
+
+  const anomalies: Array<{
+    code: 'MISSING_BRANCH_DOCTOR' | 'CONFLICTING_BRANCH_DOCTOR';
+    branchId: string;
+    branchName: string;
+    affectedSessions: number;
+    message: string;
+  }> = [];
+  if (!selfOnly) {
+    const sessionsByBranch = new Map<string, typeof sessions>();
+    sessions.forEach((session) => {
+      const branchSessions = sessionsByBranch.get(session.branchId) || [];
+      branchSessions.push(session);
+      sessionsByBranch.set(session.branchId, branchSessions);
+    });
+    sessionsByBranch.forEach((branchSessions, branchId) => {
+      const target = branchesWithHomecare.has(branchId)
+        ? CHS_BRANCH_WITH_HOMECARE_TARGET
+        : CHS_BRANCH_WITHOUT_HOMECARE_TARGET;
+      if (branchSessions.length < target) return;
+
+      const assignmentCounts = branchSessions.map((session) => doctorHeadAssignments.filter((assignment) => (
+        assignment.branchId === branchId
+        && assignmentAppliesOn(session.treatmentDate, assignment.effectiveFrom, assignment.effectiveUntil)
+      )).length);
+      const missingCount = assignmentCounts.filter((count) => count === 0).length;
+      const conflictCount = assignmentCounts.filter((count) => count > 1).length;
+      const branchName = branchSessions[0]?.branch.name || branchId;
+      if (missingCount > 0) {
+        anomalies.push({
+          code: 'MISSING_BRANCH_DOCTOR',
+          branchId,
+          branchName,
+          affectedSessions: missingCount,
+          message: `${branchName} memiliki ${missingCount} sesi tanpa assignment Dokter Cabang yang valid.`,
+        });
+      }
+      if (conflictCount > 0) {
+        anomalies.push({
+          code: 'CONFLICTING_BRANCH_DOCTOR',
+          branchId,
+          branchName,
+          affectedSessions: conflictCount,
+          message: `${branchName} memiliki ${conflictCount} sesi dengan lebih dari satu assignment Dokter Cabang.`,
+        });
+      }
+    });
+  }
 
   const nakesTotalAmount = nakes.reduce((sum, row) => sum + row.totalAmount, 0);
   const msoTotalAmount = mso.reduce((sum, row) => sum + row.totalAmount, 0);
@@ -855,6 +949,7 @@ export async function getMonthlyStaffIncentivesService(
         branchWithoutHomecareTarget: CHS_BRANCH_WITHOUT_HOMECARE_TARGET,
         branchWithHomecareTarget: CHS_BRANCH_WITH_HOMECARE_TARGET,
         branchTargetBonus: DOCTOR_HEAD_BRANCH_TARGET_BONUS,
+        ratePerBranchDoctorPaidInfusion: BRANCH_DOCTOR_RATE_PER_PAID_INFUSION,
         ratePerHomecareDoctorPaidInfusion: DOCTOR_HEAD_HOMECARE_DOCTOR_RATE,
         partnershipTarget: DOCTOR_HEAD_PARTNERSHIP_TARGET,
         ratePerPartnershipPaidInfusion: DOCTOR_HEAD_PARTNERSHIP_RATE,
@@ -864,6 +959,7 @@ export async function getMonthlyStaffIncentivesService(
     mso,
     coordinators,
     doctorHeads,
+    anomalies,
     summary: {
       nakesRecipients: nakes.length,
       nakesTotalAmount,
@@ -876,4 +972,239 @@ export async function getMonthlyStaffIncentivesService(
       grandTotalAmount: nakesTotalAmount + msoTotalAmount + coordinatorTotalAmount + doctorHeadTotalAmount,
     },
   };
+}
+
+type CalculatedStaffIncentiveReport = Awaited<ReturnType<typeof calculateMonthlyStaffIncentivesService>>;
+
+function canManageIncentivePeriod(role: Role) {
+  return role === Role.SUPER_ADMIN || role === Role.FINANCE_LOGISTICS_CONTROLLER;
+}
+
+async function incentiveScopeContext(
+  query: { month?: string; branchId?: string },
+  callerRole: Role,
+  callerUserId: string,
+  callerBranchId: string | null,
+) {
+  const period = getJakartaMonthRange(query.month);
+  const branchIds = await resolveBranchScope(callerRole, callerUserId, callerBranchId, query.branchId);
+  const branchScope = !branchIds
+    ? 'ALL'
+    : branchIds.length === 1
+      ? `BRANCH:${branchIds[0]}`
+      : `BRANCHES:${[...branchIds].sort().join(',')}`;
+  const selfOnly = callerRole === Role.NURSE || callerRole === Role.DOCTOR || callerRole === Role.ADMIN_LAYANAN;
+  return {
+    month: period.month,
+    scopeKey: selfOnly ? `USER:${callerUserId}|${branchScope}` : branchScope,
+    branchId: branchIds?.length === 1 ? branchIds[0] : null,
+  };
+}
+
+function restoreSnapshotReport(report: Prisma.JsonValue): CalculatedStaffIncentiveReport {
+  const snapshot = report as unknown as CalculatedStaffIncentiveReport;
+  return {
+    ...snapshot,
+    period: {
+      ...snapshot.period,
+      start: new Date(snapshot.period.start),
+      endExclusive: new Date(snapshot.period.endExclusive),
+    },
+  };
+}
+
+function workflowMetadata(period: {
+  id: string;
+  status: StaffIncentivePeriodStatus;
+  generatedAt: Date;
+  reviewedAt: Date | null;
+  approvedAt: Date | null;
+  paidAt: Date | null;
+} | null) {
+  return period
+    ? {
+        periodId: period.id,
+        status: period.status,
+        generatedAt: period.generatedAt,
+        reviewedAt: period.reviewedAt,
+        approvedAt: period.approvedAt,
+        paidAt: period.paidAt,
+      }
+    : {
+        periodId: null,
+        status: 'PREVIEW' as const,
+        generatedAt: null,
+        reviewedAt: null,
+        approvedAt: null,
+        paidAt: null,
+      };
+}
+
+export async function getMonthlyStaffIncentivesService(
+  query: { month?: string; branchId?: string },
+  callerRole: Role,
+  callerUserId: string,
+  callerBranchId: string | null,
+) {
+  const scope = await incentiveScopeContext(query, callerRole, callerUserId, callerBranchId);
+  const savedPeriod = await prisma.staffIncentivePeriod.findUnique({
+    where: { month_scopeKey: { month: scope.month, scopeKey: scope.scopeKey } },
+  });
+  if (savedPeriod) {
+    return {
+      ...restoreSnapshotReport(savedPeriod.report),
+      workflow: workflowMetadata(savedPeriod),
+    };
+  }
+
+  const report = await calculateMonthlyStaffIncentivesService(
+    query,
+    callerRole,
+    callerUserId,
+    callerBranchId,
+  );
+  return { ...report, workflow: workflowMetadata(null) };
+}
+
+export async function saveStaffIncentiveDraftService(
+  query: { month?: string; branchId?: string },
+  callerRole: Role,
+  callerUserId: string,
+  callerBranchId: string | null,
+) {
+  if (!canManageIncentivePeriod(callerRole)) {
+    throw errors.forbidden('Hanya Super Admin atau Finance Controller yang dapat menyimpan draft insentif.');
+  }
+  const scope = await incentiveScopeContext(query, callerRole, callerUserId, callerBranchId);
+  const existing = await prisma.staffIncentivePeriod.findUnique({
+    where: { month_scopeKey: { month: scope.month, scopeKey: scope.scopeKey } },
+    select: { id: true, status: true },
+  });
+  if (existing && existing.status !== StaffIncentivePeriodStatus.DRAFT) {
+    throw errors.conflict(
+      'INCENTIVE_PERIOD_LOCKED',
+      'Periode yang sudah direview, disetujui, atau dibayar tidak dapat dihitung ulang.',
+    );
+  }
+
+  const report = await calculateMonthlyStaffIncentivesService(
+    query,
+    callerRole,
+    callerUserId,
+    callerBranchId,
+  );
+  const now = new Date();
+  const reportJson = JSON.parse(JSON.stringify(report)) as Prisma.InputJsonValue;
+  let saved;
+  if (existing) {
+    const updated = await prisma.staffIncentivePeriod.updateMany({
+      where: { id: existing.id, status: StaffIncentivePeriodStatus.DRAFT },
+      data: {
+        report: reportJson,
+        generatedBy: callerUserId,
+        generatedAt: now,
+        reviewedBy: null,
+        reviewedAt: null,
+        approvedBy: null,
+        approvedAt: null,
+        paidBy: null,
+        paidAt: null,
+      },
+    });
+    if (updated.count !== 1) {
+      throw errors.conflict(
+        'INCENTIVE_PERIOD_LOCKED',
+        'Status periode berubah saat dihitung ulang. Muat ulang sebelum mencoba kembali.',
+      );
+    }
+    saved = await prisma.staffIncentivePeriod.findUniqueOrThrow({ where: { id: existing.id } });
+  } else {
+    try {
+      saved = await prisma.staffIncentivePeriod.create({
+        data: {
+          month: scope.month,
+          scopeKey: scope.scopeKey,
+          branchId: scope.branchId,
+          status: StaffIncentivePeriodStatus.DRAFT,
+          report: reportJson,
+          generatedBy: callerUserId,
+          generatedAt: now,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw errors.conflict(
+          'INCENTIVE_PERIOD_ALREADY_CREATED',
+          'Draft periode ini dibuat oleh proses lain. Muat ulang data sebelum mencoba kembali.',
+        );
+      }
+      throw error;
+    }
+  }
+  return { ...report, workflow: workflowMetadata(saved) };
+}
+
+export async function transitionStaffIncentivePeriodService(
+  periodId: string,
+  action: 'REVIEW' | 'APPROVE' | 'MARK_PAID',
+  callerRole: Role,
+  callerUserId: string,
+) {
+  if (!canManageIncentivePeriod(callerRole)) {
+    throw errors.forbidden('Hanya Super Admin atau Finance Controller yang dapat memproses periode insentif.');
+  }
+  const period = await prisma.staffIncentivePeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw errors.notFound('Periode insentif tidak ditemukan.');
+
+  const transitions = {
+    REVIEW: { from: StaffIncentivePeriodStatus.DRAFT, to: StaffIncentivePeriodStatus.REVIEWED },
+    APPROVE: { from: StaffIncentivePeriodStatus.REVIEWED, to: StaffIncentivePeriodStatus.APPROVED },
+    MARK_PAID: { from: StaffIncentivePeriodStatus.APPROVED, to: StaffIncentivePeriodStatus.PAID },
+  } as const;
+  const transition = transitions[action];
+  if (period.status !== transition.from) {
+    throw errors.conflict(
+      'INVALID_INCENTIVE_PERIOD_TRANSITION',
+      `Status periode harus ${transition.from} sebelum proses ${action}.`,
+    );
+  }
+  if (action === 'APPROVE') {
+    const report = period.report as { anomalies?: unknown[] };
+    if ((report.anomalies?.length || 0) > 0) {
+      throw errors.conflict(
+        'INCENTIVE_PERIOD_HAS_ANOMALIES',
+        'Periode belum dapat disetujui karena masih memiliki assignment Dokter Cabang yang kosong atau konflik.',
+      );
+    }
+  }
+
+  const now = new Date();
+  const transitionResult = await prisma.staffIncentivePeriod.updateMany({
+    where: { id: periodId, status: transition.from },
+    data: {
+      status: transition.to,
+      ...(action === 'REVIEW' ? { reviewedBy: callerUserId, reviewedAt: now } : {}),
+      ...(action === 'APPROVE' ? { approvedBy: callerUserId, approvedAt: now } : {}),
+      ...(action === 'MARK_PAID' ? { paidBy: callerUserId, paidAt: now } : {}),
+    },
+  });
+  if (transitionResult.count !== 1) {
+    throw errors.conflict(
+      'INCENTIVE_PERIOD_ALREADY_PROCESSED',
+      'Status periode berubah saat sedang diproses. Muat ulang data sebelum mencoba kembali.',
+    );
+  }
+  return prisma.staffIncentivePeriod.findUniqueOrThrow({
+    where: { id: periodId },
+    select: {
+      id: true,
+      month: true,
+      scopeKey: true,
+      status: true,
+      generatedAt: true,
+      reviewedAt: true,
+      approvedAt: true,
+      paidAt: true,
+    },
+  });
 }

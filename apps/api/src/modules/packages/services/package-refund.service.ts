@@ -3,6 +3,7 @@ import { logAudit } from '../../../utils/auditLog';
 import { uploadFile } from '../../../config/minio';
 import type { RefundPackageInput } from '../packages.schema';
 import { returnAddOnStockInTransaction } from './add-on-inventory.service';
+import { reconcileIncentiveAfterPackageCancellation } from '../../referrals/incentive-calculation.service';
 
 interface RefundProof {
   url?: string;
@@ -131,6 +132,7 @@ export class PackageRefundService {
             : `[REFUND] ${data.reason}`,
         },
       });
+      await reconcileIncentiveAfterPackageCancellation(packageId, tx);
       if (invoice) {
         await tx.invoice.update({
           where: { id: invoice.id },

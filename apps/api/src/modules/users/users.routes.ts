@@ -25,6 +25,10 @@ import {
   getStaffPerformanceSummary,
   getMonthlyStaffIncentives,
   exportMonthlyStaffIncentives,
+  saveStaffIncentiveDraft,
+  reviewStaffIncentivePeriod,
+  approveStaffIncentivePeriod,
+  markStaffIncentivePeriodPaid,
   listChsCoordinatorAssignments,
   getChsCoordinatorAssignmentOptions,
   createChsCoordinatorAssignment,
@@ -181,6 +185,36 @@ usersRouter.get(
     Role.FINANCE_LOGISTICS_CONTROLLER,
   ]),
   exportMonthlyStaffIncentives,
+);
+
+const INCENTIVE_PERIOD_MANAGERS = [Role.SUPER_ADMIN, Role.FINANCE_LOGISTICS_CONTROLLER];
+
+usersRouter.post(
+  '/incentives/monthly/draft',
+  authenticate,
+  authorize(INCENTIVE_PERIOD_MANAGERS),
+  saveStaffIncentiveDraft,
+);
+
+usersRouter.post(
+  '/incentives/monthly/periods/:periodId/review',
+  authenticate,
+  authorize(INCENTIVE_PERIOD_MANAGERS),
+  reviewStaffIncentivePeriod,
+);
+
+usersRouter.post(
+  '/incentives/monthly/periods/:periodId/approve',
+  authenticate,
+  authorize(INCENTIVE_PERIOD_MANAGERS),
+  approveStaffIncentivePeriod,
+);
+
+usersRouter.post(
+  '/incentives/monthly/periods/:periodId/mark-paid',
+  authenticate,
+  authorize(INCENTIVE_PERIOD_MANAGERS),
+  markStaffIncentivePeriodPaid,
 );
 
 usersRouter.get(

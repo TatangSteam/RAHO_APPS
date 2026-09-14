@@ -32,7 +32,11 @@ import {
 } from './services/staff-performance.service';
 import { exportStaffPerformanceService } from './services/staff-performance-export.service';
 import { exportStaffPerformanceDetailService } from './services/staff-performance-detail-export.service';
-import { getMonthlyStaffIncentivesService } from './services/staff-incentive.service';
+import {
+  getMonthlyStaffIncentivesService,
+  saveStaffIncentiveDraftService,
+  transitionStaffIncentivePeriodService,
+} from './services/staff-incentive.service';
 import { exportMonthlyStaffIncentivesService } from './services/staff-incentive-export.service';
 import {
   createChsCoordinatorAssignmentService,
@@ -54,6 +58,7 @@ import {
   chsCoordinatorBranchAssignmentsSchema,
   doctorHeadAssignmentSchema,
   doctorHeadBranchAssignmentsSchema,
+  staffIncentivePeriodQuerySchema,
 } from './staff-incentive.schema';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
@@ -635,6 +640,63 @@ export async function exportMonthlyStaffIncentives(req: Request, res: Response, 
   }
 }
 
+export async function saveStaffIncentiveDraft(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const query = staffIncentivePeriodQuerySchema.parse(req.body);
+    const result = await saveStaffIncentiveDraftService(
+      query,
+      req.user.role as Role,
+      req.user.userId,
+      req.user.branchId,
+    );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: query.branchId === 'all' ? undefined : query.branchId,
+      action: 'CREATE',
+      resource: 'StaffIncentivePeriod',
+      resourceId: result.workflow.periodId || undefined,
+      meta: { action: 'SAVE_DRAFT', month: query.month, status: result.workflow.status },
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+async function transitionStaffIncentivePeriod(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  action: 'REVIEW' | 'APPROVE' | 'MARK_PAID',
+) {
+  try {
+    const result = await transitionStaffIncentivePeriodService(
+      req.params.periodId,
+      action,
+      req.user.role as Role,
+      req.user.userId,
+    );
+    await logAudit({
+      userId: req.user.userId,
+      action: 'UPDATE',
+      resource: 'StaffIncentivePeriod',
+      resourceId: result.id,
+      meta: { action, month: result.month, status: result.status, scopeKey: result.scopeKey },
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+export function reviewStaffIncentivePeriod(req: Request, res: Response, next: NextFunction): Promise<void> {
+  return transitionStaffIncentivePeriod(req, res, next, 'REVIEW');
+}
+
+export function approveStaffIncentivePeriod(req: Request, res: Response, next: NextFunction): Promise<void> {
+  return transitionStaffIncentivePeriod(req, res, next, 'APPROVE');
+}
+
+export function markStaffIncentivePeriodPaid(req: Request, res: Response, next: NextFunction): Promise<void> {
+  return transitionStaffIncentivePeriod(req, res, next, 'MARK_PAID');
+}
+
 export async function listChsCoordinatorAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const result = await listChsCoordinatorAssignmentsService(
@@ -667,6 +729,16 @@ export async function createChsCoordinatorBranchAssignments(req: Request, res: R
         branchId: req.user.branchId,
       },
     );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'CREATE',
+      resource: 'ChsCoordinatorAssignment',
+      resourceId: result[0]?.id,
+      meta: { assignmentIds: result.map((assignment) => assignment.id), branchIds: input.branchIds },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     sendCreated(res, result);
   } catch (err) { next(err); }
 }
@@ -682,6 +754,16 @@ export async function createChsCoordinatorAssignment(req: Request, res: Response
         branchId: req.user.branchId,
       },
     );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: input.branchId,
+      action: 'CREATE',
+      resource: 'ChsCoordinatorAssignment',
+      resourceId: result.id,
+      meta: { scope: input.scope, coordinatorUserId: input.coordinatorUserId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     sendCreated(res, result);
   } catch (err) { next(err); }
 }
@@ -698,6 +780,16 @@ export async function updateChsCoordinatorAssignment(req: Request, res: Response
         branchId: req.user.branchId,
       },
     );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: result.branchId,
+      action: 'UPDATE',
+      resource: 'ChsCoordinatorAssignment',
+      resourceId: result.id,
+      meta: { scope: result.scope, coordinatorUserId: result.coordinatorUserId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     sendSuccess(res, result);
   } catch (err) { next(err); }
 }
@@ -708,6 +800,16 @@ export async function deleteChsCoordinatorAssignment(req: Request, res: Response
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,
+    });
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'UPDATE',
+      resource: 'ChsCoordinatorAssignment',
+      resourceId: result.id,
+      meta: { action: 'DEACTIVATE' },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
     });
     sendSuccess(res, result);
   } catch (err) { next(err); }
@@ -745,6 +847,16 @@ export async function createDoctorHeadBranchAssignments(req: Request, res: Respo
         branchId: req.user.branchId,
       },
     );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'CREATE',
+      resource: 'DoctorHeadAssignment',
+      resourceId: result[0]?.id,
+      meta: { assignmentIds: result.map((assignment) => assignment.id), branchIds: input.branchIds },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     sendCreated(res, result);
   } catch (err) { next(err); }
 }
@@ -761,6 +873,16 @@ export async function updateDoctorHeadAssignment(req: Request, res: Response, ne
         branchId: req.user.branchId,
       },
     );
+    await logAudit({
+      userId: req.user.userId,
+      branchId: result.branchId,
+      action: 'UPDATE',
+      resource: 'DoctorHeadAssignment',
+      resourceId: result.id,
+      meta: { doctorHeadUserId: result.doctorHeadUserId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     sendSuccess(res, result);
   } catch (err) { next(err); }
 }
@@ -771,6 +893,16 @@ export async function deleteDoctorHeadAssignment(req: Request, res: Response, ne
       role: req.user.role as Role,
       userId: req.user.userId,
       branchId: req.user.branchId,
+    });
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'UPDATE',
+      resource: 'DoctorHeadAssignment',
+      resourceId: result.id,
+      meta: { action: 'DEACTIVATE' },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
     });
     sendSuccess(res, result);
   } catch (err) { next(err); }

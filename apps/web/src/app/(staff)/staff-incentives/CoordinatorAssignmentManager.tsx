@@ -159,18 +159,18 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
   const remove = async (assignment: ChsCoordinatorAssignment) => {
     const coordinatorName = assignment.coordinator.profile?.fullName || assignment.coordinator.email;
     if (!window.confirm(
-      `Hapus permanen ${assignment.branch.name} dari koordinasi ${coordinatorName}? Data ini tidak dapat dipulihkan.`,
+      `Nonaktifkan ${assignment.branch.name} dari koordinasi ${coordinatorName}? Riwayat assignment tetap disimpan.`,
     )) return;
 
     try {
       await usersApi.deleteChsCoordinatorAssignment(assignment.id);
       if (editingAssignmentId === assignment.id) resetForm();
-      showToast.success('Assignment Koordinator CHS berhasil dihapus permanen.');
+      showToast.success('Assignment Koordinator CHS berhasil dinonaktifkan.');
       await load();
       onChanged();
     } catch (error) {
       assertCaughtError(error);
-      showToast.error(error.response?.data?.error?.message || 'Gagal menghapus assignment.');
+      showToast.error(error.response?.data?.error?.message || 'Gagal menonaktifkan assignment.');
     }
   };
 
@@ -323,7 +323,7 @@ export function CoordinatorAssignmentManager({ month, onChanged }: Props) {
                 </div>
                 <div className="flex items-center gap-1">
                   {assignment.isActive && <button type="button" onClick={() => edit(assignment)} title="Edit assignment" aria-label={`Edit assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10"><Pencil className="h-4 w-4" /></button>}
-                  <button type="button" onClick={() => void remove(assignment)} title="Hapus permanen assignment" aria-label={`Hapus permanen assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
+                  {assignment.isActive && <button type="button" onClick={() => void remove(assignment)} title="Nonaktifkan assignment" aria-label={`Nonaktifkan assignment ${coordinatorName} ${assignment.branch.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>}
                 </div>
               </div>
             );

@@ -1,5 +1,4 @@
 import { prisma } from '../../../lib/prisma';
-import { logger } from '../../../lib/logger';
 import { logAudit } from '../../../utils/auditLog';
 import type { AssignPackageInput } from '../packages.schema';
 import {
@@ -13,7 +12,6 @@ import {
   type MemberPackage,
   type PackagePricing,
 } from '@prisma/client';
-import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
 import { InvoiceGenerationService } from './invoice-generation.service';
 import {
   allocatePackageDiscount,
@@ -624,18 +622,8 @@ export class PackageAssignmentService {
         }
       }
 
-      // Calculate and record incentive AFTER all packages are created
-      // This ensures bundle incentive is calculated with complete package data
-      if (createdPackages.length > 0 && !params.socialProgramRequestId) {
-        try {
-          // Use the first package to trigger incentive calculation
-          // The service will detect if it's a bundle and calculate accordingly
-          await calculateAndRecordIncentive(createdPackages[0].id, tx);
-        } catch (error) {
-          logger.warn('[PackageAssignment] Incentive calculation failed', { error });
-          // Don't fail the whole transaction if incentive calculation fails
-        }
-      }
+      // Referral incentives are recorded only after the purchase is fully paid
+      // and its payment has been verified.
 
       // Voucher count is recorded when a basic/booster voucher is used in a session.
       // Buying a package only creates the voucher inventory and keeps it on hold.

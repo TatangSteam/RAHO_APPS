@@ -7,8 +7,12 @@ import { logger } from '@lib/logger';
  */
 export async function calculateAndRecordIncentive(
   memberPackageId: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  options: { incrementReferralCount?: boolean; forceIsFirstPackage?: boolean } = {},
 ) {
+  if (!tx) {
+    return prisma.$transaction((transaction) => calculateAndRecordIncentive(memberPackageId, transaction, options));
+  }
   const db = tx || prisma;
 
   try {
@@ -26,6 +30,17 @@ export async function calculateAndRecordIncentive(
 
     if (!memberPackage) {
       logger.warn(`[IncentiveCalculation] MemberPackage not found: ${memberPackageId}`);
+      return null;
+    }
+
+    if (
+      memberPackage.status !== 'ACTIVE'
+      || memberPackage.paymentPlanStatus !== 'PAID'
+      || !memberPackage.verifiedAt
+      || memberPackage.refundedAt
+      || memberPackage.socialProgramRequestId
+    ) {
+      logger.info(`[IncentiveCalculation] Package ${memberPackageId} is not fully paid and verified`);
       return null;
     }
 
@@ -50,23 +65,19 @@ export async function calculateAndRecordIncentive(
       return null;
     }
 
-    // If this package is part of a bundle (has purchaseGroupId), check if incentive already created for this group
-    if (memberPackage.purchaseGroupId) {
-      const existingGroupIncentive = await db.referralIncentiveRecord.findFirst({
-        where: {
-          memberPackage: {
-            purchaseGroupId: memberPackage.purchaseGroupId,
-          },
-        },
-      });
-
-      // If incentive already exists for this bundle, skip creating duplicate
-      if (existingGroupIncentive) {
-        logger.info(
-          `[IncentiveCalculation] Incentive already exists for bundle ${memberPackage.purchaseGroupId}, skipping`
-        );
-        return null;
-      }
+    const existingIncentive = await db.referralIncentiveRecord.findFirst({
+      where: memberPackage.purchaseGroupId
+        ? {
+            OR: [
+              { purchaseGroupId: memberPackage.purchaseGroupId },
+              { memberPackage: { purchaseGroupId: memberPackage.purchaseGroupId } },
+            ],
+          }
+        : { memberPackageId },
+    });
+    if (existingIncentive) {
+      logger.info(`[IncentiveCalculation] Incentive already exists for purchase ${memberPackageId}, skipping`);
+      return existingIncentive;
     }
 
     // Count how many purchase groups this member has (to determine if first package)
@@ -75,18 +86,23 @@ export async function calculateAndRecordIncentive(
     const existingGroups = await db.memberPackage.findMany({
       where: {
         memberId: memberPackage.memberId,
-        status: {
-          in: ['ACTIVE', 'PENDING_PAYMENT'],
-        },
+        status: 'ACTIVE',
+        paymentPlanStatus: 'PAID',
+        verifiedAt: { not: null },
+        refundedAt: null,
+        socialProgramRequestId: null,
       },
       select: {
+        id: true,
         purchaseGroupId: true,
       },
     });
 
-    // Get unique purchase groups (including null for standalone)
-    const uniqueGroups = new Set(existingGroups.map(p => p.purchaseGroupId || 'standalone'));
-    const isFirstPackage = uniqueGroups.size === 1;
+    // Bundles count once, while every standalone package is its own purchase.
+    const uniqueGroups = new Set(existingGroups.map((pkg) => (
+      pkg.purchaseGroupId ? `group:${pkg.purchaseGroupId}` : `package:${pkg.id}`
+    )));
+    const isFirstPackage = options.forceIsFirstPackage ?? uniqueGroups.size === 1;
 
     // Get incentive settings from MEMBER (not referral code)
     const incentiveType = isFirstPackage
@@ -115,6 +131,11 @@ export async function calculateAndRecordIncentive(
       const bundlePackages = await db.memberPackage.findMany({
         where: {
           purchaseGroupId: memberPackage.purchaseGroupId,
+          status: 'ACTIVE',
+          paymentPlanStatus: 'PAID',
+          verifiedAt: { not: null },
+          refundedAt: null,
+          socialProgramRequestId: null,
         },
         select: {
           id: true,
@@ -185,6 +206,7 @@ export async function calculateAndRecordIncentive(
         referralCodeId: referralCode.id,
         memberId: memberPackage.memberId,
         memberPackageId: memberPackage.id,
+        purchaseGroupId: memberPackage.purchaseGroupId,
         packageType: memberPackage.packageType,
         packageName,
         packageValue,
@@ -203,7 +225,7 @@ export async function calculateAndRecordIncentive(
       where: { id: referralCode.id },
       data: {
         totalReferrals: {
-          increment: isFirstPackage ? 1 : 0, // Only increment on first package/bundle
+          increment: isFirstPackage && options.incrementReferralCount !== false ? 1 : 0,
         },
         totalIncentiveEarned: {
           increment: incentiveAmount,
@@ -222,6 +244,63 @@ export async function calculateAndRecordIncentive(
     logger.error('[IncentiveCalculation] Error calculating incentive:', error);
     throw error;
   }
+}
+
+/** Rebuild an incentive after package pricing or composition changes. */
+export async function refreshIncentiveAfterPackageEdit(
+  memberPackageId: string,
+  tx?: Prisma.TransactionClient,
+) {
+  if (!tx) {
+    return prisma.$transaction((transaction) => refreshIncentiveAfterPackageEdit(memberPackageId, transaction));
+  }
+  const previous = await deleteIncentiveOnCancel(memberPackageId, tx);
+  return calculateAndRecordIncentive(memberPackageId, tx, {
+    incrementReferralCount: !previous?.isFirstPackage,
+    forceIsFirstPackage: previous?.isFirstPackage,
+  });
+}
+
+/**
+ * Reconcile a bundled purchase after one package is cancelled or refunded.
+ * Standalone incentives are removed, while a bundle is recalculated from the
+ * remaining eligible packages without counting the referral twice.
+ */
+export async function reconcileIncentiveAfterPackageCancellation(
+  memberPackageId: string,
+  tx?: Prisma.TransactionClient,
+) {
+  if (!tx) {
+    return prisma.$transaction((transaction) => (
+      reconcileIncentiveAfterPackageCancellation(memberPackageId, transaction)
+    ));
+  }
+
+  const changedPackage = await tx.memberPackage.findUnique({
+    where: { id: memberPackageId },
+    select: { purchaseGroupId: true },
+  });
+  const previous = await deleteIncentiveOnCancel(memberPackageId, tx);
+  if (!changedPackage?.purchaseGroupId) return null;
+
+  const remainingPackage = await tx.memberPackage.findFirst({
+    where: {
+      purchaseGroupId: changedPackage.purchaseGroupId,
+      status: 'ACTIVE',
+      paymentPlanStatus: 'PAID',
+      verifiedAt: { not: null },
+      refundedAt: null,
+      socialProgramRequestId: null,
+    },
+    select: { id: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  if (!remainingPackage) return null;
+
+  return calculateAndRecordIncentive(remainingPackage.id, tx, {
+    incrementReferralCount: !previous?.isFirstPackage,
+    forceIsFirstPackage: previous?.isFirstPackage,
+  });
 }
 
 /**
@@ -259,12 +338,28 @@ export async function deleteIncentiveOnCancel(
   memberPackageId: string,
   tx?: Prisma.TransactionClient
 ) {
+  if (!tx) {
+    return prisma.$transaction((transaction) => deleteIncentiveOnCancel(memberPackageId, transaction));
+  }
   const db = tx || prisma;
 
   try {
-    // Find existing incentive record
+    const memberPackage = await db.memberPackage.findUnique({
+      where: { id: memberPackageId },
+      select: { purchaseGroupId: true },
+    });
+
+    // Find the purchase incentive even when the selected package is not the
+    // first package in a bundle.
     const incentiveRecord = await db.referralIncentiveRecord.findFirst({
-      where: { memberPackageId },
+      where: memberPackage?.purchaseGroupId
+        ? {
+            OR: [
+              { purchaseGroupId: memberPackage.purchaseGroupId },
+              { memberPackage: { purchaseGroupId: memberPackage.purchaseGroupId } },
+            ],
+          }
+        : { memberPackageId },
       include: {
         referralCode: true,
       },

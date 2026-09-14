@@ -33,6 +33,20 @@ function dateOnly(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+function assignmentTerminationDate(effectiveFrom: Date, effectiveUntil: Date | null) {
+  const jakartaToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const today = dateOnly(jakartaToday);
+  const cutoff = effectiveFrom > today
+    ? new Date(effectiveFrom.getTime() - 24 * 60 * 60 * 1000)
+    : today;
+  return effectiveUntil && effectiveUntil < cutoff ? effectiveUntil : cutoff;
+}
+
 async function assertManageAccess(caller: Caller, branchId: string) {
   if (!MANAGER_ROLES.has(caller.role)) {
     throw errors.forbidden('Hanya administrator yang dapat mengatur Koordinator CHS.');
@@ -150,7 +164,6 @@ export async function createChsCoordinatorBranchAssignmentsService(
     }),
     prisma.chsCoordinatorAssignment.findMany({
       where: {
-        coordinatorUserId: input.coordinatorUserId,
         scope: 'BRANCH',
         branchId: { in: branchIds },
         homecareTeamId: null,
@@ -169,7 +182,7 @@ export async function createChsCoordinatorBranchAssignmentsService(
     const names = overlaps.map((overlap) => overlap.branch.name).join(', ');
     throw errors.conflict(
       'CHS_ASSIGNMENT_OVERLAP',
-      `Koordinator tersebut sudah menangani cabang berikut pada periode yang beririsan: ${names}.`,
+      `Cabang berikut sudah memiliki Koordinator CHS pada periode yang beririsan: ${names}.`,
     );
   }
 
@@ -221,7 +234,6 @@ export async function createChsCoordinatorAssignmentService(input: AssignmentInp
 
   const overlap = await prisma.chsCoordinatorAssignment.findFirst({
     where: {
-      coordinatorUserId: input.coordinatorUserId,
       scope: input.scope,
       branchId: input.branchId,
       homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
@@ -231,7 +243,7 @@ export async function createChsCoordinatorAssignmentService(input: AssignmentInp
     select: { id: true },
   });
   if (overlap) {
-    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Koordinator tersebut sudah memiliki scope ini pada periode yang beririsan.');
+    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Scope ini sudah memiliki Koordinator CHS pada periode yang beririsan.');
   }
 
   return prisma.chsCoordinatorAssignment.create({
@@ -300,7 +312,6 @@ export async function updateChsCoordinatorAssignmentService(
   const overlap = await prisma.chsCoordinatorAssignment.findFirst({
     where: {
       id: { not: assignmentId },
-      coordinatorUserId: input.coordinatorUserId,
       scope: input.scope,
       branchId: input.branchId,
       homecareTeamId: input.scope === 'TEAM' ? input.homecareTeamId : null,
@@ -310,7 +321,7 @@ export async function updateChsCoordinatorAssignmentService(
     select: { id: true },
   });
   if (overlap) {
-    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Koordinator tersebut sudah memiliki scope ini pada periode yang beririsan.');
+    throw errors.conflict('CHS_ASSIGNMENT_OVERLAP', 'Scope ini sudah memiliki Koordinator CHS pada periode yang beririsan.');
   }
 
   return prisma.chsCoordinatorAssignment.update({
@@ -331,10 +342,18 @@ export async function updateChsCoordinatorAssignmentService(
 export async function deleteChsCoordinatorAssignmentService(assignmentId: string, caller: Caller) {
   const assignment = await prisma.chsCoordinatorAssignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true, branchId: true },
+    select: { id: true, branchId: true, effectiveFrom: true, effectiveUntil: true, isActive: true },
   });
   if (!assignment) throw errors.notFound('Assignment Koordinator CHS tidak ditemukan.');
   await assertManageAccess(caller, assignment.branchId);
-  await prisma.chsCoordinatorAssignment.delete({ where: { id: assignment.id } });
-  return { id: assignment.id, deleted: true };
+  if (!assignment.isActive) return { id: assignment.id, deactivated: true };
+
+  await prisma.chsCoordinatorAssignment.update({
+    where: { id: assignment.id },
+    data: {
+      isActive: false,
+      effectiveUntil: assignmentTerminationDate(assignment.effectiveFrom, assignment.effectiveUntil),
+    },
+  });
+  return { id: assignment.id, deactivated: true };
 }

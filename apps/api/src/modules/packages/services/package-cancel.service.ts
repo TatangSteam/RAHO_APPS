@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { releaseAddOnStockInTransaction } from './add-on-inventory.service';
+import { reconcileIncentiveAfterPackageCancellation } from '../../referrals/incentive-calculation.service';
 
 interface CancelPackageInput {
   reason: string;
@@ -151,6 +152,7 @@ export class PackageCancelService {
             : `[CANCELLED] ${data.reason}`,
         },
       });
+      await reconcileIncentiveAfterPackageCancellation(packageId, tx);
       if (invoice) {
         await tx.invoice.update({
           where: { id: invoice.id },

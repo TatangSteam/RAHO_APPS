@@ -1614,7 +1614,8 @@ model ReferralIncentiveRecord {
   id              String @id @default(cuid())
   referralCodeId  String
   memberId        String
-  memberPackageId String
+  memberPackageId String @unique
+  purchaseGroupId String? @unique
 
   // Package Info (snapshot)
   packageType  String
@@ -5144,6 +5145,37 @@ model ChsCoordinatorAssignment {
   @@index([homecareTeamId, isActive])
   @@index([coordinatorUserId, effectiveFrom, effectiveUntil])
   @@map("chs_coordinator_assignments")
+}
+
+enum StaffIncentivePeriodStatus {
+  DRAFT
+  REVIEWED
+  APPROVED
+  PAID
+}
+
+model StaffIncentivePeriod {
+  id           String                     @id @default(cuid())
+  month        String                     @db.VarChar(7)
+  scopeKey     String                     @db.VarChar(500)
+  branchId     String?
+  status       StaffIncentivePeriodStatus @default(DRAFT)
+  report       Json
+  generatedBy  String
+  generatedAt  DateTime                   @default(now())
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  approvedBy   String?
+  approvedAt   DateTime?
+  paidBy       String?
+  paidAt       DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  @@unique([month, scopeKey])
+  @@index([month, status])
+  @@index([branchId])
+  @@map("staff_incentive_periods")
 }
 
 model HomecareTeamMember {

@@ -7,6 +7,7 @@ import { assertBranchAccess, assertPermission } from '../../iam/authorization.se
 import { PERMISSIONS } from '../../iam/permission-catalog';
 import { consumeAddOnStockInTransaction } from './add-on-inventory.service';
 import { canVerifyPurchasePayment } from './payment-verification.helpers';
+import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
 
 // This endpoint predates finance posting and creates a verified payment without
 // a cash/bank transaction or deferred-revenue contract. Keep packages verified
@@ -323,6 +324,9 @@ export class PaymentVerificationService {
           },
         });
       }
+      if (paymentPlanStatus === 'PAID' && groupPackages.length > 0) {
+        await calculateAndRecordIncentive(groupPackages[0].id, tx);
+      }
     });
 
     // NOTE: Payment record is already created inside the invoice service.
@@ -398,23 +402,30 @@ export class PaymentVerificationService {
       data
     );
 
-    const updatedPackage = await prisma.memberPackage.update({
-      where: { id: pkg.id },
-      data: {
-        status: PackageStatus.ACTIVE,
-        paidAt: now,
-        verifiedBy: userId,
-        verifiedAt: now,
-        totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || pkg.finalPrice || 0) },
-        paymentPlanStatus: this.getPaymentPlanStatus(paidInvoice),
-        paymentProofUrl: data.proofFileUrl,
-        paymentProofFileName: data.proofFileName,
-        paymentProofFileSize: data.proofFileSize,
-        paymentProofMimeType: data.proofMimeType,
-        activatedAt: now,
-        notes: data.notes || pkg.notes,
-        revenueFlowVersion: LEGACY_PACKAGE_REVENUE_FLOW_VERSION,
-      },
+    const paymentPlanStatus = this.getPaymentPlanStatus(paidInvoice);
+    const updatedPackage = await prisma.$transaction(async (tx) => {
+      const updated = await tx.memberPackage.update({
+        where: { id: pkg.id },
+        data: {
+          status: PackageStatus.ACTIVE,
+          paidAt: now,
+          verifiedBy: userId,
+          verifiedAt: now,
+          totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || pkg.finalPrice || 0) },
+          paymentPlanStatus,
+          paymentProofUrl: data.proofFileUrl,
+          paymentProofFileName: data.proofFileName,
+          paymentProofFileSize: data.proofFileSize,
+          paymentProofMimeType: data.proofMimeType,
+          activatedAt: now,
+          notes: data.notes || pkg.notes,
+          revenueFlowVersion: LEGACY_PACKAGE_REVENUE_FLOW_VERSION,
+        },
+      });
+      if (paymentPlanStatus === 'PAID') {
+        await calculateAndRecordIncentive(pkg.id, tx);
+      }
+      return updated;
     });
 
     // NOTE: Payment record is already created inside the invoice service.

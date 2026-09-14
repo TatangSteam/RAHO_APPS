@@ -76,12 +76,14 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
   const [data, setData] = useState<StaffMonthlyIncentiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [workflowProcessing, setWorkflowProcessing] = useState(false);
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
   const isFinanceController = user?.role === 'FINANCE_LOGISTICS_CONTROLLER';
   const canManageCoordinator = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
   const canSelectBranch = isSuperAdmin || isAdminManager || isFinanceController;
+  const canManagePeriod = isSuperAdmin || isFinanceController;
 
   useEffect(() => {
     if (canSelectBranch) setBranchId('all');
@@ -157,6 +159,50 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
     }
   };
 
+  const saveDraft = async () => {
+    try {
+      setWorkflowProcessing(true);
+      const result = await usersApi.saveStaffIncentiveDraft({
+        month,
+        branchId: canSelectBranch ? branchId || undefined : undefined,
+      });
+      setData(result);
+      showToast.success(data?.workflow.status === 'DRAFT' ? 'Draft berhasil dihitung ulang.' : 'Draft insentif berhasil disimpan.');
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal menyimpan draft insentif.');
+    } finally {
+      setWorkflowProcessing(false);
+    }
+  };
+
+  const transitionPeriod = async (action: 'review' | 'approve' | 'mark-paid') => {
+    if (!data?.workflow.periodId) return;
+    const confirmation = action === 'approve'
+      ? 'Setujui dan kunci periode ini? Angka tidak dapat dihitung ulang setelah disetujui.'
+      : action === 'mark-paid'
+        ? 'Tandai seluruh insentif pada periode ini sudah dibayar?'
+        : 'Ajukan draft periode ini ke tahap review?';
+    if (!window.confirm(confirmation)) return;
+    try {
+      setWorkflowProcessing(true);
+      await usersApi.transitionStaffIncentivePeriod(data.workflow.periodId, action);
+      await load();
+      showToast.success(
+        action === 'review'
+          ? 'Draft masuk tahap review.'
+          : action === 'approve'
+            ? 'Periode insentif berhasil disetujui dan dikunci.'
+            : 'Periode insentif berhasil ditandai sudah dibayar.',
+      );
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal memproses periode insentif.');
+    } finally {
+      setWorkflowProcessing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 p-6 dark:bg-[#0a0a0a]">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -188,9 +234,43 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                         ? 'Target tim/cabang, dokter Homecare, partnership, dan Treatment Review Dokter Head.'
                         : 'Perhitungan bulanan berdasarkan sesi selesai, penjualan lunas, dan target organisasi.'}
               </p>
+              {data?.workflow && (
+                <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+                  data.workflow.status === 'PAID'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                    : data.workflow.status === 'APPROVED'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                      : data.workflow.status === 'REVIEWED'
+                        ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                }`}>Status: {data.workflow.status}</span>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
+            {canManagePeriod && data?.workflow.status === 'PREVIEW' && (
+              <button type="button" onClick={() => void saveDraft()} disabled={workflowProcessing || loading} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50">
+                {workflowProcessing && <Loader2 className="h-4 w-4 animate-spin" />} Simpan Draft
+              </button>
+            )}
+            {canManagePeriod && data?.workflow.status === 'DRAFT' && (
+              <>
+                <button type="button" onClick={() => void saveDraft()} disabled={workflowProcessing || loading} className="rounded-xl border border-amber-400 px-4 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-50 dark:text-amber-300">Hitung Ulang</button>
+                <button type="button" onClick={() => void transitionPeriod('review')} disabled={workflowProcessing} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Ajukan Review</button>
+              </>
+            )}
+            {canManagePeriod && data?.workflow.status === 'REVIEWED' && (
+              <button
+                type="button"
+                onClick={() => void transitionPeriod('approve')}
+                disabled={workflowProcessing || data.anomalies.length > 0}
+                title={data.anomalies.length > 0 ? 'Selesaikan anomali assignment sebelum menyetujui periode.' : undefined}
+                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >Setujui &amp; Kunci</button>
+            )}
+            {canManagePeriod && data?.workflow.status === 'APPROVED' && (
+              <button type="button" onClick={() => void transitionPeriod('mark-paid')} disabled={workflowProcessing} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Tandai Dibayar</button>
+            )}
             <button
               type="button"
               onClick={() => void exportExcel()}
@@ -227,6 +307,14 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
           <div className="flex min-h-72 items-center justify-center gap-3 text-neutral-500"><Loader2 className="animate-spin" /> Menghitung insentif...</div>
         ) : data && (
           <>
+            {data.anomalies.length > 0 && (
+              <section className="rounded-2xl border border-red-300 bg-red-50 p-5 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                <h2 className="font-bold">Periode belum dapat disetujui</h2>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {data.anomalies.map((anomaly) => <li key={`${anomaly.code}-${anomaly.branchId}`}>{anomaly.message}</li>)}
+                </ul>
+              </section>
+            )}
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[
                 ...((view === 'all' || view === 'nakes') ? [{ label: 'Total Nakes', value: data.summary.nakesTotalAmount, detail: `${data.summary.nakesRecipients} penerima`, icon: Droplets, tone: 'text-emerald-500' }] : []),
@@ -267,7 +355,7 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Nakes</th><th className="px-5 py-3 text-right">Infus</th><th className="px-5 py-3 text-right">Per Infus</th><th className="px-5 py-3 text-center">Bonus &gt;=100</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                    {data.nakes.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td><td className="px-5 py-4 text-right font-semibold">{row.infusionCount}</td><td className="px-5 py-4 text-right">{formatCurrency(row.baseAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.targetReached}>{row.targetReached ? formatCurrency(row.targetBonus) : `${row.infusionCount}/${row.target}`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.totalAmount)}</td></tr>)}
+                    {data.nakes.map((row) => <tr key={row.id}><td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small>{row.coordinatorPersonalInfusionsExcluded > 0 && <small className="block text-amber-600">{row.coordinatorPersonalInfusionsExcluded} sesi dibayar melalui komponen Koordinator</small>}</td><td className="px-5 py-4 text-right font-semibold">{row.infusionCount}</td><td className="px-5 py-4 text-right">{formatCurrency(row.baseAmount)}</td><td className="px-5 py-4 text-center"><StatusBadge reached={row.targetReached && !row.targetBonusSuppressedByCoordinator}>{row.targetBonusSuppressedByCoordinator ? 'Digabung Koordinator' : row.targetReached ? formatCurrency(row.targetBonus) : `${row.infusionCount}/${row.target}`}</StatusBadge></td><td className="px-5 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.totalAmount)}</td></tr>)}
                     {data.nakes.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-neutral-500">Belum ada infus selesai pada periode ini.</td></tr>}
                   </tbody>
                 </table>
@@ -323,6 +411,11 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
                     title: 'Bonus target cabang',
                     formula: `Cabang lolos target × ${formatCurrency(data.rules.coordinator.branchTargetBonus)}`,
                     description: `Target cabang tanpa tim HC adalah ${data.rules.coordinator.branchWithoutHomecareTarget} infus. Jika memiliki tim HC, targetnya menjadi ${data.rules.coordinator.branchWithHomecareTarget} infus.`,
+                  },
+                  {
+                    title: 'Dokter Cabang',
+                    formula: `Jika cabang lolos: infus berbayar × ${formatCurrency(data.rules.doctorHead.ratePerBranchDoctorPaidInfusion)}`,
+                    description: 'Setelah target cabang tercapai, seluruh infus cabang yang lunas dan terverifikasi masuk perhitungan Dokter Cabang.',
                   },
                   {
                     title: 'Omzet HC dan cabang',
@@ -410,19 +503,20 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
               />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Dokter Head</th><th className="px-5 py-3 text-left">Target cabang</th><th className="px-5 py-3 text-right">Bonus tim HC</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Dokter tim HC</th><th className="px-5 py-3 text-right">Partnership</th><th className="px-5 py-3 text-center">Treatment Review</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
+                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-800/70"><tr><th className="px-5 py-3 text-left">Dokter Head</th><th className="px-5 py-3 text-left">Target cabang</th><th className="px-5 py-3 text-right">Bonus tim HC</th><th className="px-5 py-3 text-right">Bonus cabang</th><th className="px-5 py-3 text-right">Dokter Cabang</th><th className="px-5 py-3 text-right">Dokter tim HC</th><th className="px-5 py-3 text-right">Partnership</th><th className="px-5 py-3 text-center">Treatment Review</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                     {data.doctorHeads.map((row) => <tr key={row.id}>
                       <td className="px-5 py-4"><strong className="text-neutral-900 dark:text-white">{row.fullName}</strong><small className="block text-neutral-500">{row.staffCode || row.email}</small></td>
                       <td className="px-5 py-4"><div className="space-y-1">{row.scopes.map((scope) => <div key={scope.assignmentId} className="flex items-center gap-2"><StatusBadge reached={scope.qualifierPassed}>{scope.qualifierPassed ? 'PASS' : 'BELUM'}</StatusBadge><span className="text-xs text-neutral-500">{scope.branchName} · {scope.totalInfusions}/{scope.qualifierTarget}</span></div>)}</div></td>
                       <td className="px-5 py-4 text-right"><strong>{row.qualifiedHomecareTeams} tim</strong><small className="block text-neutral-500">{formatCurrency(row.homecareTeamTargetBonus)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.qualifiedBranches} cabang</strong><small className="block text-neutral-500">{formatCurrency(row.branchTargetBonus)}</small></td>
+                      <td className="px-5 py-4 text-right"><strong>{row.branchDoctorPaidInfusions} infus lunas</strong><small className="block text-neutral-500">{formatCurrency(row.branchDoctorAmount)}</small></td>
                       <td className="px-5 py-4 text-right"><strong>{row.homecareDoctorPaidInfusions} infus lunas</strong><small className="block text-neutral-500">{formatCurrency(row.homecareDoctorAmount)}</small></td>
                       <td className="px-5 py-4 text-right"><StatusBadge reached={row.partnershipTargetReached}>{row.partnershipTargetReached ? 'PASS' : `${row.partnershipTotalInfusions}/${row.partnershipTarget}`}</StatusBadge><small className="mt-1 block text-neutral-500">{row.partnershipPaidInfusions} lunas · {formatCurrency(row.partnershipAmount)}</small></td>
                       <td className="px-5 py-4 text-center"><StatusBadge reached={false}>Belum dikonfigurasi</StatusBadge></td>
                       <td className="px-5 py-4 text-right font-bold text-cyan-600 dark:text-cyan-400">{formatCurrency(row.totalAmount)}</td>
                     </tr>)}
-                    {data.doctorHeads.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Dokter Head aktif pada periode ini.</td></tr>}
+                    {data.doctorHeads.length === 0 && <tr><td colSpan={9} className="px-5 py-10 text-center text-neutral-500">Belum ada assignment Dokter Head aktif pada periode ini.</td></tr>}
                   </tbody>
                 </table>
               </div>

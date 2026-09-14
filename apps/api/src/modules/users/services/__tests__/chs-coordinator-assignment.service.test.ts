@@ -13,7 +13,6 @@ jest.mock('@lib/prisma', () => ({
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
-      delete: jest.fn(),
       update: jest.fn(),
     },
     user: { findFirst: jest.fn() },
@@ -51,7 +50,6 @@ describe('CHS coordinator assignment update', () => {
       Promise.resolve({ id: `assignment-${data.branchId}`, ...data })
     ));
     mockPrisma.chsCoordinatorAssignment.update.mockResolvedValue({ id: 'assignment-1' });
-    mockPrisma.chsCoordinatorAssignment.delete.mockResolvedValue({ id: 'assignment-1' });
     mockPrisma.branch.findMany.mockResolvedValue([{ id: 'branch-1' }, { id: 'branch-2' }]);
     mockPrisma.$transaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
   });
@@ -68,7 +66,7 @@ describe('CHS coordinator assignment update', () => {
       where: expect.objectContaining({ id: 'coordinator-1', isActive: true }),
     }));
     expect(mockPrisma.chsCoordinatorAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ coordinatorUserId: 'coordinator-1' }),
+      where: expect.not.objectContaining({ coordinatorUserId: expect.anything() }),
     }));
     expect(mockPrisma.chsCoordinatorAssignment.create).toHaveBeenCalledTimes(2);
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -104,7 +102,8 @@ describe('CHS coordinator assignment update', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: { not: 'assignment-1' },
-          coordinatorUserId: 'coordinator-1',
+          scope: 'TEAM',
+          homecareTeamId: 'team-1',
         }),
       }),
     );
@@ -136,17 +135,23 @@ describe('CHS coordinator assignment update', () => {
     }, caller)).rejects.toMatchObject({ code: 'INACTIVE_CHS_ASSIGNMENT' });
   });
 
-  it('permanently deletes a coordinator assignment regardless of its period', async () => {
+  it('deactivates a coordinator assignment while retaining its history', async () => {
     mockPrisma.chsCoordinatorAssignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
       branchId: 'branch-1',
+      effectiveFrom: new Date('2099-01-01T00:00:00.000Z'),
+      effectiveUntil: null,
+      isActive: true,
     });
 
     await deleteChsCoordinatorAssignmentService('assignment-1', caller);
 
-    expect(mockPrisma.chsCoordinatorAssignment.delete).toHaveBeenCalledWith({
+    expect(mockPrisma.chsCoordinatorAssignment.update).toHaveBeenCalledWith({
       where: { id: 'assignment-1' },
+      data: {
+        isActive: false,
+        effectiveUntil: new Date('2098-12-31T00:00:00.000Z'),
+      },
     });
-    expect(mockPrisma.chsCoordinatorAssignment.update).not.toHaveBeenCalled();
   });
 });

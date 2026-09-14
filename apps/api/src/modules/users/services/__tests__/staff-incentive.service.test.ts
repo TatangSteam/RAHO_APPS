@@ -3,6 +3,7 @@ import {
   calculateChsCoordinatorMonthlyIncentive,
   calculateDoctorHeadMonthlyIncentive,
   calculateMsoMonthlyIncentive,
+  calculateNakesAfterCoordinatorDedup,
   calculateNakesMonthlyIncentive,
   getJakartaMonthRange,
   getChsQualifierTarget,
@@ -30,6 +31,17 @@ describe('staff monthly incentive rules', () => {
       baseAmount: 2_000_000,
       targetBonus: 2_000_000,
       totalAmount: 4_000_000,
+    });
+  });
+
+  it('does not pay the same personal infusion and monthly bonus twice to a CHS coordinator', () => {
+    expect(calculateNakesAfterCoordinatorDedup(120, 100)).toMatchObject({
+      infusionCount: 20,
+      coordinatorPersonalInfusionsExcluded: 100,
+      baseAmount: 200_000,
+      targetBonus: 0,
+      targetBonusSuppressedByCoordinator: true,
+      totalAmount: 200_000,
     });
   });
 
@@ -132,6 +144,18 @@ describe('staff monthly incentive rules', () => {
     });
   });
 
+  it('pays the branch doctor Rp2.500 for every paid infusion after the branch target passes', () => {
+    expect(calculateDoctorHeadMonthlyIncentive({
+      qualifiedBranches: 1,
+      branchDoctorPaidInfusions: 160,
+    })).toMatchObject({
+      branchTargetBonus: 500_000,
+      branchDoctorPaidInfusions: 160,
+      branchDoctorAmount: 400_000,
+      totalAmount: 900_000,
+    });
+  });
+
   it('uses the correct CHS qualifier for team and branch scope', () => {
     expect(getChsQualifierTarget('TEAM', true)).toBe(100);
     expect(getChsQualifierTarget('BRANCH', false)).toBe(200);
@@ -168,12 +192,13 @@ describe('staff monthly incentive rules', () => {
         nakes: { ratePerInfusion: 10_000, target: 100, bonus: 2_000_000 },
         mso: { visitTarget: 100, minimumPaidAirNanoBoxes: 5, visitBonus: 2_000_000, ratePerPaidAirNanoBox: 90_000 },
         coordinator: { ratePerEligiblePaidInfusion: 1_000, homecareTeamTarget: 100, branchWithoutHomecareTarget: 200, branchWithHomecareTarget: 300, ratePerPersonalInfusion: 10_000, personalTarget: 100, personalTargetBonus: 2_000_000, homecareTeamTargetBonus: 500_000, branchTargetBonus: 250_000, ratePerHoPaidInfusion: 10_000 },
-        doctorHead: { homecareTeamTargetBonus: 500_000, branchTargetBonus: 500_000, ratePerHomecareDoctorPaidInfusion: 5_000, partnershipTarget: 1_500, ratePerPartnershipPaidInfusion: 2_000 },
+        doctorHead: { homecareTeamTargetBonus: 500_000, branchTargetBonus: 500_000, ratePerBranchDoctorPaidInfusion: 2_500, ratePerHomecareDoctorPaidInfusion: 5_000, partnershipTarget: 1_500, ratePerPartnershipPaidInfusion: 2_000 },
       },
       nakes: [{ id: 'n1', fullName: 'Nakes A', email: 'nakes@example.com', staffCode: 'N001', role: 'NURSE', ...calculateNakesMonthlyIncentive(100) }],
       mso: [{ id: 'm1', fullName: 'MSO A', email: 'mso@example.com', staffCode: 'M001', role: 'ADMIN_LAYANAN', ...calculateMsoMonthlyIncentive(100, 8) }],
       coordinators: [{ id: 'c1', fullName: 'Koordinator A', email: 'chs@example.com', staffCode: 'C001', role: 'NURSE', scopes: [{ assignmentId: 'a1', scope: 'TEAM', scopeId: 't1', scopeName: 'Tim HC A', branchId: 'b1', branchName: 'Cabang A', qualifierTarget: 100, totalInfusions: 110, qualifierPassed: true, eligiblePaidInfusions: 80, targetBonus: 500_000, incentiveType: 'HOMECARE' }], ...calculateChsCoordinatorMonthlyIncentive(80, 110) }],
       doctorHeads: [{ id: 'd1', fullName: 'Dokter Head A', email: 'doctor@example.com', staffCode: 'D001', role: 'DOCTOR', scopes: [{ assignmentId: 'da1', branchId: 'b1', branchName: 'Cabang A', branchType: 'PREMIER', qualifierTarget: 300, totalInfusions: 300, qualifierPassed: true, targetBonus: 500_000, qualifiedHomecareTeams: 1 }], ...calculateDoctorHeadMonthlyIncentive({ qualifiedHomecareTeams: 1, qualifiedBranches: 1, homecareDoctorPaidInfusions: 100, partnershipTotalInfusions: 0, partnershipPaidInfusions: 0 }) }],
+      anomalies: [],
       summary: { nakesRecipients: 1, nakesTotalAmount: 3_000_000, msoRecipients: 1, msoTotalAmount: 2_720_000, coordinatorRecipients: 1, coordinatorTotalAmount: 3_180_000, doctorHeadRecipients: 1, doctorHeadTotalAmount: 1_500_000, grandTotalAmount: 10_400_000 },
     };
     const buffer = await buildStaffIncentiveWorkbook(
@@ -185,6 +210,6 @@ describe('staff monthly incentive rules', () => {
     expect(workbook.getWorksheet('NAKES')?.getCell('I2').value).toBe(3_000_000);
     expect(workbook.getWorksheet('MSO')?.getCell('I2').value).toBe(2_720_000);
     expect(workbook.getWorksheet('KOORDINATOR CHS')?.getCell('O2').value).toBe(3_180_000);
-    expect(workbook.getWorksheet('DOKTER HEAD')?.getCell('P2').value).toBe(1_500_000);
+    expect(workbook.getWorksheet('DOKTER HEAD')?.getCell('R2').value).toBe(1_500_000);
   });
 });
