@@ -34,6 +34,7 @@ interface EditFormData {
 }
 
 const decimalPattern = /^\d*\.?\d*$/;
+const MIN_NO_DOSE_ML = 2.5;
 
 const parseDoseInput = (value: number | string): number => {
   if (value === '') return 0;
@@ -49,7 +50,7 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
     hho: plan.hho || 0,
     hhoKonsentrat: plan.hhoKonsentrat || 0,
     h2: plan.h2 || 0,
-    no: plan.no || 0,
+    no: plan.no || '',
     gaso: plan.gaso || 0,
     o2: plan.o2 || 0,
     o3: plan.o3 || 0,
@@ -64,6 +65,12 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const noDose = parseDoseInput(formData.no);
+    if (noDose > 0 && noDose < MIN_NO_DOSE_ML) {
+      showToast.error(`Dosis NO minimal ${MIN_NO_DOSE_ML} ml`);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -218,13 +225,15 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
                 />
               </div>
               <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>NO (ml)</label>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>NO (ml) — opsional, minimal 2.5</label>
                 <input
                   type="number"
+                  min={MIN_NO_DOSE_ML}
                   step="0.01"
                   className="form-input"
                   value={formData.no}
                   onChange={(e) => handleNumberChange('no', e.target.value)}
+                  title="Kosongkan jika tidak digunakan. Dosis NO minimal 2.5 ml"
                   style={{ fontSize: '13px' }}
                 />
               </div>

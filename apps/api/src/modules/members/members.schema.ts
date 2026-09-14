@@ -43,6 +43,15 @@ const ifaSubstanceSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
+const optionalNoDoseSchema = z
+  .number()
+  .min(0, 'Dosis NO tidak boleh negatif')
+  .nullable()
+  .optional()
+  .refine((value) => value == null || value === 0 || value >= 2.5, {
+    message: 'Dosis NO minimal 2.5 ml',
+  });
+
 // ============================================================
 // THERAPY PLAN SCHEMAS
 // ============================================================
@@ -55,7 +64,7 @@ export const therapyPlanDataSchema = z.object({
   hho: z.number().min(0).nullable().optional(),
   hhoKonsentrat: z.number().min(0).nullable().optional(),
   h2: z.number().min(0).nullable().optional(),
-  no: z.number().min(0).nullable().optional(),
+  no: optionalNoDoseSchema,
   gaso: z.number().min(0).nullable().optional(),
   o2: z.number().min(0).nullable().optional(),
   o3: z.number().min(0).nullable().optional(),
@@ -111,7 +120,7 @@ export const editTherapyPlanSchema = z.object({
   hho: z.number().min(0).nullable().optional(),
   hhoKonsentrat: z.number().min(0).nullable().optional(),
   h2: z.number().min(0).nullable().optional(),
-  no: z.number().min(0).nullable().optional(),
+  no: optionalNoDoseSchema,
   gaso: z.number().min(0).nullable().optional(),
   o2: z.number().min(0).nullable().optional(),
   o3: z.number().min(0).nullable().optional(),
@@ -141,7 +150,7 @@ export const bulkEditTherapyPlanSetSchema = z.object({
       hho: z.number().min(0).nullable().optional(),
       hhoKonsentrat: z.number().min(0).nullable().optional(),
       h2: z.number().min(0).nullable().optional(),
-      no: z.number().min(0).nullable().optional(),
+      no: optionalNoDoseSchema,
       gaso: z.number().min(0).nullable().optional(),
       o2: z.number().min(0).nullable().optional(),
       o3: z.number().min(0).nullable().optional(),

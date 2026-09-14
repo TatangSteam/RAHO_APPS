@@ -42,6 +42,7 @@ interface ValidationError {
 }
 
 const decimalPattern = /^\d*\.?\d*$/;
+const MIN_NO_DOSE_ML = 2.5;
 
 const parseDoseInput = (value: unknown): number | undefined => {
   if (value === undefined || value === null || value === '') return undefined;
@@ -511,6 +512,15 @@ export default function BulkTherapyPlanModal({
           message: 'Tidak boleh mengisi IFA250 dan IFA500 bersamaan',
         });
       }
+
+      const noDose = parseDoseInput(plan.no);
+      if (noDose !== undefined && noDose > 0 && noDose < MIN_NO_DOSE_ML) {
+        errors.push({
+          rowId: plan.rowId,
+          field: 'no',
+          message: `Dosis NO minimal ${MIN_NO_DOSE_ML} ml`,
+        });
+      }
     });
 
     setValidationErrors(errors);
@@ -571,7 +581,7 @@ export default function BulkTherapyPlanModal({
     { key: 'hho', label: 'HHO' },
     { key: 'hhoKonsentrat', label: 'HHO Kons.' },
     { key: 'h2', label: 'H2' },
-    { key: 'no', label: 'NO' },
+    { key: 'no', label: 'NO', min: MIN_NO_DOSE_ML, reminder: 'Opsional · min 2.5 ml' },
     { key: 'gaso', label: 'GASO' },
     { key: 'o2', label: 'O2' },
     { key: 'o3', label: 'O3' },
@@ -786,7 +796,12 @@ export default function BulkTherapyPlanModal({
                                   key={field.key}
                                   className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 w-16"
                                 >
-                                  {field.label}
+                                  <span>{field.label}</span>
+                                  {'reminder' in field && field.reminder && (
+                                    <span className="mt-0.5 block whitespace-nowrap text-[9px] font-medium normal-case text-amber-600 dark:text-amber-400">
+                                      {field.reminder}
+                                    </span>
+                                  )}
                                 </th>
                               ))}
                               <th className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 w-24">
@@ -858,24 +873,38 @@ export default function BulkTherapyPlanModal({
                                       </label>
                                     </div>
                                   </td>
-                                  {doseFields.map((field) => (
-                                    <td
-                                      key={field.key}
-                                      className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700"
-                                    >
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step={0.1}
-                                        value={plan[field.key] ?? ''}
-                                        onChange={(e) =>
-                                          updateDoseField(plan.rowId, field.key, e.target.value)
-                                        }
-                                        disabled={submitting}
-                                        className="w-full px-1 py-1 text-xs text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
-                                      />
-                                    </td>
-                                  ))}
+                                  {doseFields.map((field) => {
+                                    const fieldError = validationErrors.find(
+                                      (validationError) =>
+                                        validationError.rowId === plan.rowId &&
+                                        validationError.field === field.key
+                                    );
+
+                                    return (
+                                      <td
+                                        key={field.key}
+                                        className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700"
+                                      >
+                                        <input
+                                          type="number"
+                                          min={'min' in field ? field.min : 0}
+                                          step={0.1}
+                                          value={plan[field.key] ?? ''}
+                                          onChange={(e) =>
+                                            updateDoseField(plan.rowId, field.key, e.target.value)
+                                          }
+                                          disabled={submitting}
+                                          title={'reminder' in field ? field.reminder : undefined}
+                                          aria-invalid={Boolean(fieldError)}
+                                          className={`w-full px-1 py-1 text-xs text-center border rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white ${
+                                            fieldError
+                                              ? 'border-red-500 ring-1 ring-red-500'
+                                              : 'border-neutral-300 dark:border-neutral-600'
+                                          }`}
+                                        />
+                                      </td>
+                                    );
+                                  })}
                                   <td className="px-2 py-2">
                                     <div className="flex items-center justify-center gap-0.5">
                                       <button

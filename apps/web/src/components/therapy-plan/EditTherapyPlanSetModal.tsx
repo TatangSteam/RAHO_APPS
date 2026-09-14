@@ -42,6 +42,7 @@ interface EditableRow {
 
 const decimalPattern = /^\d*\.?\d*$/;
 const maxTherapyPlansPerSet = 50;
+const MIN_NO_DOSE_ML = 2.5;
 
 const parseDoseInput = (value: DoseInputValue): number | null => {
   if (value === null || value === '') return null;
@@ -506,6 +507,11 @@ export default function EditTherapyPlanSetModal({
       return `Row ${row.planNumber}: IFA 250ml dan IFA 500ml tidak boleh diisi bersamaan`;
     }
 
+    const noDose = parseDoseInput(row.no);
+    if (noDose !== null && noDose > 0 && noDose < MIN_NO_DOSE_ML) {
+      return `Row ${row.planNumber}: Dosis NO minimal ${MIN_NO_DOSE_ML} ml`;
+    }
+
     // Check for negative values
     const hasNegative = [
       row.ifa250, row.ifa500, row.hho, row.hhoKonsentrat, row.h2, row.no,
@@ -865,7 +871,12 @@ export default function EditTherapyPlanSetModal({
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">HHO</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">HHO Kons.</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">H2</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">NO</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">
+                    NO
+                    <span className="mt-0.5 block whitespace-nowrap text-[9px] font-medium normal-case text-amber-600 dark:text-amber-400">
+                      Opsional · min 2.5 ml
+                    </span>
+                  </th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">GASO</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">O2</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">O3</th>
@@ -885,6 +896,9 @@ export default function EditTherapyPlanSetModal({
                   const isLastRow = index === rows.length - 1;
                   const canRemoveThisRow =
                     canEditSetNameAndAddPlans && isLastRow && !row.isLocked && rows.length > 1;
+                  const noDose = parseDoseInput(row.no);
+                  const hasInvalidNoDose =
+                    noDose !== null && noDose > 0 && noDose < MIN_NO_DOSE_ML;
 
                   return (
                   <tr key={row.planNumber} className={`${row.planNumber === sessionPlanNumber ? 'bg-blue-50 dark:bg-blue-900/20' : row.isLocked ? 'bg-neutral-100 dark:bg-neutral-800/30 opacity-60' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'}`}>
@@ -971,16 +985,29 @@ export default function EditTherapyPlanSetModal({
                       />
                     </td>
                     <td className="px-3 py-2 border-r border-neutral-200 dark:border-neutral-700">
-                      <input
-                        type="number"
-                        value={row.no ?? ''}
-                        onChange={(e) => handleInputChange(index, 'no', e.target.value)}
-                        disabled={row.isLocked}
-                        className="w-20 px-2 py-1 text-sm text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        placeholder="0"
-                        min="0"
-                        step="0.1"
-                      />
+                      <div className="flex flex-col items-center gap-1">
+                        <input
+                          type="number"
+                          value={row.no ?? ''}
+                          onChange={(e) => handleInputChange(index, 'no', e.target.value)}
+                          disabled={row.isLocked}
+                          aria-invalid={hasInvalidNoDose}
+                          title="Kosongkan jika tidak digunakan. Dosis NO minimal 2.5 ml"
+                          className={`w-20 px-2 py-1 text-sm text-center border rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            hasInvalidNoDose
+                              ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                              : 'border-neutral-300 dark:border-neutral-600 focus:ring-amber-500 focus:border-amber-500'
+                          }`}
+                          placeholder="Min 2.5"
+                          min={MIN_NO_DOSE_ML}
+                          step="0.1"
+                        />
+                        {hasInvalidNoDose && (
+                          <span className="whitespace-nowrap text-[9px] font-medium text-red-600 dark:text-red-400">
+                            Min 2.5 ml
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 border-r border-neutral-200 dark:border-neutral-700">
                       <input
