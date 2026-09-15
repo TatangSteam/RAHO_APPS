@@ -373,20 +373,9 @@
 
 .stockSummary > div:last-child { border-right: 0; }
 .stockSummary strong { display: block; margin-top: 8px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.valuationSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .stockSummary .inbound { border-top: 3px solid #167a62; }
 .stockSummary .outbound { border-top: 3px solid #c85b39; }
-
-.layers {
-  display: grid;
-  gap: 4px;
-  min-width: 210px;
-}
-
-.layers span {
-  margin: 0 !important;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
 
 .valuationToolbar {
   display: flex;
