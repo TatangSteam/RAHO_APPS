@@ -879,6 +879,18 @@ export const inventoryApi = {
     return api.patch(`/inventory/items/${itemId}/adjust-stock`, data);
   },
 
+  /** Value existing legacy stock without changing its quantity (Super Admin only). */
+  valueLegacyStock: (itemId: string, data: {
+    idempotencyKey: string;
+    adjustment: 0;
+    unitCost: string;
+    valuationDocumentReference: string;
+    reasonCode: 'LEGACY_OPENING_VALUATION';
+    notes: string;
+    stockLocationId: string;
+    batchId?: string;
+  }) => api.patch(`/inventory/items/${itemId}/adjust-stock`, data),
+
   /**
    * Get master products for inventory modal
    */

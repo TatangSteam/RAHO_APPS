@@ -76,6 +76,16 @@ describe('directStockAdjustmentSchema', () => {
     expect(service).toContain('sourceDocumentReference: input.valuationDocumentReference!');
   });
 
+  it('membatasi valuasi ke batch dan lokasi yang dipilih', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
+      'utf8',
+    );
+    expect(service).toContain('AND b."batchId" IS NULL');
+    expect(service).toContain('AND b."batchId" = ${input.batchId}');
+    expect(service).toContain("'VALUATION_LOCATION_INVALID'");
+  });
+
   it('memisahkan perubahan quantity dari valuasi harga', () => {
     const service = readFileSync(
       resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),

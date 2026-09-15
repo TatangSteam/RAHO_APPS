@@ -499,7 +499,7 @@ async function valuePendingStockInTransaction(
 
   const batchFilter = input.batchId
     ? Prisma.sql`AND b."batchId" = ${input.batchId}`
-    : Prisma.empty;
+    : Prisma.sql`AND b."batchId" IS NULL`;
   const layers = await tx.$queryRaw<Array<{ id: string; remainingQty: Prisma.Decimal }>>(Prisma.sql`
     SELECT l."id", l."remainingQty"
     FROM "inventory_cost_layers" l
@@ -701,6 +701,20 @@ export async function directAdjustStock(
     let location = preferredLocationId
       ? await tx.stockLocation.findUnique({ where: { id: preferredLocationId }, include: { warehouse: true } })
       : null;
+    if (
+      Number(input.adjustment) === 0
+      && input.stockLocationId
+      && (
+        !location?.isActive
+        || !location.warehouse.isActive
+        || location.warehouse.branchId !== item.branchId
+      )
+    ) {
+      throw errors.badRequest(
+        'VALUATION_LOCATION_INVALID',
+        'Lokasi stok yang dipilih tidak aktif atau bukan milik cabang produk. Muat ulang laporan.',
+      );
+    }
     if (
       !location?.isActive
       || !location.warehouse.isActive

@@ -388,6 +388,90 @@
   font-size: 11px;
 }
 
+.valuationToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.valuationToolbar > div:first-child { display: grid; gap: 3px; }
+.valuationToolbar strong { font-size: 14px; }
+.valuationToolbar span { color: var(--text-secondary); font-size: 12px; }
+.valuationFilters { display: flex; gap: 6px; }
+.valuationFilters button,
+.valueButton {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 8px 11px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.valuationFilters .selectedFilter,
+.valueButton { border-color: #167a62; color: #167a62; }
+.valuationFilters button:disabled,
+.valueButton:disabled { opacity: .5; cursor: not-allowed; }
+
+.valuationSearch { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.valuationSearch label { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.valuationSearch input { width: min(320px, 100%); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 10px; background: var(--surface-input); color: var(--text-primary); }
+.valuationSearch button { border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 11px; background: var(--surface-card); color: var(--text-primary); font-weight: 600; cursor: pointer; }
+.valuationSearch button:disabled { opacity: .5; cursor: not-allowed; }
+.mobileValuationList { display: none; }
+
+.modalBackdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .65);
+}
+
+.valuationModal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  background: var(--surface-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .25);
+}
+
+.valuationModal header { padding: 20px 22px 12px; border-bottom: 1px solid var(--surface-border); }
+.valuationModal h2 { margin: 0; font-size: 18px; }
+.valuationModal header p { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
+.modalBody { display: grid; gap: 14px; padding: 18px 22px; }
+.valuationFacts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
+.valuationFacts span { color: var(--text-secondary); }
+.valuationFacts strong { color: var(--text-primary); }
+.modalBody label { display: grid; gap: 6px; font-size: 12px; font-weight: 600; }
+.modalBody input,
+.modalBody textarea {
+  width: 100%;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font: inherit;
+}
+.modalBody input:focus,
+.modalBody textarea:focus { outline: 2px solid #167a62; outline-offset: 1px; }
+.valuationPreview { display: flex; justify-content: space-between; gap: 12px; margin: 0; font-size: 13px; }
+.valuationHelp { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.modalError { margin: 0; padding: 10px; border: 1px solid #d47a68; border-radius: 6px; color: #a73e2c; font-size: 12px; }
+.valuationModal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--surface-border); }
+.valuationModal footer button { border: 1px solid var(--surface-border); border-radius: 6px; padding: 9px 15px; background: var(--surface-card); color: var(--text-primary); font-weight: 600; cursor: pointer; }
+.valuationModal footer button[type="submit"] { border-color: #167a62; background: #167a62; color: #fff; }
+.valuationModal footer button:disabled { opacity: .55; cursor: not-allowed; }
+
 .pagination {
   display: flex;
   align-items: center;
@@ -429,4 +513,20 @@
   .kpi { min-height: 92px; }
   .alertBand > div, .stockSummary > div { border-right: 0; border-bottom: 1px solid var(--surface-border); }
   .chartPanel > header { align-items: flex-start; flex-direction: column; }
+  .valuationToolbar { align-items: flex-start; flex-direction: column; }
+  .valuationSearch { flex-wrap: wrap; }
+  .valuationSearch label { width: 100%; }
+  .valuationPreview { flex-direction: column; }
+  .valuationTable { display: none; }
+  .mobileValuationList { display: grid; gap: 10px; }
+  .mobileValuationList article { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--surface-border); border-radius: 6px; background: var(--surface-card); }
+  .mobileValuationList article > strong { font-size: 13px; }
+  .mobileValuationList article > span,
+  .mobileValuationList article > div,
+  .mobileValuationList article > small { color: var(--text-secondary); font-size: 12px; }
+  .mobileValuationList article > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; }
+  .mobileValuationList article > small { color: #b74632; }
+  .mobileValuationList article > footer { margin-top: 6px; }
+  .mobileValuationList article .valueButton { width: 100%; }
+  .mobileValuationList > p { margin: 0; padding: 20px 14px; border: 1px solid var(--surface-border); border-radius: 6px; color: var(--text-secondary); font-size: 12px; }
 }

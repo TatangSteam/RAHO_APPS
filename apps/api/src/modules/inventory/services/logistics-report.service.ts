@@ -428,14 +428,28 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
     ...(query.masterProductId ? { masterProductId: query.masterProductId } : {}),
     ...(query.stockLocationId ? { stockLocationId: query.stockLocationId } : {}),
   };
+  // Keep the financial summary for the whole scope; only the table is filtered.
+  const rowWhere: Prisma.InventoryBalanceWhereInput = {
+    ...balanceWhere,
+    ...(query.search ? { masterProduct: { OR: [
+      { sku: { contains: query.search, mode: 'insensitive' } },
+      { name: { contains: query.search, mode: 'insensitive' } },
+    ] } } : {}),
+    ...(query.pendingOnly ? { costLayers: { some: {
+      remainingQty: { gt: 0 },
+      isVoided: false,
+      valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+      unitCost: null,
+    } } } : {}),
+  };
   const [total, aggregate, rows, layers, transfers] = await Promise.all([
-    prisma.inventoryBalance.count({ where: balanceWhere }),
+    prisma.inventoryBalance.count({ where: rowWhere }),
     prisma.inventoryBalance.aggregate({
       where: balanceWhere,
       _sum: { onHandQty: true, reservedQty: true, quarantineQty: true, inTransitQty: true },
     }),
     prisma.inventoryBalance.findMany({
-      where: balanceWhere,
+      where: rowWhere,
       include: {
         branch: { select: { id: true, branchCode: true, name: true } },
         masterProduct: { select: { id: true, sku: true, name: true, baseUnit: true, unit: true } },

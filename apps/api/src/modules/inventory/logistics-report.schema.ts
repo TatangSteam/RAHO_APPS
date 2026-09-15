@@ -26,6 +26,8 @@ export const inventoryValuationQuerySchema = z.object({
   branchId: z.string().trim().min(1).optional(),
   masterProductId: z.string().trim().min(1).optional(),
   stockLocationId: z.string().trim().min(1).optional(),
+  pendingOnly: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  search: z.string().trim().min(1).max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });

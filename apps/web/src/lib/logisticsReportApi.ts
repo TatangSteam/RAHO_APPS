@@ -65,7 +65,7 @@ export type InventoryValuation = {
     totalAssetValue: string; inTransitValueIncluded: boolean;
   };
   data: Array<{
-    id: string; onHandQty: string; reservedQty: string; quarantineQty: string; inTransitQty: string;
+    id: string; inventoryItemId: string; onHandQty: string; reservedQty: string; quarantineQty: string; inTransitQty: string;
     valuedQty: string; pendingValuationQty: string; inventoryValue: string; averageUnitCost: string | null;
     quantityReconciled: boolean;
     branch: { id: string; branchCode: string; name: string };
@@ -94,6 +94,8 @@ export const logisticsReportApi = {
     branchId?: string;
     masterProductId?: string;
     stockLocationId?: string;
+    pendingOnly?: boolean;
+    search?: string;
     page?: number;
     limit?: number;
   }) => unwrap<InventoryValuation>(await api.get('/inventory/reports/valuation', { params })),

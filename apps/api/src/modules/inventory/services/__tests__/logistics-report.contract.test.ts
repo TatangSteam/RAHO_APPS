@@ -41,7 +41,18 @@ describe('Sprint 10 logistics reporting contract', () => {
     expect(page).toContain("dashboardValuationComplete ? currency(dashboard.valuation.totalAssetValue) : 'Belum lengkap'");
     expect(page).toContain('Nilai inventory belum lengkap.');
     expect(page).toContain('Pending valuation');
-    expect(page).toContain("row.averageUnitCost === null ? 'Belum dinilai'");
+    expect(page).toContain('valuedCost(row.averageUnitCost)');
+    expect(page).toContain("Number.isFinite(parsed) ? parsed : null");
     expect(page).toContain('Mismatch quantity/layer');
+  });
+
+  it('makes pending valuation actionable without changing stock quantity or the full-scope summary', () => {
+    expect(service).toContain('prisma.inventoryBalance.count({ where: rowWhere })');
+    expect(service).toMatch(/prisma\.inventoryBalance\.aggregate\(\{\s+where: balanceWhere/);
+    expect(service).toMatch(/prisma\.inventoryBalance\.findMany\(\{\s+where: rowWhere/);
+    expect(page).toContain('pendingOnly, search: appliedSearch || undefined, page: valuationPage, limit: 25');
+    expect(page).toContain('inventoryApi.valueLegacyStock(valuationRow.inventoryItemId');
+    expect(page).toContain('adjustment: 0');
+    expect(page).toContain("reasonCode: 'LEGACY_OPENING_VALUATION'");
   });
 });
