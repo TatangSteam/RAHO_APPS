@@ -422,6 +422,11 @@
 .valuationSearch input { width: min(320px, 100%); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 10px; background: var(--surface-input); color: var(--text-primary); }
 .valuationSearch button { border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 11px; background: var(--surface-card); color: var(--text-primary); font-weight: 600; cursor: pointer; }
 .valuationSearch button:disabled { opacity: .5; cursor: not-allowed; }
+.skuDiagnosis { display: grid; gap: 10px; margin-bottom: 12px; padding: 14px; border: 1px solid #d39337; border-radius: 6px; background: color-mix(in srgb, #d39337 7%, var(--surface-card)); }
+.skuDiagnosis strong { font-size: 13px; }
+.skuDiagnosis p { margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.skuDiagnosisFacts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-secondary); font-size: 12px; }
+.skuDiagnosis .valueButton { width: fit-content; }
 .mobileValuationList { display: none; }
 
 .modalBackdrop {
@@ -529,4 +534,5 @@
   .mobileValuationList article > footer { margin-top: 6px; }
   .mobileValuationList article .valueButton { width: 100%; }
   .mobileValuationList > p { margin: 0; padding: 20px 14px; border: 1px solid var(--surface-border); border-radius: 6px; color: var(--text-secondary); font-size: 12px; }
+  .skuDiagnosis .valueButton { width: 100%; }
 }

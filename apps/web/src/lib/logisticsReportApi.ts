@@ -59,9 +59,15 @@ export type StockCard = {
 export type InventoryValuation = {
   generatedAt: string;
   filter: { branchId: string | null; masterProductId: string | null; stockLocationId: string | null };
+  skuLookup?: {
+    sku: string; productName: string | null; baseUnit: string | null;
+    inventoryItemId: string | null; stockLocationId: string | null; valuationBatchId: string | null; valuationBatchNumber: string | null;
+    mirrorQty: string; onHandQty: string; readyQty: string; pendingQty: string; missingLayerQty: string;
+    canValue: boolean; status: string;
+  } | null;
   summary: {
     onHandQty: string; reservedQty: string; quarantineQty: string; inTransitQty: string;
-    valuedQty: string; pendingValuationQty: string; layerValue: string; inTransitValue: string;
+    valuedQty: string; pendingValuationQty: string; missingCostLayerQty?: string; layerValue: string; inTransitValue: string;
     totalAssetValue: string; inTransitValueIncluded: boolean;
   };
   data: Array<{
@@ -69,7 +75,7 @@ export type InventoryValuation = {
     valuedQty: string; pendingValuationQty: string; inventoryValue: string; averageUnitCost: string | null;
     quantityReconciled: boolean;
     branch: { id: string; branchCode: string; name: string };
-    masterProduct: { id: string; sku: string; name: string; baseUnit?: string; unit: string };
+    masterProduct: { id: string; sku: string; name: string; baseUnit?: string; unit: string; tracksBatch?: boolean };
     stockLocation: { id: string; code: string; name: string; warehouse: { id: string; code: string; name: string } };
     batch: { id: string; batchNumber: string; expiryDate: string | null } | null;
     costLayers: Array<{ id: string; sourceType: string; sourceId: string; remainingQty: string; unitCost: string | null; valuationStatus: string; receivedAt: string }>;

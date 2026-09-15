@@ -421,6 +421,99 @@ export async function getStockCard(actorUserId: string, query: StockCardQuery) {
   };
 }
 
+async function getSkuValuationLookup(branchId: string, sku: string) {
+  const zero = new Prisma.Decimal(0);
+  const product = await prisma.masterProduct.findFirst({
+    where: { sku: { equals: sku, mode: 'insensitive' } },
+    select: { id: true, sku: true, name: true, baseUnit: true, unit: true, isActive: true, tracksBatch: true },
+  });
+  const empty = {
+    sku: product?.sku || sku.toUpperCase(),
+    productName: product?.name || null,
+    baseUnit: product?.baseUnit || product?.unit || null,
+    inventoryItemId: null as string | null,
+    stockLocationId: null as string | null,
+    valuationBatchId: null as string | null,
+    valuationBatchNumber: null as string | null,
+    mirrorQty: zero,
+    onHandQty: zero,
+    readyQty: zero,
+    pendingQty: zero,
+    missingLayerQty: zero,
+    canValue: false,
+  };
+  if (!product) return { ...empty, status: 'SKU_NOT_FOUND' };
+  if (!product.isActive) return { ...empty, status: 'SKU_INACTIVE' };
+
+  const item = await prisma.inventoryItem.findFirst({
+    where: { branchId, masterProductId: product.id },
+    select: {
+      id: true, stock: true, stockLocationId: true,
+      balances: { select: {
+        stockLocationId: true, batchId: true, onHandQty: true, reservedQty: true, quarantineQty: true,
+        batch: { select: { batchNumber: true, isBlocked: true, expiryDate: true } },
+        costLayers: {
+          where: { remainingQty: { gt: 0 }, isVoided: false },
+          select: { remainingQty: true, unitCost: true, valuationStatus: true, receivedAt: true },
+        },
+      } },
+    },
+  });
+  if (!item) return { ...empty, status: 'NOT_ASSIGNED_TO_BRANCH' };
+
+  const allOnHand = decimalSum(item.balances.map((balance) => balance.onHandQty));
+  const canonical = item.balances.filter((balance) => balance.stockLocationId === item.stockLocationId);
+  const onHandQty = decimalSum(canonical.map((balance) => balance.onHandQty));
+  const missingBalances = canonical.filter((balance) => balance.onHandQty.greaterThan(0) && balance.costLayers.length === 0);
+  const missingLayerQty = decimalSum(missingBalances.map((balance) => balance.onHandQty));
+  const pendingQty = decimalSum(canonical.flatMap((balance) => balance.costLayers
+    .filter((layer) => layer.valuationStatus === InventoryValuationStatus.PENDING_VALUATION && layer.unitCost === null)
+    .map((layer) => layer.remainingQty)));
+  const now = new Date();
+  const readyQty = canonical.reduce((sum, balance) => {
+    const batchSaleable = !balance.batch?.isBlocked
+      && (!balance.batch?.expiryDate || balance.batch.expiryDate > now);
+    if (!batchSaleable) return sum;
+    const valued = decimalSum(balance.costLayers
+      .filter((layer) => layer.valuationStatus === InventoryValuationStatus.VALUED
+        && layer.unitCost !== null && layer.unitCost.greaterThan(0) && layer.receivedAt <= now)
+      .map((layer) => layer.remainingQty));
+    const available = balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty);
+    return sum.add(Prisma.Decimal.min(available.greaterThan(0) ? available : zero, valued));
+  }, zero);
+  const hasPartialLayerMismatch = canonical.some((balance) => balance.costLayers.length > 0
+    && !decimalSum(balance.costLayers.map((layer) => layer.remainingQty)).equals(balance.onHandQty));
+  const valuationBalance = missingBalances.length === 1 ? missingBalances[0] : null;
+  const base = {
+    ...empty,
+    inventoryItemId: item.id,
+    stockLocationId: item.stockLocationId,
+    valuationBatchId: valuationBalance?.batchId || null,
+    valuationBatchNumber: valuationBalance?.batch?.batchNumber || null,
+    mirrorQty: item.stock,
+    onHandQty,
+    readyQty,
+    pendingQty,
+    missingLayerQty,
+  };
+  if (!item.stockLocationId) return { ...base, status: 'NO_STOCK_LOCATION' };
+  if (item.balances.length === 0 && item.stock.greaterThan(0)) {
+    return { ...base, status: 'NO_LEDGER_BALANCE', canValue: !product.tracksBatch };
+  }
+  if (!allOnHand.equals(item.stock)) return { ...base, status: 'MIRROR_MISMATCH' };
+  if (onHandQty.isZero() && allOnHand.greaterThan(0)) return { ...base, status: 'STOCK_IN_OTHER_LOCATION' };
+  if (onHandQty.isZero()) return { ...base, status: 'NO_STOCK' };
+  if (hasPartialLayerMismatch) return { ...base, status: 'LAYER_MISMATCH' };
+  if (missingLayerQty.greaterThan(0)) return {
+    ...base,
+    status: 'NO_COST_LAYER',
+    canValue: !!valuationBalance && (!product.tracksBatch || !!valuationBalance.batchId),
+  };
+  if (pendingQty.greaterThan(0)) return { ...base, status: 'PENDING_VALUATION' };
+  if (readyQty.isZero()) return { ...base, status: 'NO_SALEABLE_HPP' };
+  return { ...base, status: 'READY' };
+}
+
 export async function getInventoryValuation(actorUserId: string, query: InventoryValuationQuery) {
   const branchScope = await resolveBranchScope(actorUserId, query.branchId);
   const balanceWhere: Prisma.InventoryBalanceWhereInput = {
@@ -435,14 +528,17 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
       { sku: { contains: query.search, mode: 'insensitive' } },
       { name: { contains: query.search, mode: 'insensitive' } },
     ] } } : {}),
-    ...(query.pendingOnly ? { costLayers: { some: {
-      remainingQty: { gt: 0 },
-      isVoided: false,
-      valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
-      unitCost: null,
-    } } } : {}),
+    ...(query.pendingOnly ? { OR: [
+      { costLayers: { some: {
+        remainingQty: { gt: 0 },
+        isVoided: false,
+        valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+        unitCost: null,
+      } } },
+      { onHandQty: { gt: 0 }, costLayers: { none: { remainingQty: { gt: 0 }, isVoided: false } } },
+    ] } : {}),
   };
-  const [total, aggregate, rows, layers, transfers] = await Promise.all([
+  const [total, aggregate, rows, layers, transfers, missingBalances] = await Promise.all([
     prisma.inventoryBalance.count({ where: rowWhere }),
     prisma.inventoryBalance.aggregate({
       where: balanceWhere,
@@ -452,7 +548,7 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
       where: rowWhere,
       include: {
         branch: { select: { id: true, branchCode: true, name: true } },
-        masterProduct: { select: { id: true, sku: true, name: true, baseUnit: true, unit: true } },
+        masterProduct: { select: { id: true, sku: true, name: true, baseUnit: true, unit: true, tracksBatch: true } },
         stockLocation: { include: { warehouse: { select: { id: true, code: true, name: true } } } },
         batch: { select: { id: true, batchNumber: true, expiryDate: true } },
         costLayers: { where: { remainingQty: { gt: 0 }, isVoided: false }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] },
@@ -472,6 +568,14 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
       },
       select: { totalValue: true, receivedValue: true },
     }),
+    prisma.inventoryBalance.findMany({
+      where: {
+        ...balanceWhere,
+        onHandQty: { gt: 0 },
+        costLayers: { none: { remainingQty: { gt: 0 }, isVoided: false } },
+      },
+      select: { onHandQty: true },
+    }),
   ]);
 
   const layerValue = layers.reduce((sum, layer) => (
@@ -485,14 +589,19 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
   const pendingValuationQty = decimalSum(layers
     .filter((layer) => layer.valuationStatus === InventoryValuationStatus.PENDING_VALUATION || layer.unitCost === null)
     .map((layer) => layer.remainingQty));
+  const missingCostLayerQty = decimalSum(missingBalances.map((balance) => balance.onHandQty));
   const includeInTransitValue = !query.masterProductId && !query.stockLocationId;
   const inTransitValue = includeInTransitValue
     ? transfers.reduce((sum, transfer) => sum.add(positive(transfer.totalValue.sub(transfer.receivedValue))), new Prisma.Decimal(0))
     : new Prisma.Decimal(0);
+  const skuLookup = query.branchId && query.search && /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(query.search)
+    ? await getSkuValuationLookup(query.branchId, query.search)
+    : null;
 
   return {
     generatedAt: new Date(),
     filter: { branchId: query.branchId || null, masterProductId: query.masterProductId || null, stockLocationId: query.stockLocationId || null },
+    skuLookup,
     summary: {
       onHandQty: aggregate._sum.onHandQty || new Prisma.Decimal(0),
       reservedQty: aggregate._sum.reservedQty || new Prisma.Decimal(0),
@@ -500,6 +609,7 @@ export async function getInventoryValuation(actorUserId: string, query: Inventor
       inTransitQty: aggregate._sum.inTransitQty || new Prisma.Decimal(0),
       valuedQty,
       pendingValuationQty,
+      missingCostLayerQty,
       layerValue,
       inTransitValue,
       totalAssetValue: layerValue.add(inTransitValue),

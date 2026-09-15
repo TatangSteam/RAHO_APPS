@@ -40,6 +40,47 @@ import styles from './logistics-dashboard.module.css';
 
 import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 type View = 'OVERVIEW' | 'STOCK_CARD' | 'VALUATION';
+type ValuationTarget = {
+  branchId: string; inventoryItemId: string; stockLocationId: string; batchId: string | null;
+  batchLabel: string; sku: string; productName: string; baseUnit: string; quantityToValue: string;
+  pendingLayerCount: number; allowMissingLayer: boolean;
+};
+type SkuLookup = NonNullable<InventoryValuation['skuLookup']>;
+
+const skuStatusTitle: Record<string, string> = {
+  SKU_NOT_FOUND: 'SKU tidak ditemukan',
+  SKU_INACTIVE: 'Produk tidak aktif',
+  NOT_ASSIGNED_TO_BRANCH: 'Produk belum ada di cabang ini',
+  NO_STOCK_LOCATION: 'Lokasi stok belum diatur',
+  NO_LEDGER_BALANCE: 'Stok belum tercatat di ledger',
+  MIRROR_MISMATCH: 'Jumlah stok tidak cocok',
+  STOCK_IN_OTHER_LOCATION: 'Stok ada di lokasi lain',
+  NO_STOCK: 'Stok belum tersedia',
+  LAYER_MISMATCH: 'Saldo dan cost layer tidak cocok',
+  NO_COST_LAYER: 'Stok ada, cost layer belum ada',
+  PENDING_VALUATION: 'Stok menunggu HPP',
+  NO_SALEABLE_HPP: 'Belum ada stok bernilai yang siap jual',
+  READY: 'Stok bernilai siap jual',
+};
+
+const skuStatusHint = (lookup: SkuLookup) => {
+  switch (lookup.status) {
+    case 'SKU_NOT_FOUND': return 'Periksa SKU. Untuk add-on per dus, stok biasanya memakai SKU botol penyusunnya.';
+    case 'SKU_INACTIVE': return 'Aktifkan produk master sebelum transaksi.';
+    case 'NOT_ASSIGNED_TO_BRANCH': return 'Pastikan cabang ini adalah cabang transaksi, lalu minta Admin menambahkan produk ke inventori cabang.';
+    case 'NO_STOCK_LOCATION': return 'Atur lokasi stok produk terlebih dahulu.';
+    case 'NO_LEDGER_BALANCE': return 'Jumlah tercatat di item inventori tetapi belum ada saldo ledger. Super Admin dapat memulihkan saldo dan mengisi HPP tanpa menambah jumlah stok.';
+    case 'MIRROR_MISMATCH': return 'Saldo item dan ledger berbeda. Rekonsiliasi dahulu; jangan membuat stok masuk baru untuk menutup selisih.';
+    case 'STOCK_IN_OTHER_LOCATION': return 'Transaksi add-on hanya memakai lokasi stok aktif produk. Pindahkan stok melalui mutasi yang sah, bukan valuasi lokasi lain.';
+    case 'NO_STOCK': return 'Jika barang memang ada secara fisik, catat penerimaan atau opening stock yang benar.';
+    case 'LAYER_MISMATCH': return 'Jumlah cost layer dan saldo stok berbeda. Periksa rekonsiliasi sebelum mengisi HPP.';
+    case 'NO_COST_LAYER': return 'Jumlah stok tersedia tetapi cost layer hilang. Super Admin dapat memulihkan layer dan mengisi HPP tanpa menambah stok.';
+    case 'PENDING_VALUATION': return 'Klik Isi HPP pada baris produk di bawah. Gunakan harga pokok dari dokumen, bukan harga jual.';
+    case 'NO_SALEABLE_HPP': return 'Periksa HPP layer, reservasi, batch kedaluwarsa/terblokir, dan lokasi stok.';
+    case 'READY': return 'Jika transaksi masih gagal, pastikan cabang transaksi sama dan jumlah stok siap jual mencukupi.';
+    default: return 'Periksa data inventori produk ini.';
+  }
+};
 
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -55,6 +96,7 @@ const currency = (value: unknown) => {
 const valuedCost = (value: unknown) => value === null || value === undefined || finiteNumber(value) === null ? 'Belum dinilai' : currency(value);
 const hasPendingLayer = (row: InventoryValuation['data'][number]) => row.costLayers.some((layer) =>
   layer.valuationStatus === 'PENDING_VALUATION' && layer.unitCost === null && Number(layer.remainingQty) > 0);
+const hasMissingCostLayer = (row: InventoryValuation['data'][number]) => Number(row.onHandQty) > 0 && row.costLayers.length === 0;
 const statusLabel = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
 
 function Kpi({ label, value, note, icon }: { label: string; value: string; note?: string; icon: ReactNode }) {
@@ -92,7 +134,7 @@ export default function LogisticsDashboardPage() {
   const [pendingOnly, setPendingOnly] = useState(true);
   const [valuationSearch, setValuationSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
-  const [valuationRow, setValuationRow] = useState<InventoryValuation['data'][number] | null>(null);
+  const [valuationTarget, setValuationTarget] = useState<ValuationTarget | null>(null);
   const [unitCost, setUnitCost] = useState('');
   const [documentReference, setDocumentReference] = useState('');
   const [valuationNotes, setValuationNotes] = useState('');
@@ -167,22 +209,30 @@ export default function LogisticsDashboardPage() {
     }
   }, [valuation, valuationPage]);
   useEffect(() => {
-    if (!valuationRow) return;
+    if (!valuationTarget) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !valuationSaving) setValuationRow(null);
+      if (event.key === 'Escape' && !valuationSaving) setValuationTarget(null);
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [valuationRow, valuationSaving]);
+  }, [valuationTarget, valuationSaving]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppliedSearch(valuationSearch.trim());
+      setValuationPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [valuationSearch]);
 
   const refresh = async () => {
     await loadMain();
     if (view === 'STOCK_CARD') await loadStockCard();
   };
 
-  const openValuation = (row: InventoryValuation['data'][number]) => {
+  const openValuation = (target: ValuationTarget) => {
     valuationRequest.current = null;
-    setValuationRow(row);
+    setValuationTarget(target);
     setUnitCost('');
     setDocumentReference('');
     setValuationNotes('');
@@ -191,9 +241,9 @@ export default function LogisticsDashboardPage() {
 
   const saveValuation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valuationRow || valuationSaving) return;
-    if (valuationRow.branch.id !== branchId || !valuationRow.quantityReconciled) {
-      setValuationError('Saldo berubah atau tidak cocok. Muat ulang laporan sebelum menilai stok.');
+    if (!valuationTarget || valuationSaving) return;
+    if (valuationTarget.branchId !== branchId) {
+      setValuationError('Cabang berubah. Muat ulang laporan sebelum menilai stok.');
       return;
     }
     if (!/^\d+(?:\.\d{1,4})?$/.test(unitCost) || Number(unitCost) <= 0) {
@@ -208,24 +258,24 @@ export default function LogisticsDashboardPage() {
       setValuationSaving(true);
       setValuationError('');
       const signature = JSON.stringify([
-        valuationRow.inventoryItemId, valuationRow.stockLocation.id, valuationRow.batch?.id || null,
+        valuationTarget.inventoryItemId, valuationTarget.stockLocationId, valuationTarget.batchId,
         unitCost, documentReference.trim(), valuationNotes.trim(),
       ]);
       if (valuationRequest.current?.signature !== signature) {
         valuationRequest.current = { signature, key: crypto.randomUUID() };
       }
-      await inventoryApi.valueLegacyStock(valuationRow.inventoryItemId, {
+      await inventoryApi.valueLegacyStock(valuationTarget.inventoryItemId, {
         idempotencyKey: valuationRequest.current.key,
         adjustment: 0,
         unitCost,
         valuationDocumentReference: documentReference.trim(),
         reasonCode: 'LEGACY_OPENING_VALUATION',
         notes: valuationNotes.trim(),
-        stockLocationId: valuationRow.stockLocation.id,
-        ...(valuationRow.batch ? { batchId: valuationRow.batch.id } : {}),
+        stockLocationId: valuationTarget.stockLocationId,
+        ...(valuationTarget.batchId ? { batchId: valuationTarget.batchId } : {}),
       });
-      setValuationRow(null);
-      showToast.success(`HPP ${valuationRow.masterProduct.sku} tersimpan tanpa mengubah jumlah stok.`);
+      setValuationTarget(null);
+      showToast.success(`HPP ${valuationTarget.sku} tersimpan tanpa mengubah jumlah stok.`);
       setValuationPage(1);
       if (valuationPage === 1) await loadMain();
     } catch (requestError) {
@@ -236,13 +286,51 @@ export default function LogisticsDashboardPage() {
     }
   };
 
-  const valueAction = (row: InventoryValuation['data'][number]) => hasPendingLayer(row)
-    ? user?.role === 'SUPER_ADMIN'
-      ? <button className={styles.valueButton} type="button" onClick={() => openValuation(row)} disabled={!row.quantityReconciled || loading} title={!row.quantityReconciled ? 'Perbaiki selisih stok sebelum valuasi' : 'Isi HPP stok lama'}>Isi HPP</button>
-      : <span>Hubungi Super Admin</span>
-    : Number(row.pendingValuationQty) > 0
-      ? <span>Perlu perbaikan data</span>
-      : <span>Sudah dinilai</span>;
+  const rowTarget = (row: InventoryValuation['data'][number]): ValuationTarget => ({
+    branchId: row.branch.id,
+    inventoryItemId: row.inventoryItemId,
+    stockLocationId: row.stockLocation.id,
+    batchId: row.batch?.id || null,
+    batchLabel: row.batch?.batchNumber || 'Tanpa batch',
+    sku: row.masterProduct.sku,
+    productName: row.masterProduct.name,
+    baseUnit: row.masterProduct.baseUnit || row.masterProduct.unit,
+    quantityToValue: hasMissingCostLayer(row) ? row.onHandQty : row.pendingValuationQty,
+    pendingLayerCount: row.costLayers.filter((layer) => layer.valuationStatus === 'PENDING_VALUATION' && layer.unitCost === null).length,
+    allowMissingLayer: hasMissingCostLayer(row),
+  });
+
+  const skuLookup = valuation?.skuLookup;
+  const valueAction = (row: InventoryValuation['data'][number]): ReactNode => {
+    const searchedItem = !!appliedSearch && skuLookup?.inventoryItemId === row.inventoryItemId;
+    if (searchedItem && skuLookup?.status === 'STOCK_IN_OTHER_LOCATION') return <span>Mutasi ke lokasi jual dahulu</span>;
+    if (searchedItem && ['MIRROR_MISMATCH', 'LAYER_MISMATCH'].includes(skuLookup?.status || '')) return <span>Rekonsiliasi dahulu</span>;
+    if (searchedItem && skuLookup?.canValue && user?.role === 'SUPER_ADMIN') return <span>Gunakan tombol Isi HPP di atas</span>;
+    if (hasPendingLayer(row) || hasMissingCostLayer(row)) {
+      if (row.masterProduct.tracksBatch && !row.batch) return <span>Batch diperlukan</span>;
+      if (user?.role !== 'SUPER_ADMIN') return <span>Hubungi Super Admin</span>;
+      const needsReconciliation = !row.quantityReconciled && !hasMissingCostLayer(row);
+      return <button className={styles.valueButton} type="button" onClick={() => openValuation(rowTarget(row))} disabled={needsReconciliation || loading} title={needsReconciliation ? 'Perbaiki selisih stok sebelum valuasi' : 'Isi HPP stok lama'}>Isi HPP</button>;
+    }
+    return Number(row.pendingValuationQty) > 0 ? <span>Perlu perbaikan data</span> : <span>Sudah dinilai</span>;
+  };
+
+  const openLookupValuation = () => {
+    if (!skuLookup?.canValue || !skuLookup.inventoryItemId || !skuLookup.stockLocationId) return;
+    openValuation({
+      branchId,
+      inventoryItemId: skuLookup.inventoryItemId,
+      stockLocationId: skuLookup.stockLocationId,
+      batchId: skuLookup.valuationBatchId,
+      batchLabel: skuLookup.valuationBatchNumber || 'Tanpa batch',
+      sku: skuLookup.sku,
+      productName: skuLookup.productName || skuLookup.sku,
+      baseUnit: skuLookup.baseUnit || 'unit',
+      quantityToValue: skuLookup.status === 'NO_LEDGER_BALANCE' ? skuLookup.mirrorQty : skuLookup.missingLayerQty,
+      pendingLayerCount: 0,
+      allowMissingLayer: true,
+    });
+  };
 
   const chartData = useMemo(() => dashboard?.movements.trend.map((row) => ({
     ...row,
@@ -254,7 +342,7 @@ export default function LogisticsDashboardPage() {
   const dashboardPendingValuationQty = Number(dashboard?.valuation.pendingValuationQty || 0);
   const dashboardLayerMismatchCount = Number(dashboard?.valuation.layerMismatchCount || 0);
   const dashboardValuationComplete = dashboardPendingValuationQty === 0 && dashboardLayerMismatchCount === 0;
-  const valuationPendingQty = Number(valuation?.summary.pendingValuationQty || 0);
+  const valuationPendingQty = Number(valuation?.summary.pendingValuationQty || 0) + Number(valuation?.summary.missingCostLayerQty || 0);
   const valuationMismatchCount = dashboardLayerMismatchCount;
   const valuationComplete = valuationPendingQty === 0 && valuationMismatchCount === 0;
 
@@ -265,10 +353,10 @@ export default function LogisticsDashboardPage() {
     </header>
 
     <section className={styles.filters} aria-label="Filter laporan">
-      <label><span>Cabang</span><select value={branchId} onChange={(event) => { setBranchId(event.target.value); setValuationPage(1); setValuationRow(null); }}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} - {branch.name}</option>)}</select></label>
+      <label><span>Cabang</span><select value={branchId} onChange={(event) => { setBranchId(event.target.value); setValuationPage(1); setValuationTarget(null); }}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} - {branch.name}</option>)}</select></label>
       <label><span>Dari</span><input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label>
       <label><span>Sampai</span><input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label>
-      <div className={styles.snapshot}><span>Snapshot valuation</span><strong>{valuation ? new Date(valuation.generatedAt).toLocaleString('id-ID') : '-'}</strong></div>
+      <div className={styles.snapshot}><span>Data nilai stok diperbarui</span><strong>{valuation ? new Date(valuation.generatedAt).toLocaleString('id-ID') : '-'}</strong></div>
     </section>
 
     <nav className={styles.tabs} aria-label="Tampilan laporan">
@@ -283,7 +371,7 @@ export default function LogisticsDashboardPage() {
     {view === 'OVERVIEW' && dashboard && <>
       {!dashboardValuationComplete && <div className={styles.valuationNotice} role="status">
         <AlertTriangle size={18} />
-        <div><strong>Nilai inventory belum lengkap.</strong><span>{dashboardPendingValuationQty > 0 && <> {quantity(dashboardPendingValuationQty)} unit masih menunggu unit cost.</>}{dashboardLayerMismatchCount > 0 && <> {dashboardLayerMismatchCount.toLocaleString('id-ID')} saldo memiliki mismatch quantity dan cost layer.</>} Buka tab Valuation sebelum memakai nilai aset untuk laporan keuangan.</span></div>
+        <div><strong>Nilai inventory belum lengkap.</strong><span>{dashboardPendingValuationQty > 0 && <> {quantity(dashboardPendingValuationQty)} unit masih menunggu HPP.</>}{dashboardLayerMismatchCount > 0 && <> {dashboardLayerMismatchCount.toLocaleString('id-ID')} saldo memiliki selisih jumlah atau cost layer.</>} Buka tab Nilai Stok sebelum memakai nilai aset untuk laporan keuangan.</span></div>
       </div>}
       <section className={styles.kpiGrid}>
         <Kpi label="Nilai aset inventory" value={dashboardValuationComplete ? currency(dashboard.valuation.totalAssetValue) : 'Belum lengkap'} note={`${currency(dashboard.valuation.totalAssetValue)} sudah terhitung · In-transit ${currency(dashboard.valuation.inTransitValue)}`} icon={<CircleDollarSign size={19} />} />
@@ -366,14 +454,14 @@ export default function LogisticsDashboardPage() {
     {view === 'VALUATION' && valuation && <section className={styles.viewSection}>
       {!valuationComplete && <div className={styles.valuationNotice} role="status">
         <AlertTriangle size={18} />
-        <div><strong>Nilai stok belum lengkap untuk laporan keuangan.</strong><span>{valuationPendingQty > 0 && <> {quantity(valuationPendingQty)} unit belum memiliki HPP.</>}{valuationMismatchCount > 0 && <> {valuationMismatchCount.toLocaleString('id-ID')} saldo jumlahnya tidak cocok.</>}</span></div>
+        <div><strong>Nilai stok belum lengkap untuk laporan keuangan.</strong><span>{valuationPendingQty > 0 && <> {quantity(valuationPendingQty)} unit masih perlu HPP atau cost layer.</>}{valuationMismatchCount > 0 && <> {valuationMismatchCount.toLocaleString('id-ID')} saldo jumlah/layer tidak cocok.</>}</span></div>
       </div>}
       <section className={styles.stockSummary}>
         <div><span>Nilai stok</span><strong>{currency(valuation.summary.layerValue)}</strong></div>
         <div><span>Dalam pengiriman</span><strong>{currency(valuation.summary.inTransitValue)}</strong></div>
         <div><span>Total aset</span><strong>{valuationComplete ? currency(valuation.summary.totalAssetValue) : 'Belum lengkap'}</strong></div>
         <div><span>Stok sudah dinilai</span><strong>{quantity(valuation.summary.valuedQty)}</strong></div>
-        <div className={Number(valuation.summary.pendingValuationQty) ? styles.outbound : ''}><span>Stok belum dinilai</span><strong>{quantity(valuation.summary.pendingValuationQty)}</strong></div>
+        <div className={valuationPendingQty ? styles.outbound : ''}><span>Stok perlu HPP</span><strong>{quantity(valuationPendingQty)}</strong></div>
       </section>
       <div className={styles.valuationToolbar}>
         <div><strong>Harga pokok stok</strong><span>Stok lama cukup diberi HPP; jumlah stok tidak bertambah.</span></div>
@@ -388,12 +476,17 @@ export default function LogisticsDashboardPage() {
         <button type="submit" disabled={loading}>Cari</button>
         {appliedSearch && <button type="button" onClick={() => { setValuationSearch(''); setAppliedSearch(''); setValuationPage(1); }} disabled={loading}>Hapus</button>}
       </form>
+      {skuLookup && <section className={styles.skuDiagnosis} role="status" aria-label={`Diagnosis SKU ${skuLookup.sku}`}>
+        <div><strong>{skuStatusTitle[skuLookup.status] || 'Status stok'}: {skuLookup.sku}</strong><p>{skuStatusHint(skuLookup)}</p></div>
+        {skuLookup.inventoryItemId && <div className={styles.skuDiagnosisFacts}><span>Stok tercatat: {quantity(skuLookup.mirrorQty)}</span><span>Lokasi jual: {quantity(skuLookup.onHandQty)}</span><span>Siap jual: {quantity(skuLookup.readyQty)}</span></div>}
+        {skuLookup.canValue && user?.role === 'SUPER_ADMIN' && <button className={styles.valueButton} type="button" onClick={openLookupValuation} disabled={loading}>Isi HPP tanpa menambah stok</button>}
+      </section>}
       <div className={styles.mobileValuationList}>
         {valuation.data.length ? valuation.data.map((row) => <article key={row.id}>
           <strong>{row.masterProduct.sku}</strong><span>{row.masterProduct.name}</span>
-          <div><span>Stok: {quantity(row.onHandQty)} {row.masterProduct.baseUnit || row.masterProduct.unit}</span><span>Belum dinilai: {quantity(row.pendingValuationQty)}</span></div>
+          <div><span>Stok: {quantity(row.onHandQty)} {row.masterProduct.baseUnit || row.masterProduct.unit}</span><span>{hasMissingCostLayer(row) ? `Tanpa cost layer: ${quantity(row.onHandQty)}` : `Belum dinilai: ${quantity(row.pendingValuationQty)}`}</span></div>
           <div><span>HPP: {valuedCost(row.averageUnitCost)}</span><span>{row.batch?.batchNumber || 'Tanpa batch'}</span></div>
-          {!row.quantityReconciled && <small>Jumlah stok tidak cocok. Rekonsiliasi dahulu.</small>}
+          {!row.quantityReconciled && !hasMissingCostLayer(row) && <small>Jumlah stok tidak cocok. Rekonsiliasi dahulu.</small>}
           <footer>{valueAction(row)}</footer>
         </article>) : <p>{appliedSearch ? 'Produk tidak ditemukan pada filter ini.' : pendingOnly ? 'Tidak ada stok yang menunggu HPP.' : 'Belum ada stok.'}</p>}
       </div>
@@ -404,27 +497,27 @@ export default function LogisticsDashboardPage() {
           <td className={styles.number}>{quantity(row.onHandQty)}</td>
           <td className={styles.number}>{quantity(row.reservedQty)}</td>
           <td className={styles.number}>{valuedCost(row.averageUnitCost)}</td>
-          <td className={styles.number}><strong>{currency(row.inventoryValue)}</strong>{Number(row.pendingValuationQty) > 0 && <span className={styles.warningText}>{quantity(row.pendingValuationQty)} belum dinilai</span>}{!row.quantityReconciled && <span className={styles.warningText}>Jumlah tidak cocok</span>}</td>
-          <td><div className={styles.layers}>{row.costLayers.map((layer) => <span key={layer.id}>{layer.sourceType} · {quantity(layer.remainingQty)} @ {valuedCost(layer.unitCost)}</span>)}</div></td>
+          <td className={styles.number}><strong>{currency(row.inventoryValue)}</strong>{Number(row.pendingValuationQty) > 0 && <span className={styles.warningText}>{quantity(row.pendingValuationQty)} belum dinilai</span>}{hasMissingCostLayer(row) && <span className={styles.warningText}>{quantity(row.onHandQty)} tanpa cost layer</span>}{!row.quantityReconciled && !hasMissingCostLayer(row) && <span className={styles.warningText}>Jumlah tidak cocok</span>}</td>
+          <td><div className={styles.layers}>{row.costLayers.length ? row.costLayers.map((layer) => <span key={layer.id}>{layer.sourceType} · {quantity(layer.remainingQty)} @ {valuedCost(layer.unitCost)}</span>) : <span>Belum ada cost layer</span>}</div></td>
           <td>{valueAction(row)}</td>
         </tr>) : <tr><td colSpan={8} className={styles.empty}>{appliedSearch ? 'Produk tidak ditemukan pada filter ini.' : pendingOnly ? 'Tidak ada stok yang menunggu HPP.' : 'Belum ada cost layer'}</td></tr>}
       </tbody></table></div>
       <footer className={styles.pagination}><span>{valuation.meta.total} baris {pendingOnly ? 'belum dinilai' : 'stok'}</span><div><button className={styles.iconButton} disabled={loading || valuationPage <= 1} onClick={() => setValuationPage((page) => page - 1)} title="Halaman sebelumnya"><ArrowLeft size={17} /></button><strong>{valuationPage} / {Math.max(1, valuation.meta.totalPages)}</strong><button className={styles.iconButton} disabled={loading || valuationPage >= valuation.meta.totalPages} onClick={() => setValuationPage((page) => page + 1)} title="Halaman berikutnya"><ArrowRight size={17} /></button></div></footer>
     </section>}
-    {valuationRow && <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !valuationSaving) setValuationRow(null); }}>
+    {valuationTarget && <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !valuationSaving) setValuationTarget(null); }}>
       <section className={styles.valuationModal} role="dialog" aria-modal="true" aria-labelledby="valuation-modal-title">
         <form onSubmit={(event) => void saveValuation(event)}>
-          <header><h2 id="valuation-modal-title">Isi HPP stok lama</h2><p>{valuationRow.masterProduct.sku} — {valuationRow.masterProduct.name}</p></header>
+          <header><h2 id="valuation-modal-title">Isi HPP stok lama</h2><p>{valuationTarget.sku} — {valuationTarget.productName}</p></header>
           <div className={styles.modalBody}>
-            <div className={styles.valuationFacts}><span>Stok menunggu HPP: <strong>{quantity(valuationRow.pendingValuationQty)} {valuationRow.masterProduct.baseUnit || valuationRow.masterProduct.unit}</strong></span><span>Batch: <strong>{valuationRow.batch?.batchNumber || 'Tanpa batch'}</strong></span></div>
-            <label><span>HPP per {valuationRow.masterProduct.baseUnit || valuationRow.masterProduct.unit}</span><input autoFocus required inputMode="decimal" placeholder="Contoh: 15000" value={unitCost} onChange={(event) => setUnitCost(event.target.value)} disabled={valuationSaving} /></label>
+            <div className={styles.valuationFacts}><span>Stok perlu HPP: <strong>{quantity(valuationTarget.quantityToValue)} {valuationTarget.baseUnit}</strong></span><span>Batch: <strong>{valuationTarget.batchLabel}</strong></span></div>
+            <label><span>HPP per {valuationTarget.baseUnit}</span><input autoFocus required inputMode="decimal" placeholder="Contoh: 15000" value={unitCost} onChange={(event) => setUnitCost(event.target.value)} disabled={valuationSaving} /></label>
             <label><span>Nomor invoice / PO / dokumen saldo awal</span><input required minLength={3} maxLength={160} placeholder="Contoh: OPENING-2026-001" value={documentReference} onChange={(event) => setDocumentReference(event.target.value)} disabled={valuationSaving} /></label>
             <label><span>Catatan dasar HPP</span><textarea required minLength={3} maxLength={500} rows={2} placeholder="Sumber dan alasan harga pokok" value={valuationNotes} onChange={(event) => setValuationNotes(event.target.value)} disabled={valuationSaving} /></label>
-            <p className={styles.valuationPreview}>Nilai stok yang akan dicatat: <strong>{unitCost && finiteNumber(unitCost) !== null ? currency(Number(unitCost) * Number(valuationRow.pendingValuationQty)) : '-'}</strong></p>
-            <p className={styles.valuationHelp}>Jumlah stok tetap. Tindakan ini mencatat nilai persediaan dan jurnal saldo awal; gunakan HPP dari dokumen, bukan harga jual.{valuationRow.costLayers.filter((layer) => layer.valuationStatus === 'PENDING_VALUATION' && layer.unitCost === null).length > 1 && ' Satu HPP akan berlaku untuk seluruh layer pending pada batch/lokasi ini; pastikan dasar harganya sama.'}</p>
+            <p className={styles.valuationPreview}>Nilai stok yang akan dicatat: <strong>{unitCost && finiteNumber(unitCost) !== null ? currency(Number(unitCost) * Number(valuationTarget.quantityToValue)) : '-'}</strong></p>
+            <p className={styles.valuationHelp}>Jumlah stok tetap. Tindakan ini mencatat nilai persediaan dan jurnal saldo awal; gunakan HPP dari dokumen, bukan harga jual.{valuationTarget.allowMissingLayer && ' Cost layer yang hilang akan dipulihkan dahulu tanpa menambah stok.'}{valuationTarget.pendingLayerCount > 1 && ' Satu HPP akan berlaku untuk seluruh layer pending pada batch/lokasi ini; pastikan dasar harganya sama.'}</p>
             {valuationError && <p className={styles.modalError} role="alert">{valuationError}</p>}
           </div>
-          <footer><button type="button" onClick={() => setValuationRow(null)} disabled={valuationSaving}>Batal</button><button type="submit" disabled={valuationSaving}>{valuationSaving ? 'Menyimpan...' : 'Simpan HPP'}</button></footer>
+          <footer><button type="button" onClick={() => setValuationTarget(null)} disabled={valuationSaving}>Batal</button><button type="submit" disabled={valuationSaving}>{valuationSaving ? 'Menyimpan...' : 'Simpan HPP'}</button></footer>
         </form>
       </section>
     </div>}

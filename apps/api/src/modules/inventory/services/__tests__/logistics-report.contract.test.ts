@@ -51,8 +51,19 @@ describe('Sprint 10 logistics reporting contract', () => {
     expect(service).toMatch(/prisma\.inventoryBalance\.aggregate\(\{\s+where: balanceWhere/);
     expect(service).toMatch(/prisma\.inventoryBalance\.findMany\(\{\s+where: rowWhere/);
     expect(page).toContain('pendingOnly, search: appliedSearch || undefined, page: valuationPage, limit: 25');
-    expect(page).toContain('inventoryApi.valueLegacyStock(valuationRow.inventoryItemId');
+    expect(page).toContain('inventoryApi.valueLegacyStock(valuationTarget.inventoryItemId');
     expect(page).toContain('adjustment: 0');
     expect(page).toContain("reasonCode: 'LEGACY_OPENING_VALUATION'");
+  });
+
+  it('finds a searched SKU even when its balance has no active cost layer', () => {
+    expect(service).toContain('getSkuValuationLookup(query.branchId, query.search)');
+    expect(service).toContain("status: 'NOT_ASSIGNED_TO_BRANCH'");
+    expect(service).toContain("status: 'NO_LEDGER_BALANCE'");
+    expect(service).toContain("status: 'NO_COST_LAYER'");
+    expect(service).toMatch(/onHandQty: \{ gt: 0 \}, costLayers: \{ none: \{ remainingQty:/);
+    expect(service).toContain('missingCostLayerQty,');
+    expect(page).toContain('skuStatusHint(skuLookup)');
+    expect(page).toContain('hasMissingCostLayer(row)');
   });
 });

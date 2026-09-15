@@ -799,6 +799,58 @@ export async function directAdjustStock(
       bootstrappedLegacyStock = true;
     }
 
+    // A legacy balance may exist without any active FIFO layer. Restore only
+    // that exact balance as an unvalued layer; never add quantity or guess HPP.
+    if (adjustment.isZero() && balances.length > 0) {
+      const targetBalance = balances.find((balance) => (
+        balance.stockLocationId === location.id
+        && (input.batchId ? balance.batchId === input.batchId : balance.batchId === null)
+      ));
+      if (targetBalance?.onHandQty.greaterThan(0)) {
+        await tx.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "inventory_balances" WHERE "id" = ${targetBalance.id} FOR UPDATE
+        `);
+        const activeLayers = await tx.inventoryCostLayer.count({
+          where: { inventoryBalanceId: targetBalance.id, remainingQty: { gt: 0 }, isVoided: false },
+        });
+        if (activeLayers === 0) {
+          const layer = await tx.inventoryCostLayer.create({
+            data: {
+              inventoryBalanceId: targetBalance.id,
+              batchId: targetBalance.batchId,
+              sourceType: 'DIRECT_STOCK_BOOTSTRAP',
+              sourceId: item.id,
+              originalQty: targetBalance.onHandQty,
+              remainingQty: targetBalance.onHandQty,
+              unitCost: null,
+              currency: 'IDR',
+              valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+              receivedAt: new Date(),
+            },
+          });
+          bootstrappedLegacyStock = true;
+          await tx.auditLog.create({ data: {
+            userId,
+            branchId: item.branchId,
+            action: 'CREATE',
+            module: 'INVENTORY',
+            resource: 'InventoryCostLayer',
+            resourceId: layer.id,
+            entityType: 'InventoryItem',
+            entityId: item.id,
+            entityCode: item.masterProduct.sku || item.masterProduct.name,
+            description: 'Cost layer stok lama tanpa HPP dipulihkan tanpa mengubah jumlah stok.',
+            afterData: {
+              inventoryBalanceId: targetBalance.id,
+              quantity: targetBalance.onHandQty.toFixed(4),
+              sourceType: layer.sourceType,
+              valuationDocumentReference: input.valuationDocumentReference,
+            },
+          } });
+        }
+      }
+    }
+
     // Valuasi legacy adalah tindakan finance tersendiri. Adjustment stok masuk
     // atau keluar tidak boleh diam-diam menilai layer lama menggunakan harga
     // fallback dari transaksi lain.

@@ -118,6 +118,7 @@ export async function reserveAddOnStockInTransaction(
     WHERE l."inventoryBalanceId" IN (${Prisma.join(balances.map((balance) => balance.id))})
       AND l."remainingQty" > 0
       AND l."unitCost" IS NOT NULL
+      AND l."unitCost" > 0
       AND l."valuationStatus" = 'VALUED'
       AND l."isVoided" = false
       AND l."receivedAt" <= CURRENT_TIMESTAMP
@@ -141,7 +142,7 @@ export async function reserveAddOnStockInTransaction(
     if (available.isZero()) {
       throw errors.unprocessable(
         'ADD_ON_VALUED_STOCK_UNAVAILABLE',
-        `Stok ${addOn.inventorySku} belum memiliki harga pokok (HPP) yang valid. Catat penerimaan barang atau opening stock sebelum menjual add-on.`,
+        `Stok siap jual ${addOn.inventorySku} belum memiliki HPP yang valid. Buka Dashboard Logistik → Nilai Stok, pilih cabang transaksi, lalu cari SKU tersebut. Jangan menambah stok lagi jika jumlahnya sudah tercatat.`,
       );
     }
     throw errors.unprocessable(

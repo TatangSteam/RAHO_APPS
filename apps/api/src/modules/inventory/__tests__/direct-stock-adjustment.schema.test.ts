@@ -86,6 +86,18 @@ describe('directStockAdjustmentSchema', () => {
     expect(service).toContain("'VALUATION_LOCATION_INVALID'");
   });
 
+  it('memulihkan balance tanpa cost layer secara diaudit dan tanpa menambah stok', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
+      'utf8',
+    );
+    expect(service).toContain('if (adjustment.isZero() && balances.length > 0)');
+    expect(service).toContain('inventoryCostLayer.count({');
+    expect(service).toContain("sourceType: 'DIRECT_STOCK_BOOTSTRAP'");
+    expect(service).toContain('remainingQty: targetBalance.onHandQty');
+    expect(service).toContain("resource: 'InventoryCostLayer'");
+  });
+
   it('memisahkan perubahan quantity dari valuasi harga', () => {
     const service = readFileSync(
       resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
