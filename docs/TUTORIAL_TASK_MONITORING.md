@@ -38,8 +38,9 @@ Hanya Owner yang dapat mengelola anggota.
 3. Pilih akun aktif dan role **Staff** atau **Leader**, lalu klik **Tambahkan**.
 4. Untuk mengubah role, gunakan pilihan role pada baris anggota.
 5. Untuk memilih Primary Leader, klik **Jadikan Primary Leader** pada anggota Owner/Leader yang aktif.
+6. Untuk mengeluarkan anggota, klik **Keluarkan** pada baris anggota dan konfirmasi.
 
-Menghapus anggota dilakukan sebagai penonaktifan membership melalui API saat ini. Tugas, komentar, dan histori yang sudah ada tetap disimpan; assignment aktif anggota tersebut dilepas.
+Untuk mengubah nama, deskripsi, dan visibilitas tim, klik **Edit Tim**. Untuk mengarsipkan seluruh tim, klik **Hapus Tim** dan konfirmasi. Keduanya hanya tersedia bagi Owner. Pengeluaran anggota menonaktifkan membership; tugas, komentar, dan histori tetap disimpan, sementara assignment aktifnya dilepas.
 
 ## 4. Membuat tugas
 
@@ -50,6 +51,8 @@ Menghapus anggota dilakukan sebagai penonaktifan membership melalui API saat ini
 
 Assignee harus merupakan anggota aktif dari tim yang sama. Tugas baru dimulai dengan status **Belum dimulai** (`TODO`).
 
+Untuk mengedit tugas, buka detailnya lalu klik ikon **pensil** di kanan atas. Ubah judul, deskripsi, prioritas, tenggat, assignee, atau pengaturan subtask wajib, lalu **Simpan Perubahan**. Untuk menghapus tugas, klik ikon **tempat sampah** dan konfirmasi. Hanya Owner/Leader yang dapat mengedit dan menghapus. Penghapusan bersifat soft-delete: tugas hilang dari daftar aktif, tetapi histori tidak dihapus permanen.
+
 ## 5. Membuat dan memantau subtask
 
 1. Buka **Tugas & Subtask**.
@@ -57,6 +60,7 @@ Assignee harus merupakan anggota aktif dari tim yang sama. Tugas baru dimulai de
 3. Isi data subtask dan centang **Subtask wajib diselesaikan sebelum parent task** bila diperlukan.
 4. Klik **Tambah Subtask**.
 5. Buka kartu parent untuk melihat progres `selesai/total` subtask wajib.
+6. Klik subtask untuk membuka detailnya. Owner/Leader dapat menggunakan ikon pensil atau tempat sampah untuk mengedit atau menghapus subtask tersebut.
 
 Subtask hanya boleh satu tingkat di bawah parent dan maksimal 50 subtask aktif per parent. Tenggat subtask tidak boleh melewati tenggat parent.
 
@@ -72,6 +76,8 @@ Parent task tidak dapat diselesaikan jika subtask wajib masih belum selesai. Per
 ## 7. Melihat detail dan berdiskusi
 
 Klik judul/kartu tugas untuk membuka detail. Detail menampilkan status, prioritas, tenggat, assignee, subtask, dan histori komentar. Tulis komentar pada bagian **Diskusi**, kemudian klik tombol kirim.
+
+Pembuat komentar atau Owner/Leader dapat memakai tombol **Edit** atau **Hapus** di bawah komentar. Edit dilakukan langsung pada form di tempat; penghapusan meminta konfirmasi. Komentar yang dihapus disembunyikan tetapi aktivitasnya tetap tercatat.
 
 ## 8. Memakai dashboard monitoring
 
@@ -90,13 +96,13 @@ Gunakan dropdown tim untuk berpindah scope. Pada halaman tugas, gunakan kotak pe
 
 | Objek | Create | Read | Update | Delete |
 |---|---|---|---|---|
-| Tim | UI | UI | Endpoint tersedia; form edit belum ada di UI | UI mengarsipkan tim (bukan hard delete) |
-| Anggota | UI | UI | UI untuk role; status removal tersedia di API | Removal/soft delete tersedia di API |
-| Tugas | UI | UI | Endpoint tersedia; form edit belum ada di UI | Belum tersedia |
-| Subtask | UI | UI | Status melalui detail; edit field belum ada di UI | Belum tersedia |
-| Komentar | UI (buat) | UI | Belum tersedia | Belum tersedia |
+| Tim | UI | UI | UI untuk Owner | UI mengarsipkan tim (bukan hard delete) |
+| Anggota | UI | UI | UI untuk role dan Primary Leader | UI menonaktifkan membership |
+| Tugas | UI | UI | UI untuk Owner/Leader, termasuk status dan assignee | UI soft-delete untuk Owner/Leader |
+| Subtask | UI | UI | UI untuk Owner/Leader, termasuk status | UI soft-delete untuk Owner/Leader |
+| Komentar | UI | UI | UI untuk pembuat atau Owner/Leader | UI soft-delete untuk pembuat atau Owner/Leader |
 
-Dengan demikian, fitur sudah dapat dipakai untuk monitoring dan workflow status, tetapi belum dapat disebut CRUD penuh dari UI. Jangan mengandalkan penghapusan permanen; penghapusan tim saat ini bersifat arsip agar histori tetap tersimpan.
+CRUD dasar sudah tersedia di UI. Penghapusan tim berupa arsip, sedangkan tugas/subtask/komentar menggunakan soft-delete agar histori tetap tersimpan. Fitur notifikasi assignment, lampiran, tag, filter lanjutan, dan laporan periode belum tersedia pada versi ini.
 
 ## 10. Jika terjadi masalah
 

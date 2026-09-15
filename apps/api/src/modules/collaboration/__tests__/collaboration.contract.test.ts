@@ -4,6 +4,8 @@ import {
   createSubtaskSchema,
   createTaskSchema,
   createTeamSchema,
+  updateCommentSchema,
+  updateTaskSchema,
   updateTaskStatusSchema,
 } from '../collaboration.schema';
 
@@ -16,6 +18,9 @@ describe('Team task collaboration contract', () => {
     expect(createSubtaskSchema.parse({ title: 'Periksa angka' }).isRequired).toBe(true);
     expect(() => createTaskSchema.parse({ teamId: 'team-1', title: 'x' })).toThrow();
     expect(() => updateTaskStatusSchema.parse({ status: 'INVALID', version: 1 })).toThrow();
+    expect(updateTaskSchema.parse({ title: 'Tugas baru', version: 2 }).version).toBe(2);
+    expect(() => updateTaskSchema.parse({ title: 'Tugas baru', version: 0 })).toThrow();
+    expect(() => updateCommentSchema.parse({ content: ' ' })).toThrow();
   });
 
   it('enforces membership, one-level subtasks, parent blockers, and real optimistic concurrency', () => {
@@ -31,6 +36,10 @@ describe('Team task collaboration contract', () => {
     expect(service).toContain('restrictSubtasks');
     expect(service).toContain("data: { status: 'ARCHIVED', archivedAt: new Date() }");
     expect(service).toContain("'TEAM_DELETED'");
+    expect(service).toContain("'TASK_DELETED'");
+    expect(service).toContain('where: { taskId, userId: { notIn: assigneeIds }, unassignedAt: null }');
+    expect(service).toContain('parentTaskId: taskId, deletedAt: null');
+    expect(service).toContain("'COMMENT_DELETED'");
   });
 
   it('registers authenticated routes and persists the complete hierarchy', () => {
@@ -46,6 +55,9 @@ describe('Team task collaboration contract', () => {
     expect(routes).toContain('Object.values(Role).filter((role) => role !== Role.MEMBER)');
     expect(routes).toContain("router.delete('/teams/:teamId', controller.deleteTeam)");
     expect(routes).toContain("router.post('/tasks/:taskId/subtasks'");
+    expect(routes).toContain("router.delete('/tasks/:taskId', controller.deleteTask)");
+    expect(routes).toContain("router.patch('/tasks/:taskId/comments/:commentId', controller.updateComment)");
+    expect(routes).toContain("router.delete('/tasks/:taskId/comments/:commentId', controller.deleteComment)");
     expect(migration).toContain('CREATE TABLE "collaboration_teams"');
     expect(migration).toContain('CREATE TABLE "team_tasks"');
     expect(migration).toContain('"parentTaskId" TEXT');
@@ -70,6 +82,11 @@ describe('Team task collaboration contract', () => {
     expect(page).toContain('Hapus Tim');
     expect(page).toContain('collaborationApi.deleteTeam');
     expect(page).toContain("setModal('subtask')");
+    expect(page).toContain('Edit Tim');
+    expect(page).toContain('collaborationApi.updateTask');
+    expect(page).toContain('collaborationApi.deleteTask');
+    expect(page).not.toContain('window.prompt');
+    expect(page).not.toContain('window.confirm');
     expect(styles).toContain('@media (max-width: 680px)');
     expect(styles).toContain(':global(.dark) .page');
   });

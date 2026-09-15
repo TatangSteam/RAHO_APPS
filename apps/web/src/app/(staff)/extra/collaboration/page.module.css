@@ -643,6 +643,8 @@
 
 .drawer > header h2,
 .modal > header h2 { margin: 0.2rem 0 0; font-size: 1.08rem; }
+.drawerActions { display: flex; align-items: center; gap: 0.25rem; }
+.drawerActions button:nth-child(2) { color: #be123c; }
 .modal > header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.76rem; }
 .drawer > header button,
 .modal > header button { display: grid; width: 2rem; height: 2rem; flex-shrink: 0; place-items: center; border-radius: 0.6rem; }
@@ -693,6 +695,13 @@
 .comments strong { font-size: 0.76rem; }
 .comments small { margin-left: 0.5rem; color: var(--muted); font-size: 0.65rem; }
 .comments p { margin: 0.25rem 0 0; font-size: 0.8rem; line-height: 1.5; }
+.commentActions { display: flex; gap: 0.8rem; margin-top: 0.4rem; }
+.commentActions button { color: var(--brand-strong); font-size: 0.72rem; font-weight: 680; }
+.commentActions button:last-child { color: #be123c; }
+.commentActions button:disabled { opacity: 0.5; }
+.commentEditForm { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.commentEditForm textarea { width: 100%; min-height: 4rem; padding: 0.65rem; border: 1px solid var(--line); border-radius: 0.6rem; color: var(--ink); background: var(--surface-soft); }
+.commentEditForm > div { display: flex; justify-content: flex-end; gap: 0.5rem; }
 
 .commentForm {
   display: grid;

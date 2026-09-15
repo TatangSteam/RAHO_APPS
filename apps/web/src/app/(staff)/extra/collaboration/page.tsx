@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
@@ -81,6 +81,13 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value));
 }
 
+function toLocalDateTime(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function isOverdue(task: CollaborationTask) {
   return Boolean(task.dueAt && !['COMPLETED', 'CANCELLED'].includes(task.status) && new Date(task.dueAt).getTime() < Date.now());
 }
@@ -95,6 +102,9 @@ export default function CollaborationPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ title: string; description: string; action: () => Promise<void> } | null>(null);
+  const [statusReason, setStatusReason] = useState<{ task: CollaborationTask; status: TaskStatus } | null>(null);
+  const [reasonText, setReasonText] = useState('');
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<'team' | 'edit-team' | 'member' | 'task' | 'subtask' | 'edit-task' | 'detail' | null>(null);
   const [selectedTask, setSelectedTask] = useState<CollaborationTask | null>(null);
@@ -197,17 +207,21 @@ export default function CollaborationPage() {
     } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
   };
 
-  const changeStatus = async (task: CollaborationTask, nextStatus: TaskStatus) => {
-    let reason: string | undefined;
+  const changeStatus = async (task: CollaborationTask, nextStatus: TaskStatus, reason?: string) => {
     if (nextStatus === 'CANCELLED' || nextStatus === 'NEEDS_REVISION') {
-      reason = window.prompt(nextStatus === 'CANCELLED' ? 'Alasan pembatalan:' : 'Catatan revisi:') || undefined;
-      if (!reason) return;
+      if (!reason) {
+        setReasonText('');
+        setStatusReason({ task, status: nextStatus });
+        return;
+      }
     }
     try {
       setBusy(true);
       const updated = await collaborationApi.updateTaskStatus(task.id, { status: nextStatus, version: task.version, reason });
       showToast.success(`Status diubah menjadi ${STATUS_META[nextStatus].label}.`);
       if (modal === 'detail') setSelectedTask(updated);
+      setStatusReason(null);
+      setReasonText('');
       await load();
     } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
   };
@@ -245,17 +259,20 @@ export default function CollaborationPage() {
 
   const deleteTeam = async () => {
     if (!selectedTeam || selectedTeam.myRole !== 'OWNER') return;
-    const confirmed = window.confirm(
-      `Hapus tim "${selectedTeam.name}"? Tim akan diarsipkan dan tidak lagi muncul pada daftar aktif. Tugas serta histori tetap tersimpan.`,
-    );
-    if (!confirmed) return;
-    try {
-      setBusy(true);
-      await collaborationApi.deleteTeam(selectedTeam.id);
-      showToast.success('Tim berhasil dihapus dari daftar aktif.');
-      setSelectedTeamId('');
-      await load();
-    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+    setConfirmation({
+      title: `Arsipkan tim "${selectedTeam.name}"?`,
+      description: 'Tim tidak lagi tampil dalam daftar aktif. Tugas dan histori tetap tersimpan.',
+      action: async () => {
+        try {
+          setBusy(true);
+          await collaborationApi.deleteTeam(selectedTeam.id);
+          showToast.success('Tim berhasil dihapus dari daftar aktif.');
+          setSelectedTeamId('');
+          setConfirmation(null);
+          await load();
+        } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+      },
+    });
   };
 
   const openEditTeam = () => {
@@ -275,7 +292,7 @@ export default function CollaborationPage() {
       title: task.title,
       description: task.description || '',
       priority: task.priority,
-      dueAt: task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : '',
+      dueAt: toLocalDateTime(task.dueAt),
       assigneeIds: task.assignees.map((person) => person.id),
       isRequired: task.isRequired,
     });
@@ -284,48 +301,65 @@ export default function CollaborationPage() {
 
   const deleteTask = async (task: CollaborationTask) => {
     if (!canManage) return;
-    const confirmed = window.confirm(`Hapus tugas #${task.taskNo} "${task.title}"? Tugas akan diarsipkan beserta subtasks-nya.`);
-    if (!confirmed) return;
-    try {
-      setBusy(true);
-      await collaborationApi.deleteTask(task.id);
-      showToast.success('Tugas berhasil dihapus.');
-      setModal(null);
-      setSelectedTask(null);
-      await load();
-    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+    setConfirmation({
+      title: `Hapus tugas #${task.taskNo}?`,
+      description: `"${task.title}" akan disembunyikan dari daftar aktif. Subtask dan riwayatnya tetap tercatat.`,
+      action: async () => {
+        try {
+          setBusy(true);
+          await collaborationApi.deleteTask(task.id);
+          showToast.success('Tugas berhasil dihapus.');
+          setConfirmation(null);
+          setModal(null);
+          setSelectedTask(null);
+          await load();
+        } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+      },
+    });
   };
 
   const removeMember = async (membershipId: string, name: string) => {
     if (!selectedTeam || !isOwner) return;
-    if (!window.confirm(`Keluarkan ${name} dari tim? Assignment aktifnya akan dilepas.`)) return;
-    try {
-      setBusy(true);
-      await collaborationApi.updateMember(selectedTeam.id, membershipId, { status: 'REMOVED' });
-      showToast.success('Anggota berhasil dikeluarkan dari tim.');
-      await load();
-    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+    setConfirmation({
+      title: `Keluarkan ${name}?`,
+      description: 'Keanggotaan akan dinonaktifkan dan assignment aktif dilepas. Histori tetap tersimpan.',
+      action: async () => {
+        try {
+          setBusy(true);
+          await collaborationApi.updateMember(selectedTeam.id, membershipId, { status: 'REMOVED' });
+          showToast.success('Anggota berhasil dikeluarkan dari tim.');
+          setConfirmation(null);
+          await load();
+        } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+      },
+    });
   };
 
-  const editComment = async (task: CollaborationTask, commentId: string, currentContent: string) => {
-    const content = window.prompt('Ubah komentar:', currentContent)?.trim();
-    if (!content || content === currentContent) return;
+  const editComment = async (task: CollaborationTask, commentId: string, content: string) => {
+    if (!content.trim()) return false;
     try {
       setBusy(true);
-      await collaborationApi.updateComment(task.id, commentId, content);
+      await collaborationApi.updateComment(task.id, commentId, content.trim());
       setSelectedTask(await collaborationApi.getTask(task.id));
       await load();
-    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+      return true;
+    } catch (error) { showToast.error(getError(error)); return false; } finally { setBusy(false); }
   };
 
   const deleteComment = async (task: CollaborationTask, commentId: string) => {
-    if (!window.confirm('Hapus komentar ini?')) return;
-    try {
-      setBusy(true);
-      await collaborationApi.deleteComment(task.id, commentId);
-      setSelectedTask(await collaborationApi.getTask(task.id));
-      await load();
-    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+    setConfirmation({
+      title: 'Hapus komentar?',
+      description: 'Komentar akan disembunyikan dari diskusi; aktivitas perubahan tetap tercatat.',
+      action: async () => {
+        try {
+          setBusy(true);
+          await collaborationApi.deleteComment(task.id, commentId);
+          setConfirmation(null);
+          setSelectedTask(await collaborationApi.getTask(task.id));
+          await load();
+        } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+      },
+    });
   };
 
   const unassignedUsers = data.users.filter((candidate) => !selectedTeam?.memberships.some((member) => member.userId === candidate.id));
@@ -430,6 +464,15 @@ export default function CollaborationPage() {
       </Modal>}
 
       {modal === 'detail' && selectedTask && <TaskDetail task={selectedTask} currentUserId={user?.userId || ''} canManage={Boolean(canManage)} busy={busy} onClose={() => setModal(null)} onStatus={changeStatus} onEdit={openEditTask} onDelete={deleteTask} onEditComment={editComment} onDeleteComment={deleteComment} comment={comment} setComment={setComment} onComment={submitComment} onOpenSubtask={openDetail} />}
+      {statusReason && <Modal title={statusReason.status === 'CANCELLED' ? 'Batalkan tugas' : 'Minta revisi'} subtitle="Tuliskan alasan yang jelas untuk anggota tim." onClose={() => setStatusReason(null)}>
+        <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void changeStatus(statusReason.task, statusReason.status, reasonText.trim()); }}>
+          <Field label="Alasan"><textarea required minLength={3} maxLength={500} rows={4} autoFocus value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Jelaskan perubahan yang diperlukan..." /></Field>
+          <FormActions busy={busy} submit="Simpan status" onCancel={() => setStatusReason(null)} />
+        </form>
+      </Modal>}
+      {confirmation && <Modal title={confirmation.title} subtitle={confirmation.description} onClose={() => setConfirmation(null)}>
+        <div className={styles.formActions}><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmation(null)}>Kembali</button><button type="button" className={styles.deleteTeamButton} disabled={busy} onClick={() => void confirmation.action()}>{busy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Konfirmasi</button></div>
+      </Modal>}
     </div>
   );
 }
@@ -521,15 +564,16 @@ function TeamsView({ team, isOwner, busy, onAdd, onEdit, onDelete, onSetLeader, 
   return <div className={styles.teamsGrid}>
     <section className={styles.panel}>
       <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <div className={styles.teamActions}><button className="btn btn-secondary btn-sm" disabled={busy} onClick={onEdit}><Pencil size={16} /> Edit Tim</button><button className={styles.deleteTeamButton} disabled={busy} onClick={onDelete}><Trash2 size={16} /> Hapus Tim</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button></div>}</div>
-      <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} onClick={() => onSetLeader(member.id)}>Jadikan Primary Leader</button>}</div>)}</div>
+      <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} disabled={busy} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} disabled={busy} onClick={() => onSetLeader(member.id)}>Jadikan Primary Leader</button>}{isOwner && member.role !== 'OWNER' && <button className={styles.textButton} disabled={busy} onClick={() => onRemove(member.id, member.user.fullName)}><UserMinus size={14} /> Keluarkan</button>}</div>)}</div>
     </section>
-    {isOwner && <section className={styles.panel}><div className={styles.sectionHeading}><div><h2>Kelola akses anggota</h2><p>Pengeluaran anggota melepas assignment aktif tanpa menghapus histori.</p></div><UserMinus size={20} /></div><div className={styles.memberList}>{team.memberships.filter((member) => member.role !== 'OWNER').map((member) => <div key={`remove-${member.id}`} className={styles.memberRow}><span>{member.user.fullName}</span><button className={styles.textButton} disabled={busy} onClick={() => onRemove(member.id, member.user.fullName)}><UserMinus size={14} /> Keluarkan</button></div>)}</div></section>}
     <aside className={styles.panel}><div className={styles.sectionHeading}><div><h2>Aturan tim</h2><p>Konfigurasi akses saat ini.</p></div><Settings2 size={20} /></div><div className={styles.infoList}><div><span>Role Anda</span><strong>{team.myRole}</strong></div><div><span>Visibilitas tugas</span><strong>{team.taskVisibilityPolicy === 'ALL_TEAM_MEMBERS' ? 'Semua anggota' : 'Assignee saja'}</strong></div><div><span>Primary Leader</span><strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong></div></div></aside>
   </div>;
 }
 
-function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, onEdit, onDelete, onEditComment, onDeleteComment, comment, setComment, onComment, onOpenSubtask }: { task: CollaborationTask; currentUserId: string; canManage: boolean; busy: boolean; onClose: () => void; onStatus: (task: CollaborationTask, status: TaskStatus) => void; onEdit: (task: CollaborationTask) => void; onDelete: (task: CollaborationTask) => void; onEditComment: (task: CollaborationTask, commentId: string, content: string) => void; onDeleteComment: (task: CollaborationTask, commentId: string) => void; comment: string; setComment: (value: string) => void; onComment: (event: FormEvent) => void; onOpenSubtask: (task: CollaborationTask) => void }) {
+function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, onEdit, onDelete, onEditComment, onDeleteComment, comment, setComment, onComment, onOpenSubtask }: { task: CollaborationTask; currentUserId: string; canManage: boolean; busy: boolean; onClose: () => void; onStatus: (task: CollaborationTask, status: TaskStatus) => void; onEdit: (task: CollaborationTask) => void; onDelete: (task: CollaborationTask) => void; onEditComment: (task: CollaborationTask, commentId: string, content: string) => Promise<boolean>; onDeleteComment: (task: CollaborationTask, commentId: string) => void; comment: string; setComment: (value: string) => void; onComment: (event: FormEvent) => void; onOpenSubtask: (task: CollaborationTask) => void }) {
   const assigned = task.assignees.some((person) => person.id === currentUserId);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
   return <div className={styles.drawerBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><aside className={styles.drawer}>
     <header><div><span className={styles.taskNo}>#{task.taskNo}</span><h2>{task.title}</h2></div><div className={styles.drawerActions}>{canManage && <><button title="Edit tugas" onClick={() => onEdit(task)}><Pencil size={18} /></button><button title="Hapus tugas" onClick={() => onDelete(task)}><Trash2 size={18} /></button></>}<button onClick={onClose}><X size={20} /></button></div></header>
     <div className={styles.drawerBody}>
@@ -543,14 +587,39 @@ function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, o
         {canManage && !['COMPLETED', 'CANCELLED'].includes(task.status) && <button className={styles.dangerAction} onClick={() => onStatus(task, 'CANCELLED')}>Batalkan</button>}
       </div>
       {task.subtasks?.length > 0 && <section className={styles.detailSection}><h3>Subtask <span>{task.progress.completed}/{task.progress.total}</span></h3><div className={styles.detailSubtasks}>{task.subtasks.map((subtask) => <button key={subtask.id} onClick={() => onOpenSubtask(subtask)}><StatusDot status={subtask.status} /><span>{subtask.title}</span><ChevronRight size={16} /></button>)}</div></section>}
-      <section className={styles.detailSection}><h3>Diskusi <span>{task.comments?.length || 0}</span></h3><div className={styles.comments}>{task.comments?.map((entry) => <div key={entry.id}><Avatar name={entry.author.fullName} /><div><strong>{entry.author.fullName}</strong><small>{formatDate(entry.createdAt)}</small><p>{entry.content}</p></div></div>)}{!task.comments?.length && <div className={styles.inlineEmpty}>Belum ada komentar.</div>}</div><form className={styles.commentForm} onSubmit={onComment}><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Tulis komentar atau update..." /><button disabled={busy || !comment.trim()}><Send size={17} /></button></form></section>
-      <section className={styles.detailSection}><h3>Kelola komentar</h3><div className={styles.comments}>{task.comments?.filter((entry) => entry.author.id === currentUserId || canManage).map((entry) => <div key={`manage-${entry.id}`} className={styles.commentActions}><span>{entry.content}</span><span><button type="button" onClick={() => onEditComment(task, entry.id, entry.content)}>Edit</button><button type="button" onClick={() => onDeleteComment(task, entry.id)}>Hapus</button></span></div>)}</div></section>
+      <section className={styles.detailSection}>
+        <h3>Diskusi <span>{task.comments?.length || 0}</span></h3>
+        <div className={styles.comments}>
+          {task.comments?.map((entry) => <div key={entry.id}>
+            <Avatar name={entry.author.fullName} />
+            <div>
+              <strong>{entry.author.fullName}</strong><small>{formatDate(entry.createdAt)}{entry.editedAt ? ' · diedit' : ''}</small>
+              {editingCommentId === entry.id ? <form className={styles.commentEditForm} onSubmit={(event) => { event.preventDefault(); void onEditComment(task, entry.id, commentDraft).then((saved) => { if (saved) setEditingCommentId(null); }); }}>
+                <textarea required maxLength={3000} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} rows={3} />
+                <div><button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingCommentId(null)}>Batal</button><button className="btn btn-primary btn-sm" disabled={busy || !commentDraft.trim()}>Simpan</button></div>
+              </form> : <p>{entry.content}</p>}
+              {(entry.author.id === currentUserId || canManage) && editingCommentId !== entry.id && <div className={styles.commentActions}>
+                <button type="button" disabled={busy} onClick={() => { setEditingCommentId(entry.id); setCommentDraft(entry.content); }}>Edit</button>
+                <button type="button" disabled={busy} onClick={() => onDeleteComment(task, entry.id)}>Hapus</button>
+              </div>}
+            </div>
+          </div>)}
+          {!task.comments?.length && <div className={styles.inlineEmpty}>Belum ada komentar.</div>}
+        </div>
+        <form className={styles.commentForm} onSubmit={onComment}><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Tulis komentar atau update..." /><button disabled={busy || !comment.trim()}><Send size={17} /></button></form>
+      </section>
     </div>
   </aside></div>;
 }
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className={styles.modalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={styles.modal}><header><div><h2>{title}</h2><p>{subtitle}</p></div><button onClick={onClose}><X size={20} /></button></header>{children}</section></div>;
+  const titleId = useId();
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+  return <div className={styles.modalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby={titleId}><header><div><h2 id={titleId}>{title}</h2><p>{subtitle}</p></div><button type="button" aria-label="Tutup dialog" onClick={onClose}><X size={20} /></button></header>{children}</section></div>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className={styles.field}><span>{label}</span>{children}</label>; }
 function FormActions({ busy, submit, onCancel }: { busy: boolean; submit: string; onCancel: () => void }) { return <div className={styles.formActions}><button type="button" className="btn btn-secondary" onClick={onCancel}>Batal</button><button className="btn btn-primary" disabled={busy}>{busy && <Loader2 size={16} className="animate-spin" />}{submit}</button></div>; }

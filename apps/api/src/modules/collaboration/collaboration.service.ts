@@ -358,8 +358,23 @@ export async function updateTask(actorId: string, taskId: string, input: UpdateT
       if (childOutsideDeadline) throw errors.badRequest('PARENT_DUE_BEFORE_SUBTASK', 'Tenggat parent tidak boleh lebih awal dari subtask yang sudah ada.');
     }
     if (assigneeIds) {
-      await tx.taskAssignment.deleteMany({ where: { taskId } });
-      await tx.taskAssignment.createMany({ data: assigneeIds.map((userId) => ({ taskId, userId, assignedById: actorId })) });
+      const previous = await tx.taskAssignment.findMany({ where: { taskId }, select: { userId: true, unassignedAt: true } });
+      const next = new Set(assigneeIds);
+      await tx.taskAssignment.updateMany({
+        where: { taskId, userId: { notIn: assigneeIds }, unassignedAt: null },
+        data: { unassignedAt: new Date() },
+      });
+      for (const userId of next) {
+        const row = previous.find((assignment) => assignment.userId === userId);
+        if (!row) {
+          await tx.taskAssignment.create({ data: { taskId, userId, assignedById: actorId } });
+        } else if (row.unassignedAt) {
+          await tx.taskAssignment.update({
+            where: { taskId_userId: { taskId, userId } },
+            data: { unassignedAt: null, assignedAt: new Date(), assignedById: actorId },
+          });
+        }
+      }
     }
     const updatedCount = await tx.teamTask.updateMany({
       where: { id: taskId, version: input.version },
@@ -385,15 +400,19 @@ export async function deleteTask(actorId: string, taskId: string) {
   if (!context.isManager) throw errors.forbidden('Hanya Owner atau Leader yang dapat menghapus tugas.');
   return prisma.$transaction(async (tx) => {
     const deletedAt = new Date();
-    await tx.teamTask.updateMany({
+    const deleted = await tx.teamTask.updateMany({
       where: { id: taskId, deletedAt: null },
       data: { deletedAt, status: 'CANCELLED', cancelledAt: deletedAt, cancelReason: 'Dihapus oleh pengelola tim.', version: { increment: 1 } },
     });
+    if (deleted.count !== 1) throw errors.notFound('Tugas tidak ditemukan.');
     await tx.teamTask.updateMany({
       where: { parentTaskId: taskId, deletedAt: null },
       data: { deletedAt, status: 'CANCELLED', cancelledAt: deletedAt, cancelReason: 'Parent task dihapus.', version: { increment: 1 } },
     });
-    await tx.taskAssignment.updateMany({ where: { taskId, unassignedAt: null }, data: { unassignedAt: deletedAt } });
+    await tx.taskAssignment.updateMany({
+      where: { unassignedAt: null, task: { OR: [{ id: taskId }, { parentTaskId: taskId }] } },
+      data: { unassignedAt: deletedAt },
+    });
     await addActivity(tx, context.task.teamId, actorId, 'TASK_DELETED', taskId, { taskNo: context.task.taskNo });
     return { id: taskId, deleted: true };
   });
