@@ -14,6 +14,7 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -22,6 +23,7 @@ import {
   Target,
   Trash2,
   UserPlus,
+  UserMinus,
   Users,
   X,
 } from 'lucide-react';
@@ -94,7 +96,7 @@ export default function CollaborationPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-  const [modal, setModal] = useState<'team' | 'member' | 'task' | 'subtask' | 'detail' | null>(null);
+  const [modal, setModal] = useState<'team' | 'edit-team' | 'member' | 'task' | 'subtask' | 'edit-task' | 'detail' | null>(null);
   const [selectedTask, setSelectedTask] = useState<CollaborationTask | null>(null);
   const [comment, setComment] = useState('');
   const [teamForm, setTeamForm] = useState({ name: '', description: '', taskVisibilityPolicy: 'ALL_TEAM_MEMBERS' as Team['taskVisibilityPolicy'] });
@@ -140,8 +142,11 @@ export default function CollaborationPage() {
     event.preventDefault();
     try {
       setBusy(true);
-      const team = await collaborationApi.createTeam(teamForm);
-      showToast.success('Tim berhasil dibuat. Anda menjadi Owner tim.');
+      const editing = modal === 'edit-team' && selectedTeam;
+      const team = editing
+        ? await collaborationApi.updateTeam(selectedTeam.id, teamForm)
+        : await collaborationApi.createTeam(teamForm);
+      showToast.success(editing ? 'Profil tim berhasil diperbarui.' : 'Tim berhasil dibuat. Anda menjadi Owner tim.');
       setModal(null);
       setTeamForm({ name: '', description: '', taskVisibilityPolicy: 'ALL_TEAM_MEMBERS' });
       setSelectedTeamId(team.id);
@@ -171,6 +176,9 @@ export default function CollaborationPage() {
       if (modal === 'subtask' && selectedTask) {
         await collaborationApi.createSubtask(selectedTask.id, payload);
         showToast.success('Subtask berhasil ditambahkan.');
+      } else if (modal === 'edit-task' && selectedTask) {
+        await collaborationApi.updateTask(selectedTask.id, { ...payload, version: selectedTask.version });
+        showToast.success('Tugas berhasil diperbarui.');
       } else {
         await collaborationApi.createTask({ ...payload, teamId: selectedTeam.id });
         showToast.success('Tugas berhasil dibuat.');
@@ -250,6 +258,76 @@ export default function CollaborationPage() {
     } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
   };
 
+  const openEditTeam = () => {
+    if (!selectedTeam || selectedTeam.myRole !== 'OWNER') return;
+    setTeamForm({
+      name: selectedTeam.name,
+      description: selectedTeam.description || '',
+      taskVisibilityPolicy: selectedTeam.taskVisibilityPolicy,
+    });
+    setModal('edit-team');
+  };
+
+  const openEditTask = (task: CollaborationTask) => {
+    if (!canManage) return;
+    setSelectedTask(task);
+    setTaskForm({
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      dueAt: task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : '',
+      assigneeIds: task.assignees.map((person) => person.id),
+      isRequired: task.isRequired,
+    });
+    setModal('edit-task');
+  };
+
+  const deleteTask = async (task: CollaborationTask) => {
+    if (!canManage) return;
+    const confirmed = window.confirm(`Hapus tugas #${task.taskNo} "${task.title}"? Tugas akan diarsipkan beserta subtasks-nya.`);
+    if (!confirmed) return;
+    try {
+      setBusy(true);
+      await collaborationApi.deleteTask(task.id);
+      showToast.success('Tugas berhasil dihapus.');
+      setModal(null);
+      setSelectedTask(null);
+      await load();
+    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+  };
+
+  const removeMember = async (membershipId: string, name: string) => {
+    if (!selectedTeam || !isOwner) return;
+    if (!window.confirm(`Keluarkan ${name} dari tim? Assignment aktifnya akan dilepas.`)) return;
+    try {
+      setBusy(true);
+      await collaborationApi.updateMember(selectedTeam.id, membershipId, { status: 'REMOVED' });
+      showToast.success('Anggota berhasil dikeluarkan dari tim.');
+      await load();
+    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+  };
+
+  const editComment = async (task: CollaborationTask, commentId: string, currentContent: string) => {
+    const content = window.prompt('Ubah komentar:', currentContent)?.trim();
+    if (!content || content === currentContent) return;
+    try {
+      setBusy(true);
+      await collaborationApi.updateComment(task.id, commentId, content);
+      setSelectedTask(await collaborationApi.getTask(task.id));
+      await load();
+    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+  };
+
+  const deleteComment = async (task: CollaborationTask, commentId: string) => {
+    if (!window.confirm('Hapus komentar ini?')) return;
+    try {
+      setBusy(true);
+      await collaborationApi.deleteComment(task.id, commentId);
+      setSelectedTask(await collaborationApi.getTask(task.id));
+      await load();
+    } catch (error) { showToast.error(getError(error)); } finally { setBusy(false); }
+  };
+
   const unassignedUsers = data.users.filter((candidate) => !selectedTeam?.memberships.some((member) => member.userId === candidate.id));
 
   return (
@@ -316,16 +394,16 @@ export default function CollaborationPage() {
           </section>
         )}
         {view === 'teams' && selectedTeam && (
-          <TeamsView team={selectedTeam} isOwner={Boolean(isOwner)} busy={busy} onAdd={() => setModal('member')} onDelete={deleteTeam} onSetLeader={setLeader} onRole={updateMemberRole} />
+          <TeamsView team={selectedTeam} isOwner={Boolean(isOwner)} busy={busy} onAdd={() => setModal('member')} onEdit={openEditTeam} onDelete={deleteTeam} onSetLeader={setLeader} onRole={updateMemberRole} onRemove={removeMember} />
         )}
       </>}
 
-      {modal === 'team' && <Modal title="Buat tim baru" subtitle="Anda otomatis menjadi Owner tim." onClose={() => setModal(null)}>
+      {(modal === 'team' || modal === 'edit-team') && <Modal title={modal === 'edit-team' ? 'Edit profil tim' : 'Buat tim baru'} subtitle={modal === 'edit-team' ? 'Perbarui nama, deskripsi, atau visibilitas tugas.' : 'Anda otomatis menjadi Owner tim.'} onClose={() => setModal(null)}>
         <form className={styles.form} onSubmit={submitTeam}>
           <Field label="Nama tim"><input required minLength={3} value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} placeholder="Contoh: Operasional Jakarta" /></Field>
           <Field label="Deskripsi"><textarea rows={3} value={teamForm.description} onChange={(event) => setTeamForm({ ...teamForm, description: event.target.value })} placeholder="Tujuan dan ruang lingkup tim" /></Field>
           <Field label="Visibilitas tugas"><select value={teamForm.taskVisibilityPolicy} onChange={(event) => setTeamForm({ ...teamForm, taskVisibilityPolicy: event.target.value as Team['taskVisibilityPolicy'] })}><option value="ALL_TEAM_MEMBERS">Semua anggota tim</option><option value="ASSIGNEE_ONLY">Hanya assignee dan leader</option></select></Field>
-          <FormActions busy={busy} submit="Buat Tim" onCancel={() => setModal(null)} />
+          <FormActions busy={busy} submit={modal === 'edit-team' ? 'Simpan Perubahan' : 'Buat Tim'} onCancel={() => setModal(null)} />
         </form>
       </Modal>}
 
@@ -337,7 +415,7 @@ export default function CollaborationPage() {
         </form>
       </Modal>}
 
-      {(modal === 'task' || modal === 'subtask') && selectedTeam && <Modal title={modal === 'subtask' ? 'Tambah subtask' : 'Buat tugas baru'} subtitle={modal === 'subtask' ? `Anak tugas untuk #${selectedTask?.taskNo} ${selectedTask?.title}` : `Untuk tim ${selectedTeam.name}`} onClose={() => setModal(null)}>
+      {(modal === 'task' || modal === 'subtask' || modal === 'edit-task') && selectedTeam && <Modal title={modal === 'subtask' ? 'Tambah subtask' : modal === 'edit-task' ? 'Edit tugas' : 'Buat tugas baru'} subtitle={modal === 'subtask' ? `Anak tugas untuk #${selectedTask?.taskNo} ${selectedTask?.title}` : `Untuk tim ${selectedTeam.name}`} onClose={() => setModal(null)}>
         <form className={styles.form} onSubmit={submitTask}>
           <Field label="Judul"><input required minLength={3} value={taskForm.title} onChange={(event) => setTaskForm({ ...taskForm, title: event.target.value })} placeholder="Apa yang harus diselesaikan?" /></Field>
           <Field label="Deskripsi"><textarea rows={4} value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} placeholder="Berikan konteks dan hasil yang diharapkan" /></Field>
@@ -346,12 +424,12 @@ export default function CollaborationPage() {
             <Field label="Tenggat"><input type="datetime-local" value={taskForm.dueAt} onChange={(event) => setTaskForm({ ...taskForm, dueAt: event.target.value })} /></Field>
           </div>
           <Field label="Assignee"><div className={styles.assigneeGrid}>{selectedTeam.memberships.map((member) => <label key={member.id} className={taskForm.assigneeIds.includes(member.userId) ? styles.assigneeSelected : styles.assigneeOption}><input type="checkbox" checked={taskForm.assigneeIds.includes(member.userId)} onChange={() => setTaskForm((current) => ({ ...current, assigneeIds: current.assigneeIds.includes(member.userId) ? current.assigneeIds.filter((id) => id !== member.userId) : [...current.assigneeIds, member.userId] }))} /><Avatar name={member.user.fullName} /><span>{member.user.fullName}<small>{member.role}</small></span></label>)}</div></Field>
-          {modal === 'subtask' && <label className={styles.checkLine}><input type="checkbox" checked={taskForm.isRequired} onChange={(event) => setTaskForm({ ...taskForm, isRequired: event.target.checked })} /> Subtask wajib diselesaikan sebelum parent task</label>}
-          <FormActions busy={busy} submit={modal === 'subtask' ? 'Tambah Subtask' : 'Buat Tugas'} onCancel={() => setModal(null)} />
+          {(modal === 'subtask' || modal === 'edit-task') && <label className={styles.checkLine}><input type="checkbox" checked={taskForm.isRequired} onChange={(event) => setTaskForm({ ...taskForm, isRequired: event.target.checked })} /> Subtask wajib diselesaikan sebelum parent task</label>}
+          <FormActions busy={busy} submit={modal === 'subtask' ? 'Tambah Subtask' : modal === 'edit-task' ? 'Simpan Perubahan' : 'Buat Tugas'} onCancel={() => setModal(null)} />
         </form>
       </Modal>}
 
-      {modal === 'detail' && selectedTask && <TaskDetail task={selectedTask} currentUserId={user?.userId || ''} canManage={Boolean(canManage)} busy={busy} onClose={() => setModal(null)} onStatus={changeStatus} comment={comment} setComment={setComment} onComment={submitComment} onOpenSubtask={openDetail} />}
+      {modal === 'detail' && selectedTask && <TaskDetail task={selectedTask} currentUserId={user?.userId || ''} canManage={Boolean(canManage)} busy={busy} onClose={() => setModal(null)} onStatus={changeStatus} onEdit={openEditTask} onDelete={deleteTask} onEditComment={editComment} onDeleteComment={deleteComment} comment={comment} setComment={setComment} onComment={submitComment} onOpenSubtask={openDetail} />}
     </div>
   );
 }
@@ -439,20 +517,21 @@ function TaskRow({ task, expanded, onToggle, onOpen, onAddSubtask, canManage }: 
   </article>;
 }
 
-function TeamsView({ team, isOwner, busy, onAdd, onDelete, onSetLeader, onRole }: { team: Team; isOwner: boolean; busy: boolean; onAdd: () => void; onDelete: () => void; onSetLeader: (id: string) => void; onRole: (id: string, role: 'LEADER' | 'STAFF') => void }) {
+function TeamsView({ team, isOwner, busy, onAdd, onEdit, onDelete, onSetLeader, onRole, onRemove }: { team: Team; isOwner: boolean; busy: boolean; onAdd: () => void; onEdit: () => void; onDelete: () => void; onSetLeader: (id: string) => void; onRole: (id: string, role: 'LEADER' | 'STAFF') => void; onRemove: (id: string, name: string) => void }) {
   return <div className={styles.teamsGrid}>
     <section className={styles.panel}>
-      <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <div className={styles.teamActions}><button className={styles.deleteTeamButton} disabled={busy} onClick={onDelete}><Trash2 size={16} /> Hapus Tim</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button></div>}</div>
+      <div className={styles.sectionHeading}><div><h2>{team.name}</h2><p>{team.description || 'Belum ada deskripsi tim.'}</p></div>{isOwner && <div className={styles.teamActions}><button className="btn btn-secondary btn-sm" disabled={busy} onClick={onEdit}><Pencil size={16} /> Edit Tim</button><button className={styles.deleteTeamButton} disabled={busy} onClick={onDelete}><Trash2 size={16} /> Hapus Tim</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={onAdd}><UserPlus size={16} /> Tambah Anggota</button></div>}</div>
       <div className={styles.memberList}>{team.memberships.map((member) => <div key={member.id} className={styles.memberRow}><Avatar name={member.user.fullName} /><div><strong>{member.user.fullName}</strong><p>{member.user.role} · {member.user.staffCode || member.user.email}</p></div><span className={styles.roleBadge}>{member.role}</span>{team.primaryLeaderMembershipId === member.id && <span className={styles.leaderBadge}>Primary Leader</span>}{isOwner && member.role !== 'OWNER' && <select value={member.role} onChange={(event) => onRole(member.id, event.target.value as 'LEADER' | 'STAFF')}><option value="STAFF">Staff</option><option value="LEADER">Leader</option></select>}{isOwner && (member.role === 'LEADER' || member.role === 'OWNER') && team.primaryLeaderMembershipId !== member.id && <button className={styles.textButton} onClick={() => onSetLeader(member.id)}>Jadikan Primary Leader</button>}</div>)}</div>
     </section>
+    {isOwner && <section className={styles.panel}><div className={styles.sectionHeading}><div><h2>Kelola akses anggota</h2><p>Pengeluaran anggota melepas assignment aktif tanpa menghapus histori.</p></div><UserMinus size={20} /></div><div className={styles.memberList}>{team.memberships.filter((member) => member.role !== 'OWNER').map((member) => <div key={`remove-${member.id}`} className={styles.memberRow}><span>{member.user.fullName}</span><button className={styles.textButton} disabled={busy} onClick={() => onRemove(member.id, member.user.fullName)}><UserMinus size={14} /> Keluarkan</button></div>)}</div></section>}
     <aside className={styles.panel}><div className={styles.sectionHeading}><div><h2>Aturan tim</h2><p>Konfigurasi akses saat ini.</p></div><Settings2 size={20} /></div><div className={styles.infoList}><div><span>Role Anda</span><strong>{team.myRole}</strong></div><div><span>Visibilitas tugas</span><strong>{team.taskVisibilityPolicy === 'ALL_TEAM_MEMBERS' ? 'Semua anggota' : 'Assignee saja'}</strong></div><div><span>Primary Leader</span><strong>{team.primaryLeader?.fullName || 'Belum ditentukan'}</strong></div></div></aside>
   </div>;
 }
 
-function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, comment, setComment, onComment, onOpenSubtask }: { task: CollaborationTask; currentUserId: string; canManage: boolean; busy: boolean; onClose: () => void; onStatus: (task: CollaborationTask, status: TaskStatus) => void; comment: string; setComment: (value: string) => void; onComment: (event: FormEvent) => void; onOpenSubtask: (task: CollaborationTask) => void }) {
+function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, onEdit, onDelete, onEditComment, onDeleteComment, comment, setComment, onComment, onOpenSubtask }: { task: CollaborationTask; currentUserId: string; canManage: boolean; busy: boolean; onClose: () => void; onStatus: (task: CollaborationTask, status: TaskStatus) => void; onEdit: (task: CollaborationTask) => void; onDelete: (task: CollaborationTask) => void; onEditComment: (task: CollaborationTask, commentId: string, content: string) => void; onDeleteComment: (task: CollaborationTask, commentId: string) => void; comment: string; setComment: (value: string) => void; onComment: (event: FormEvent) => void; onOpenSubtask: (task: CollaborationTask) => void }) {
   const assigned = task.assignees.some((person) => person.id === currentUserId);
   return <div className={styles.drawerBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><aside className={styles.drawer}>
-    <header><div><span className={styles.taskNo}>#{task.taskNo}</span><h2>{task.title}</h2></div><button onClick={onClose}><X size={20} /></button></header>
+    <header><div><span className={styles.taskNo}>#{task.taskNo}</span><h2>{task.title}</h2></div><div className={styles.drawerActions}>{canManage && <><button title="Edit tugas" onClick={() => onEdit(task)}><Pencil size={18} /></button><button title="Hapus tugas" onClick={() => onDelete(task)}><Trash2 size={18} /></button></>}<button onClick={onClose}><X size={20} /></button></div></header>
     <div className={styles.drawerBody}>
       <div className={styles.detailPills}><Pill tone={STATUS_META[task.status].tone}>{STATUS_META[task.status].label}</Pill><Pill tone={PRIORITY_META[task.priority].tone}>{PRIORITY_META[task.priority].label}</Pill>{isOverdue(task) && <Pill tone="rose">Terlambat</Pill>}</div>
       <p className={styles.description}>{task.description || 'Tidak ada deskripsi.'}</p>
@@ -465,6 +544,7 @@ function TaskDetail({ task, currentUserId, canManage, busy, onClose, onStatus, c
       </div>
       {task.subtasks?.length > 0 && <section className={styles.detailSection}><h3>Subtask <span>{task.progress.completed}/{task.progress.total}</span></h3><div className={styles.detailSubtasks}>{task.subtasks.map((subtask) => <button key={subtask.id} onClick={() => onOpenSubtask(subtask)}><StatusDot status={subtask.status} /><span>{subtask.title}</span><ChevronRight size={16} /></button>)}</div></section>}
       <section className={styles.detailSection}><h3>Diskusi <span>{task.comments?.length || 0}</span></h3><div className={styles.comments}>{task.comments?.map((entry) => <div key={entry.id}><Avatar name={entry.author.fullName} /><div><strong>{entry.author.fullName}</strong><small>{formatDate(entry.createdAt)}</small><p>{entry.content}</p></div></div>)}{!task.comments?.length && <div className={styles.inlineEmpty}>Belum ada komentar.</div>}</div><form className={styles.commentForm} onSubmit={onComment}><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Tulis komentar atau update..." /><button disabled={busy || !comment.trim()}><Send size={17} /></button></form></section>
+      <section className={styles.detailSection}><h3>Kelola komentar</h3><div className={styles.comments}>{task.comments?.filter((entry) => entry.author.id === currentUserId || canManage).map((entry) => <div key={`manage-${entry.id}`} className={styles.commentActions}><span>{entry.content}</span><span><button type="button" onClick={() => onEditComment(task, entry.id, entry.content)}>Edit</button><button type="button" onClick={() => onDeleteComment(task, entry.id)}>Hapus</button></span></div>)}</div></section>
     </div>
   </aside></div>;
 }

@@ -379,6 +379,26 @@ export async function updateTask(actorId: string, taskId: string, input: UpdateT
   });
 }
 
+/** Soft-delete a task and its subtasks while preserving the audit trail. */
+export async function deleteTask(actorId: string, taskId: string) {
+  const context = await taskAndMembership(actorId, taskId);
+  if (!context.isManager) throw errors.forbidden('Hanya Owner atau Leader yang dapat menghapus tugas.');
+  return prisma.$transaction(async (tx) => {
+    const deletedAt = new Date();
+    await tx.teamTask.updateMany({
+      where: { id: taskId, deletedAt: null },
+      data: { deletedAt, status: 'CANCELLED', cancelledAt: deletedAt, cancelReason: 'Dihapus oleh pengelola tim.', version: { increment: 1 } },
+    });
+    await tx.teamTask.updateMany({
+      where: { parentTaskId: taskId, deletedAt: null },
+      data: { deletedAt, status: 'CANCELLED', cancelledAt: deletedAt, cancelReason: 'Parent task dihapus.', version: { increment: 1 } },
+    });
+    await tx.taskAssignment.updateMany({ where: { taskId, unassignedAt: null }, data: { unassignedAt: deletedAt } });
+    await addActivity(tx, context.task.teamId, actorId, 'TASK_DELETED', taskId, { taskNo: context.task.taskNo });
+    return { id: taskId, deleted: true };
+  });
+}
+
 const staffTransitions: Partial<Record<CollaborationTaskStatus, CollaborationTaskStatus[]>> = {
   TODO: ['IN_PROGRESS'],
   IN_PROGRESS: ['SUBMITTED'],
@@ -436,6 +456,32 @@ export async function createComment(actorId: string, taskId: string, content: st
     await addActivity(tx, context.task.teamId, actorId, 'COMMENT_ADDED', taskId);
     return { ...comment, author: person(comment.author) };
   });
+}
+
+export async function updateComment(actorId: string, taskId: string, commentId: string, content: string) {
+  const context = await taskAndMembership(actorId, taskId);
+  const comment = await prisma.taskComment.findFirst({ where: { id: commentId, taskId, deletedAt: null } });
+  if (!comment) throw errors.notFound('Komentar tidak ditemukan.');
+  if (comment.authorId !== actorId && !context.isManager) throw errors.forbidden('Hanya pembuat komentar atau pengelola tim yang dapat mengubah komentar.');
+  const updated = await prisma.taskComment.update({
+    where: { id: commentId },
+    data: { content, editedAt: new Date() },
+    include: { author: { select: userSelect } },
+  });
+  await prisma.taskActivity.create({ data: { teamId: context.task.teamId, taskId, actorId, action: 'COMMENT_UPDATED' } });
+  return { ...updated, author: person(updated.author) };
+}
+
+export async function deleteComment(actorId: string, taskId: string, commentId: string) {
+  const context = await taskAndMembership(actorId, taskId);
+  const comment = await prisma.taskComment.findFirst({ where: { id: commentId, taskId, deletedAt: null } });
+  if (!comment) throw errors.notFound('Komentar tidak ditemukan.');
+  if (comment.authorId !== actorId && !context.isManager) throw errors.forbidden('Hanya pembuat komentar atau pengelola tim yang dapat menghapus komentar.');
+  await prisma.$transaction(async (tx) => {
+    await tx.taskComment.update({ where: { id: commentId }, data: { deletedAt: new Date(), editedAt: new Date() } });
+    await addActivity(tx, context.task.teamId, actorId, 'COMMENT_DELETED', taskId);
+  });
+  return { id: commentId, deleted: true };
 }
 
 export async function getTaskDetail(actorId: string, taskId: string) {

@@ -36,6 +36,7 @@ export type TaskComment = {
   id: string;
   content: string;
   createdAt: string;
+  editedAt?: string | null;
   author: CollaborationUser;
 };
 
@@ -108,8 +109,16 @@ export const collaborationApi = {
     data<CollaborationTask>(await api.post(`/collaboration/tasks/${taskId}/subtasks`, payload)),
   getTask: async (taskId: string) =>
     data<CollaborationTask>(await api.get(`/collaboration/tasks/${taskId}`)),
+  updateTask: async (taskId: string, payload: Partial<TaskPayload> & { version: number }) =>
+    data<CollaborationTask>(await api.patch(`/collaboration/tasks/${taskId}`, payload)),
+  deleteTask: async (taskId: string) =>
+    data<{ id: string; deleted: boolean }>(await api.delete(`/collaboration/tasks/${taskId}`)),
   updateTaskStatus: async (taskId: string, payload: { status: TaskStatus; version: number; reason?: string }) =>
     data<CollaborationTask>(await api.patch(`/collaboration/tasks/${taskId}/status`, payload)),
   createComment: async (taskId: string, content: string) =>
     data<TaskComment>(await api.post(`/collaboration/tasks/${taskId}/comments`, { content })),
+  updateComment: async (taskId: string, commentId: string, content: string) =>
+    data<TaskComment>(await api.patch(`/collaboration/tasks/${taskId}/comments/${commentId}`, { content })),
+  deleteComment: async (taskId: string, commentId: string) =>
+    data<{ id: string; deleted: boolean }>(await api.delete(`/collaboration/tasks/${taskId}/comments/${commentId}`)),
 };

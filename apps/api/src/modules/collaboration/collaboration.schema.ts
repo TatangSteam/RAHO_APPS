@@ -44,6 +44,7 @@ export const updateTaskStatusSchema = z.object({
   reason: z.string().trim().min(3).max(500).optional(),
 });
 export const createCommentSchema = z.object({ content: z.string().trim().min(1).max(3000) });
+export const updateCommentSchema = z.object({ content: z.string().trim().min(1).max(3000) });
 export const bootstrapQuerySchema = z.object({
   teamId: z.string().optional(),
   status: z.enum(['ALL', 'TODO', 'IN_PROGRESS', 'SUBMITTED', 'NEEDS_REVISION', 'COMPLETED', 'CANCELLED']).default('ALL'),
@@ -58,4 +59,3 @@ export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type CreateSubtaskInput = z.infer<typeof createSubtaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type UpdateTaskStatusInput = z.infer<typeof updateTaskStatusSchema>;
-

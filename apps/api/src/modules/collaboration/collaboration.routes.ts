@@ -20,7 +20,10 @@ router.post('/tasks', controller.createTask);
 router.get('/tasks/:taskId', controller.getTask);
 router.post('/tasks/:taskId/subtasks', controller.createSubtask);
 router.patch('/tasks/:taskId', controller.updateTask);
+router.delete('/tasks/:taskId', controller.deleteTask);
 router.patch('/tasks/:taskId/status', controller.updateTaskStatus);
 router.post('/tasks/:taskId/comments', controller.createComment);
+router.patch('/tasks/:taskId/comments/:commentId', controller.updateComment);
+router.delete('/tasks/:taskId/comments/:commentId', controller.deleteComment);
 
 export default router;

@@ -11,6 +11,7 @@ import {
   updateMemberSchema,
   updateTaskSchema,
   updateTaskStatusSchema,
+  updateCommentSchema,
   updateTeamSchema,
 } from './collaboration.schema';
 import * as service from './collaboration.service';
@@ -51,6 +52,9 @@ export async function createSubtask(req: Request, res: Response, next: NextFunct
 export async function updateTask(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await service.updateTask(req.user.userId, req.params.taskId, updateTaskSchema.parse(req.body))); } catch (error) { next(error); }
 }
+export async function deleteTask(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await service.deleteTask(req.user.userId, req.params.taskId)); } catch (error) { next(error); }
+}
 export async function updateTaskStatus(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await service.updateTaskStatus(req.user.userId, req.params.taskId, updateTaskStatusSchema.parse(req.body))); } catch (error) { next(error); }
 }
@@ -59,4 +63,13 @@ export async function createComment(req: Request, res: Response, next: NextFunct
     const input = createCommentSchema.parse(req.body);
     sendCreated(res, await service.createComment(req.user.userId, req.params.taskId, input.content));
   } catch (error) { next(error); }
+}
+export async function updateComment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = updateCommentSchema.parse(req.body);
+    sendSuccess(res, await service.updateComment(req.user.userId, req.params.taskId, req.params.commentId, input.content));
+  } catch (error) { next(error); }
+}
+export async function deleteComment(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await service.deleteComment(req.user.userId, req.params.taskId, req.params.commentId)); } catch (error) { next(error); }
 }
