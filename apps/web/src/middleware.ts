@@ -104,6 +104,7 @@ export function middleware(request: NextRequest): NextResponse {
     adminManagerAccessScope === 'MEMBER_VIEW_ONLY' &&
     isStaffRoute &&
     !(
+      pathname === '/extra/rain' ||
       pathname === '/members' ||
       pathname.startsWith('/members/') ||
       pathname === '/profile' ||
@@ -117,6 +118,7 @@ export function middleware(request: NextRequest): NextResponse {
   if (
     role === 'VOUCHER_OPERATOR' &&
     !(
+      pathname === '/extra/rain' ||
       pathname === '/extra/vouchers' ||
       pathname === '/extra/vouchers/history' ||
       pathname === '/profile' ||

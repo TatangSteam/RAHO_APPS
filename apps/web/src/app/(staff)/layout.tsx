@@ -65,6 +65,7 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
         pathname.startsWith('/sessions/') ||
         pathname === '/extra/collaboration' ||
         pathname.startsWith('/extra/collaboration/') ||
+        pathname === '/extra/rain' ||
         pathname === '/profile' ||
         pathname.startsWith('/profile/')
       )
@@ -81,6 +82,7 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
         pathname.startsWith('/extra/vouchers/') ||
         pathname === '/extra/collaboration' ||
         pathname.startsWith('/extra/collaboration/') ||
+        pathname === '/extra/rain' ||
         pathname === '/profile' ||
         pathname.startsWith('/profile/')
       )

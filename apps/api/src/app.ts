@@ -45,6 +45,7 @@ import zohoRouter from './modules/zoho/zoho.routes';
 import whatsappRouter from './modules/whatsapp/whatsapp.routes';
 import voucherRouter from './modules/vouchers/voucher.routes';
 import collaborationRouter from './modules/collaboration/collaboration.routes';
+import { aiRouter } from './modules/ai/ai.routes';
 import runtimeRouter from './modules/runtime/runtime.routes';
 
 export function createApp(): Application {
@@ -164,6 +165,7 @@ export function createApp(): Application {
   app.use(`${prefix}/integrations/whatsapp`, whatsappRouter);
   app.use(`${prefix}/vouchers`, voucherRouter);
   app.use(`${prefix}/collaboration`, collaborationRouter);
+  app.use(`${prefix}/ai`, aiRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

@@ -405,6 +405,9 @@ const MENU_GROUPS: MenuGroup[] = [
   },
   {
     title: 'Ekstra',
+    items: [{ label: 'RAIN · Asisten Task', href: '/extra/rain', icon: <MessageSquare size={20} />, roles: COLLABORATION_ROLES }],
+  },
+  {
     dropdown: {
       key: 'team-collaboration',
       label: 'Tim & Tugas',
@@ -943,10 +946,10 @@ export function Sidebar({
           const focusedMenu = FOCUSED_ROLE_MENU[role];
           const visibleItems = group.items.filter((item) => (
             item.roles.includes(role) &&
-            (!focusedMenu || focusedMenu.has(item.href)) &&
+            (!focusedMenu || focusedMenu.has(item.href) || item.href === '/extra/rain') &&
             (!isMemberViewOnlyAdminManager ||
               ['/members', '/sessions'].includes(item.href) ||
-              item.href.startsWith('/extra/collaboration'))
+              item.href.startsWith('/extra/collaboration') || item.href === '/extra/rain')
           ));
           if (visibleItems.length === 0) return null;
 
