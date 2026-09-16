@@ -11,13 +11,13 @@ export type RainTask = {
 };
 export type RainChatResponse = {
   contractVersion: 'rain.v1'; success: true; source: 'erp'; isDemo: boolean; asOf: string;
-  user: { id: string }; mode: 'rules'; intent: 'performance' | 'compare' | 'tasks' | 'overdue' | 'help';
+  user: { id: string }; mode: 'openclaw'; intent: 'agent'; conversationId: string;
   reply: string; context: RainContext | null;
   data: { tasks?: RainTask[]; pagination?: { total: number; nextOffset: number | null } } | null;
 };
 export const rainApi = {
-  chat: async (message: string, context?: RainContext): Promise<RainChatResponse> => {
-    const response = await api.post<RainChatResponse>('/ai/chat', { message, ...(context ? { context } : {}) });
+  chat: async (message: string, conversationId: string): Promise<RainChatResponse> => {
+    const response = await api.post<RainChatResponse>('/ai/chat', { message, conversationId });
     return response.data;
   },
 };

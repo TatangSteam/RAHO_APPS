@@ -20,7 +20,14 @@ export const chatContext = z.object({
   period: periodType.optional(), startDate: date.optional(), endDate: date.optional(),
   status: taskStatus.optional(), ...pagination,
 }).strict();
-export const chatBody = z.object({ message: z.string().trim().min(1).max(1000), context: chatContext.optional() }).strict();
+export const chatBody = z.object({
+  message: z.string().trim().min(1).max(1000),
+  conversationId: z.string().uuid().optional(),
+  // Kept temporarily so an already-open dashboard from the rules-based client
+  // can cross the OpenClaw rollout without failing validation. The server does
+  // not use this client-supplied context for identity or data scope.
+  context: chatContext.optional(),
+}).strict();
 export type PeriodInput = { period?: z.infer<typeof periodType>; startDate?: string; endDate?: string };
 export type ListInput = PeriodInput & { status?: z.infer<typeof taskStatus>; limit?: number; offset?: number };
 export type ChatContext = z.infer<typeof chatContext>;

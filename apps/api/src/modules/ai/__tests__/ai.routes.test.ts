@@ -6,6 +6,15 @@ import { prisma } from '@lib/prisma';
 import { aiRouter } from '../ai.routes';
 
 jest.mock('@lib/prisma', () => ({ prisma: { $transaction: jest.fn() } }));
+jest.mock('../openclaw.service', () => ({
+  resolveOpenClawSession: jest.fn(() => null),
+  chatThroughOpenClaw: jest.fn(async (user, message, conversationId) => ({
+    contractVersion: 'rain.v1', success: true, source: 'erp', isDemo: false,
+    asOf: '2026-09-16T14:30:00+07:00', user: { id: user.userId },
+    mode: 'openclaw', intent: 'agent', reply: `OpenClaw: ${message}`,
+    conversationId, context: null, data: null,
+  })),
+}));
 jest.mock('@middleware/authenticate', () => ({
   authenticate: jest.fn((req, res, next) => {
     if (!req.headers.authorization) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED' } });
@@ -68,15 +77,33 @@ describe('RAIN HTTP API contract', () => {
     expect(A.period).toEqual(B.period);
   });
   it('does not accept user identity in the chat body', async () => {
-    const response = await fetch(`${base}/chat`, { method: 'POST', headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Kinerja hari ini', userId: 'other' }) });
+    const response = await fetch(`${base}/chat`, { method: 'POST', headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Kinerja hari ini', conversationId: '2dc2e222-f555-447a-81b8-e03d5731f1b9', userId: 'other' }) });
     expect(response.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
-  it('serves chat from the same personal service, without modifying task state', async () => {
-    const response = await fetch(`${base}/chat`, { method: 'POST', headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Kinerja hari ini' }) });
+  it('routes chat to OpenClaw with a server-authenticated ERP user', async () => {
+    const conversationId = '2dc2e222-f555-447a-81b8-e03d5731f1b9';
+    const response = await fetch(`${base}/chat`, { method: 'POST', headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Kinerja hari ini', conversationId }) });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ mode: 'rules', intent: 'performance', data: { performance: { totalTasks: 0, completionRate: null } } });
-    expect(tx.teamTask.groupBy.mock.calls[0][0].where.assignments.some.userId).toBe('token-user');
+    expect(await response.json()).toMatchObject({ mode: 'openclaw', intent: 'agent', reply: 'OpenClaw: Kinerja hari ini', conversationId });
+    const { chatThroughOpenClaw } = jest.requireMock('../openclaw.service');
+    expect(chatThroughOpenClaw).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'token-user' }), 'Kinerja hari ini', conversationId,
+    );
+  });
+  it('accepts an already-open legacy dashboard and creates its conversation id', async () => {
+    const response = await fetch(`${base}/chat`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Daftar task hari ini' }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { conversationId: string };
+    expect(body.conversationId).toEqual(expect.any(String));
+    const { chatThroughOpenClaw } = jest.requireMock('../openclaw.service');
+    expect(chatThroughOpenClaw).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'token-user' }), 'Daftar task hari ini', expect.any(String),
+    );
   });
   it('maps database failure to 503 rather than empty success or internal details', async () => {
     (prisma.$transaction as jest.Mock).mockRejectedValue(new Error('secret connection string'));

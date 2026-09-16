@@ -4,7 +4,7 @@
 
 Login dengan akun internal ERP, lalu buka **Ekstra → RAIN · Asisten Task** (`/extra/rain`).
 
-Versi awal adalah **asisten berbasis aturan**, bukan integrasi model AI. Tidak perlu API key atau layanan AI eksternal. Jawaban menggunakan data ERP; tidak ada fallback data demo. Chat hanya membaca data dan tidak mengubah workflow Tim & Tugas, stok, klinik, maupun transaksi.
+Chat memakai agent lokal OpenClaw `rain` dan lima tool read-only yang membaca endpoint personal ERP. Jawaban menggunakan data ERP; tidak ada fallback data demo. Chat tidak mengubah workflow Tim & Tugas, stok, klinik, maupun transaksi.
 
 Contoh pertanyaan:
 
@@ -30,30 +30,33 @@ Semua endpoint membutuhkan `Authorization: Bearer <access-token>`. Identitas dia
 | GET | `/api/v1/ai/me/performance/compare` | `periodA`, `periodB`, tanggal custom dengan suffix A/B |
 | GET | `/api/v1/ai/me/tasks` | `period`, tanggal custom, `status`, `limit`, `offset` |
 | GET | `/api/v1/ai/me/tasks/overdue` | `period` opsional, tanggal custom, `limit`, `offset`; tanpa status |
-| POST | `/api/v1/ai/chat` | JSON `message` dan `context` opsional untuk pagination |
+| POST | `/api/v1/ai/chat` | JSON `message` dan UUID `conversationId` |
 
 `period`: `today`, `yesterday`, `this_week`, `last_week`, `this_month`, `last_month`, `custom`. Pada daftar task biasa period wajib. Tanggal `YYYY-MM-DD` hanya untuk custom; kedua tanggal wajib, awal <= akhir, maksimal 366 hari inklusif.
 
 `status`: `TODO`, `IN_PROGRESS`, `SUBMITTED`, `NEEDS_REVISION`, `COMPLETED`, `CANCELLED`, atau filter virtual `OPEN` (selain COMPLETED/CANCELLED). Default daftar task semua status. `limit` default 10, maksimal 50; `offset` default 0, maksimal 100000. `nextOffset: null` berarti tidak ada halaman berikutnya.
 
-Semua respons sukses mempunyai `contractVersion: "rain.v1"`, `success: true`, `source: "erp"`, `isDemo: false`, `asOf`, serta identitas pengguna. Respons dibaca langsung dari body JSON, **bukan** envelope ERP `data` yang umum dipakai modul lain. Respons chat punya `reply`, `mode: "rules"`, `intent`, `data` (hasil bisnis), dan `context` (filter/offset berikutnya, atau null).
+Semua respons sukses mempunyai `contractVersion: "rain.v1"`, `success: true`, `source: "erp"`, `isDemo: false`, `asOf`, serta identitas pengguna. Respons dibaca langsung dari body JSON, **bukan** envelope ERP `data` yang umum dipakai modul lain. Respons chat punya `reply`, `mode: "openclaw"`, `intent: "agent"`, dan `conversationId`.
 
 Contoh request chat:
 
 ```json
-{ "message": "Daftar task minggu ini" }
+{
+  "message": "Daftar task minggu ini",
+  "conversationId": "2dc2e222-f555-447a-81b8-e03d5731f1b9"
+}
 ```
 
-Untuk melanjutkan, kirim context dari respons terakhir:
+Untuk melanjutkan, gunakan `conversationId` yang sama:
 
 ```json
 {
   "message": "lanjut",
-  "context": { "intent": "tasks", "period": "this_week", "limit": 10, "offset": 10 }
+  "conversationId": "2dc2e222-f555-447a-81b8-e03d5731f1b9"
 }
 ```
 
-Context tidak memuat data task/identitas dan bukan pemberian akses. Backend tetap menghitung serta menyaring ulang berdasarkan token. Tidak ada endpoint mutasi task dalam modul AI.
+Backend membuat session key opaque dari kombinasi user terautentikasi dan `conversationId`. Session key hanya berlaku sebagai binding read-only selama lima menit sejak request chat terbaru. Access token ERP tidak dikirim ke OpenClaw, prompt, tool argument, atau transcript. Plugin mengirim session key kembali melalui loopback dan backend memulihkan identitas dari registry in-memory. Tidak ada endpoint mutasi task dalam modul AI.
 
 ## Aturan data dan perhitungan
 
@@ -83,7 +86,7 @@ Context tidak memuat data task/identitas dan bukan pemberian akses. Backend teta
 
 Endpoint menggunakan `Cache-Control: no-store`. Query bisnis berada dalam transaksi read-only RepeatableRead; statement timeout 7 detik, transaction timeout 8 detik, waktu tunggu koneksi maksimal 2 detik. Rate limiter ERP global tetap berlaku. Komentar, deskripsi panjang, histori aktivitas, email assignee, dan data anggota lain tidak dikirim ke chat.
 
-Integrasi model AI belum disediakan. Jika ditambahkan nanti, gunakan kelima service/API personal sebagai sumber data read-only; jangan memberikan alat mutasi atau mengambil identitas dari prompt.
+OpenClaw memakai endpoint Chat Completions lokal dan diarahkan secara eksplisit ke `openclaw/rain`. Gateway tetap loopback dan credential operator hanya dibaca server-side. Plugin berada di `integrations/openclaw/rain-plugin`, sedangkan prompt/workspace agent berada di `integrations/openclaw/rain-workspace`.
 
 ## Verifikasi sebelum produksi
 

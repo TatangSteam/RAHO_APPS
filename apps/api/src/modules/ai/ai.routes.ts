@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import { Role, Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import rateLimit from 'express-rate-limit';
@@ -7,11 +8,24 @@ import { AppError } from '@middleware/errorHandler';
 import { logger } from '@lib/logger';
 import { chatBody, compareQuery, overdueQuery, performanceQuery, tasksQuery, todayQuery } from './ai.schema';
 import { compareMyPerformance, getMyPerformance, getMyTasks } from './ai.service';
-import { chat } from './ai.chat';
+import { chatThroughOpenClaw, resolveOpenClawSession } from './openclaw.service';
 
 export const aiRouter = Router();
 aiRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 aiRouter.use((req, res, next) => {
+  const internalKey = req.header('x-rain-session-key');
+  const remote = req.socket.remoteAddress || '';
+  const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  const internalUser = isLoopback ? resolveOpenClawSession(internalKey) : null;
+  if (internalUser) {
+    req.user = {
+      id: internalUser.userId, userId: internalUser.userId, email: '', role: internalUser.role,
+      branchId: null, branchCode: null, fullName: internalUser.fullName, staffCode: internalUser.staffCode,
+    };
+    req.isImpersonating = false;
+    next();
+    return;
+  }
   const originalJson = res.json;
   res.json = function (body) {
     res.json = originalJson;
@@ -60,7 +74,7 @@ aiRouter.get('/me/tasks', handle((req) => getMyTasks(req.user, tasksQuery.parse(
 aiRouter.post('/chat', handle((req) => {
   todayQuery.parse(req.query);
   const body = chatBody.parse(req.body);
-  return chat(req.user, body.message, body.context);
+  return chatThroughOpenClaw(req.user, body.message, body.conversationId ?? randomUUID());
 }));
 
 // Module-local contract: do not alter error behavior of existing ERP endpoints.

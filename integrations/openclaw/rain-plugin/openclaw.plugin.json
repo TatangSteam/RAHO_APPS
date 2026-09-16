@@ -1,0 +1,38 @@
+{
+  "id": "raho-ai",
+  "name": "RAIN ERP Tools",
+  "description": "Five read-only personal task tools backed by authenticated RAHO ERP APIs.",
+  "contracts": {
+    "tools": [
+      "get_my_daily_performance",
+      "get_my_performance",
+      "compare_my_performance",
+      "get_my_tasks",
+      "get_my_overdue_tasks"
+    ]
+  },
+  "toolMetadata": {
+    "get_my_daily_performance": { "optional": true },
+    "get_my_performance": { "optional": true },
+    "compare_my_performance": { "optional": true },
+    "get_my_tasks": { "optional": true },
+    "get_my_overdue_tasks": { "optional": true }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:4000"
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 30000,
+        "default": 8000
+      }
+    }
+  },
+  "version": "1.0.0"
+}

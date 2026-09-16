@@ -14,6 +14,12 @@ export const envSchema = z.object({
   API_PREFIX: z.string().default('/api/v1'),
   API_URL: z.string().url().optional().default('http://localhost:4000'),
 
+  OPENCLAW_GATEWAY_URL: z.string().url().default('http://127.0.0.1:18789'),
+  OPENCLAW_GATEWAY_TOKEN: z.preprocess(emptyStringToUndefined, z.string().min(16).optional()),
+  OPENCLAW_CONFIG_PATH: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
+  OPENCLAW_AGENT_ID: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/i).default('rain'),
+  OPENCLAW_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(10_000).max(300_000).default(120_000),
+
   DATABASE_URL: z.string().url(),
   DATABASE_PROFILES_JSON: z.preprocess(emptyStringToUndefined, z.string().optional()),
   DATABASE_DEFAULT_PROFILE_ID: z.string().trim().min(1).max(40).default('default'),
