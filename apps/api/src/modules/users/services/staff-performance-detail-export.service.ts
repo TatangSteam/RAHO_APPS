@@ -7,6 +7,8 @@ interface StaffPerformanceDetailExportQuery {
   branchId?: string;
   position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
   completion?: 'all' | 'complete' | 'incomplete';
+  msoId?: string;
+  nakesId?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -305,10 +307,19 @@ export async function exportStaffPerformanceDetailService(
     : query.completion === 'complete'
       ? 'Sudah lengkap'
       : 'Semua kelengkapan';
+  const selectedMso = query.msoId
+    ? history.sessions[0]?.mso.fullName || 'Tidak ada hasil'
+    : 'Semua MSO';
+  const selectedNakes = query.nakesId
+    ? history.sessions[0]?.nakes.find((person) => person.id === query.nakesId)?.fullName || 'Tidak ada hasil'
+    : 'Semua Nakes';
+  const assignmentLabel = query.msoId || query.nakesId
+    ? ` / MSO: ${selectedMso} / Nakes: ${selectedNakes}`
+    : '';
   const baseMetadata: Array<[string, string | number]> = [
     ['Staff', `${history.staff.staffCode} - ${history.staff.fullName}`],
     ['Tanggal sesi terapi', period],
-    ['Filter posisi / kelengkapan', `${positionLabel} / ${completionLabel}`],
+    ['Filter posisi / kelengkapan', `${positionLabel} / ${completionLabel}${assignmentLabel}`],
     ['Diekspor', exportedAt],
   ];
 

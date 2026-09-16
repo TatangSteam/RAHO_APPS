@@ -22,6 +22,8 @@ interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
   completion?: 'all' | 'complete' | 'incomplete';
+  msoId?: string;
+  nakesId?: string;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -533,7 +535,7 @@ export async function getStaffSessionHistoryService(
   callerBranchId: string | null,
   callerUserId?: string,
 ) {
-  const { branchId, position = 'all', completion = 'all', startDate, endDate, page = 1, limit = 20 } = query;
+  const { branchId, position = 'all', completion = 'all', msoId, nakesId, startDate, endDate, page = 1, limit = 20 } = query;
   const skip = (page - 1) * limit;
   let allowedBranchIds: string[] | undefined;
 
@@ -656,7 +658,7 @@ export async function getStaffSessionHistoryService(
   const positionAndCompletionFilter = completion === 'all'
     ? positionFilter
     : completionFilter;
-  const sessionHistoryWhere: Prisma.TreatmentSessionWhereInput = completion === 'all'
+  const baseSessionHistoryWhere: Prisma.TreatmentSessionWhereInput = completion === 'all'
     ? {
       ...positionFilter,
       ...sessionBranchFilter,
@@ -665,6 +667,17 @@ export async function getStaffSessionHistoryService(
     : {
       AND: [positionAndCompletionFilter, sessionBranchFilter, dateFilter],
     };
+  const assignmentFilters: Prisma.TreatmentSessionWhereInput[] = [];
+  if (msoId) assignmentFilters.push({ adminLayananId: msoId });
+  if (nakesId) assignmentFilters.push({
+    OR: [
+      { nurseId: nakesId },
+      { sessionNurses: { some: { nurseId: nakesId } } },
+    ],
+  });
+  const sessionHistoryWhere: Prisma.TreatmentSessionWhereInput = assignmentFilters.length
+    ? { AND: [baseSessionHistoryWhere, ...assignmentFilters] }
+    : baseSessionHistoryWhere;
 
   // Get sessions
   const [sessions, totalSessions] = await Promise.all([
@@ -680,6 +693,8 @@ export async function getStaffSessionHistoryService(
         doctorId: true,
         nurseId: true,
         adminLayananId: true,
+        adminLayanan: { select: { id: true, staffCode: true, email: true, profile: { select: { fullName: true } } } },
+        nurse: { select: { id: true, staffCode: true, email: true, profile: { select: { fullName: true } } } },
         sessionDoctors: {
           select: {
             doctorId: true,
@@ -688,6 +703,7 @@ export async function getStaffSessionHistoryService(
         sessionNurses: {
           select: {
             nurseId: true,
+            nurse: { select: { id: true, staffCode: true, email: true, profile: { select: { fullName: true } } } },
           },
         },
         branch: {
@@ -734,6 +750,11 @@ export async function getStaffSessionHistoryService(
   // Add position info to each session
   const sessionsWithPosition = sessions.map((session) => {
     const positions: string[] = [];
+    const staffName = (person: { staffCode: string | null; email: string; profile: { fullName: string | null } | null }) =>
+      person.profile?.fullName || person.staffCode || person.email;
+    const nakes = [session.nurse, ...session.sessionNurses.map((item) => item.nurse)]
+      .filter((person, index, people) => people.findIndex((candidate) => candidate.id === person.id) === index)
+      .map((person) => ({ id: person.id, fullName: staffName(person) }));
     if (
       session.doctorId === staffId ||
       session.sessionDoctors.some((sessionDoctor) => sessionDoctor.doctorId === staffId)
@@ -764,6 +785,8 @@ export async function getStaffSessionHistoryService(
         packageType: session.encounter.memberPackage.packageType,
         boosterType: session.encounter.memberPackage.boosterType,
       },
+      mso: { id: session.adminLayanan.id, fullName: staffName(session.adminLayanan) },
+      nakes,
       positions, // Array of positions this staff held in this session
     };
   });

@@ -78,6 +78,8 @@ export interface StaffSessionHistoryItem {
     packageType: string;
     boosterType: string | null;
   };
+  mso: { id: string; fullName: string };
+  nakes: Array<{ id: string; fullName: string }>;
   positions: string[];
 }
 
@@ -371,6 +373,8 @@ export interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all';
   completion?: 'all' | 'complete' | 'incomplete';
+  msoId?: string;
+  nakesId?: string;
   startDate?: string;
   endDate?: string;
   page?: number;

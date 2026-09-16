@@ -578,7 +578,7 @@ export async function getStaffPerformanceSummary(req: Request, res: Response, ne
 export async function getStaffSessionHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { staffId } = req.params;
-    const { branchId, position, completion, startDate, endDate, page, limit } = req.query;
+    const { branchId, position, completion, msoId, nakesId, startDate, endDate, page, limit } = req.query;
     
     const result = await getStaffSessionHistoryService(
       staffId,
@@ -586,6 +586,8 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
         branchId: branchId as string | undefined,
         position: position as 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         completion: completion as 'all' | 'complete' | 'incomplete' | undefined,
+        msoId: msoId as string | undefined,
+        nakesId: nakesId as string | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
         page: page ? parseInt(page as string, 10) : undefined,
@@ -915,13 +917,15 @@ export async function deleteDoctorHeadAssignment(req: Request, res: Response, ne
 export async function exportStaffPerformanceDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { staffId } = req.params;
-    const { branchId, position, completion, startDate, endDate } = req.query;
+    const { branchId, position, completion, msoId, nakesId, startDate, endDate } = req.query;
     const result = await exportStaffPerformanceDetailService(
       staffId,
       {
         branchId: branchId as string | undefined,
         position: position as 'doctor' | 'operational' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         completion: completion as 'all' | 'complete' | 'incomplete' | undefined,
+        msoId: msoId as string | undefined,
+        nakesId: nakesId as string | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       },

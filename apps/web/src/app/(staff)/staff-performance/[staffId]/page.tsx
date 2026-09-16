@@ -4,7 +4,7 @@ import AppImage from '@/components/ui/AppImage';
 import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { usersApi, StaffSessionHistoryResponse } from '@/lib/usersApi';
+import { usersApi, StaffMember, StaffSessionHistoryResponse } from '@/lib/usersApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import {
@@ -114,12 +114,33 @@ export default function StaffPerformanceDetailPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'operational'>('all');
+  const [msoId, setMsoId] = useState(searchParams.get('msoId') || '');
+  const [nakesId, setNakesId] = useState(searchParams.get('nakesId') || '');
+  const [msoOptions, setMsoOptions] = useState<StaffMember[]>([]);
+  const [nakesOptions, setNakesOptions] = useState<StaffMember[]>([]);
   const [completionFilter, setCompletionFilter] = useState<'all' | 'complete' | 'incomplete'>(
     searchParams.get('completion') === 'incomplete' ? 'incomplete' : 'all',
   );
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const selectedBranch = branchId && branchId !== 'all' ? branchId : undefined;
+    void Promise.all([
+      usersApi.getAdminLayanan(selectedBranch),
+      usersApi.getNurses(selectedBranch),
+    ]).then(([msos, nakes]) => {
+      if (!active) return;
+      setMsoOptions(msos);
+      setNakesOptions(nakes);
+    }).catch((error) => {
+      assertCaughtError(error);
+      if (active) showToast.error('Gagal memuat pilihan MSO dan Nakes');
+    });
+    return () => { active = false; };
+  }, [branchId]);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -128,6 +149,8 @@ export default function StaffPerformanceDetailPage() {
         branchId,
         position: positionFilter,
         completion: completionFilter,
+        msoId: msoId || undefined,
+        nakesId: nakesId || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         page,
@@ -141,7 +164,7 @@ export default function StaffPerformanceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, completionFilter, endDate, limit, page, positionFilter, staffId, startDate]);
+  }, [branchId, completionFilter, endDate, limit, msoId, nakesId, page, positionFilter, staffId, startDate]);
 
   useEffect(() => {
     void fetchHistory();
@@ -158,6 +181,8 @@ export default function StaffPerformanceDetailPage() {
         branchId,
         position: positionFilter,
         completion: completionFilter,
+        msoId: msoId || undefined,
+        nakesId: nakesId || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
@@ -282,7 +307,7 @@ export default function StaffPerformanceDetailPage() {
       )}
 
       {/* Filters */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-end gap-4">
+      <div className="mb-6 flex flex-col md:flex-row md:flex-wrap md:items-end gap-4">
         <select
           value={positionFilter}
           onChange={(e) => { setPositionFilter(e.target.value as typeof positionFilter); setPage(1); }}
@@ -307,11 +332,31 @@ export default function StaffPerformanceDetailPage() {
           <option value="complete">Sudah Lengkap</option>
         </select>
 
+        <select
+          value={msoId}
+          onChange={(e) => { setMsoId(e.target.value); setPage(1); }}
+          aria-label="Filter nama MSO"
+          className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-[180px]"
+        >
+          <option value="">Semua MSO</option>
+          {msoOptions.map((person) => <option key={person.userId} value={person.userId}>{person.fullName}</option>)}
+        </select>
+
+        <select
+          value={nakesId}
+          onChange={(e) => { setNakesId(e.target.value); setPage(1); }}
+          aria-label="Filter nama Nakes"
+          className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-[180px]"
+        >
+          <option value="">Semua Nakes</option>
+          {nakesOptions.map((person) => <option key={person.userId} value={person.userId}>{person.fullName}</option>)}
+        </select>
+
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
             Tanggal sesi terapi
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
               <input
@@ -349,7 +394,7 @@ export default function StaffPerformanceDetailPage() {
         <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Riwayat Sesi Terapi</h2>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Daftar sesi terapi yang diikuti oleh staff ini
+            Daftar sesi terapi yang diikuti oleh staff ini{!loading && data ? ` · ${data.total} hasil sesuai filter` : ''}
           </p>
         </div>
 
@@ -367,9 +412,9 @@ export default function StaffPerformanceDetailPage() {
                 <Activity className="h-8 w-8 text-neutral-400" />
               </div>
               <div>
-                <p className="text-neutral-900 dark:text-white font-medium">Tidak ada riwayat sesi</p>
+                <p className="text-neutral-900 dark:text-white font-medium">{msoId || nakesId || positionFilter !== 'all' || completionFilter !== 'all' || startDate || endDate ? 'Tidak ada sesi sesuai filter' : 'Tidak ada riwayat sesi'}</p>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Staff ini belum memiliki riwayat sesi terapi
+                  {msoId || nakesId || positionFilter !== 'all' || completionFilter !== 'all' || startDate || endDate ? 'Coba ubah pilihan MSO, Nakes, posisi, status, atau tanggal.' : 'Staff ini belum memiliki riwayat sesi terapi'}
                 </p>
               </div>
             </div>
@@ -422,6 +467,10 @@ export default function StaffPerformanceDetailPage() {
                         <Building2 size={14} />
                         <span>{session.branch.name}</span>
                       </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      <span>MSO: <strong className="text-neutral-700 dark:text-neutral-200">{session.mso?.fullName || '-'}</strong></span>
+                      <span>Nakes: <strong className="text-neutral-700 dark:text-neutral-200">{session.nakes?.map((person) => person.fullName).join(', ') || '-'}</strong></span>
                     </div>
                   </div>
 

@@ -534,6 +534,49 @@ describe('staff performance service', () => {
     );
   });
 
+  it('filters history and pagination totals by named MSO and Nakes, including additional nurses', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('doctor-1', 'Doctor One'),
+      branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([{
+      id: 'session-1', sessionCode: 'SES-001', infusKe: 1, pelaksanaan: 'ON_SITE',
+      treatmentDate: new Date('2026-08-08T03:00:00.000Z'), isCompleted: true,
+      doctorId: 'doctor-1', nurseId: 'nurse-1', adminLayananId: 'mso-1',
+      adminLayanan: { id: 'mso-1', staffCode: 'MSO-1', email: 'mso@example.test', profile: { fullName: 'MSO One' } },
+      nurse: { id: 'nurse-1', staffCode: 'NAKES-1', email: 'nurse@example.test', profile: { fullName: 'Nakes One' } },
+      sessionDoctors: [],
+      sessionNurses: [{ nurseId: 'nurse-2', nurse: { id: 'nurse-2', staffCode: 'NAKES-2', email: 'nurse2@example.test', profile: { fullName: 'Nakes Two' } } }],
+      branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+      encounter: {
+        member: { memberNo: 'MEM-001', user: { profile: { fullName: 'Member One' } } },
+        memberPackage: { packageType: 'BASIC', boosterType: null },
+      },
+    }] as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(1 as any);
+
+    const result = await getStaffSessionHistoryService(
+      'doctor-1',
+      { branchId: 'branch-1', msoId: 'mso-1', nakesId: 'nurse-2' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    const expectedWhere = expect.objectContaining({ AND: expect.arrayContaining([
+      expect.objectContaining({ branchId: 'branch-1' }),
+      { adminLayananId: 'mso-1' },
+      { OR: [{ nurseId: 'nurse-2' }, { sessionNurses: { some: { nurseId: 'nurse-2' } } }] },
+    ]) });
+    expect(mockPrisma.treatmentSession.findMany.mock.calls[0][0].where).toEqual(expectedWhere);
+    expect(mockPrisma.treatmentSession.count.mock.calls[0][0].where).toEqual(expectedWhere);
+    expect(result.total).toBe(1);
+    expect(result.sessions[0]).toMatchObject({
+      mso: { id: 'mso-1', fullName: 'MSO One' },
+      nakes: [{ id: 'nurse-1', fullName: 'Nakes One' }, { id: 'nurse-2', fullName: 'Nakes Two' }],
+    });
+  });
+
   it('exports a formatted workbook with active filters and totals', async () => {
     mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
     mockPrisma.treatmentSession.findMany.mockResolvedValue([sessionForDoctor('doctor-1')] as any);
@@ -604,6 +647,8 @@ describe('staff performance service', () => {
         doctorId: 'doctor-1',
         nurseId: 'nurse-1',
         adminLayananId: 'admin-1',
+        adminLayanan: { id: 'admin-1', staffCode: 'MSO-1', email: 'admin@example.test', profile: { fullName: 'Admin One' } },
+        nurse: { id: 'nurse-1', staffCode: 'NAKES-1', email: 'nurse@example.test', profile: { fullName: 'Nurse One' } },
         sessionDoctors: [],
         sessionNurses: [],
         branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
@@ -703,7 +748,7 @@ describe('staff performance service', () => {
 
     const result = await exportStaffPerformanceDetailService(
       'doctor-1',
-      { branchId: 'branch-1', position: 'all', startDate: '2026-08-01', endDate: '2026-08-10' },
+      { branchId: 'branch-1', position: 'all', msoId: 'admin-1', nakesId: 'nurse-1', startDate: '2026-08-01', endDate: '2026-08-10' },
       Role.SUPER_ADMIN,
       null,
     );
@@ -721,6 +766,13 @@ describe('staff performance service', () => {
       'Klinis & Evaluasi',
     ]);
     expect(workbook.getWorksheet('Detail Sesi')?.getCell('X8').value).toBe('NaCl 0,9%');
+    expect(workbook.getWorksheet('Detail Sesi')?.getCell('C4').value).toContain('MSO: Admin One / Nakes: Nurse One');
+    expect(mockPrisma.treatmentSession.findMany.mock.calls[0][0].where).toEqual(expect.objectContaining({
+      AND: expect.arrayContaining([
+        { adminLayananId: 'admin-1' },
+        { OR: [{ nurseId: 'nurse-1' }, { sessionNurses: { some: { nurseId: 'nurse-1' } } }] },
+      ]),
+    }));
     expect(workbook.getWorksheet('Cairan & Dosis')?.getCell('F8').value).toBe('IFA + NO 2,5 ml (250 ml)');
     expect(workbook.getWorksheet('Cairan & Dosis')?.getCell('H9').value).toBe(5);
     expect(workbook.getWorksheet('Material')?.getCell('G8').value).toBe('Infus Set');
