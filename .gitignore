@@ -287,3 +287,6 @@ apps/api/scripts/*
 !apps/api/scripts/activate-zoho-canary.ts
 !apps/api/scripts/drain-zoho-canary.ts
 !apps/api/scripts/hold-zoho-sync.ts
+
+# OpenClaw local workspace state
+/integrations/openclaw/rain-workspace/openclaw-workspace-state.json
