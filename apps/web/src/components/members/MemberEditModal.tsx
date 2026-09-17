@@ -112,7 +112,6 @@ export default function MemberEditModal({
   const hasStoredValue = (value: unknown) =>
     value !== null && value !== undefined && (typeof value !== 'string' || value.trim().length > 0);
   const managerFieldLocked = (value: unknown) => isAdminManagerEmptyOnly && hasStoredValue(value);
-  const existingFullName = memberData?.profile?.fullName || memberData?.fullName;
   const existingUsername = memberData?.user?.username || memberData?.username || memberData?.user?.email || memberData?.email;
   const existingPhone = memberData?.user?.phone || memberData?.phone || memberData?.profile?.phone;
   const existingGender = memberData?.profile?.gender || memberData?.jenisKelamin;
@@ -265,7 +264,7 @@ export default function MemberEditModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.phone.trim() && formData.phone.replace(/\D/g, '').length < 10) {
+    if (!managerFieldLocked(existingPhone) && formData.phone.trim() && formData.phone.replace(/\D/g, '').length < 10) {
       showToast.error('Nomor telepon minimal 10 digit');
       return;
     }
@@ -276,7 +275,7 @@ export default function MemberEditModal({
       if (action === 'create') {
         const createData: CreateMemberData = {
           branchId: branchId,
-          fullName: formData.fullName,
+          fullName: formData.fullName.trim(),
           memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
           birthDate: formData.birthDate || '',
@@ -305,7 +304,7 @@ export default function MemberEditModal({
         showToast.success('Member berhasil ditambahkan');
       } else if (action === 'edit' && memberData) {
         const updateData: UpdateMemberData = {
-          fullName: formData.fullName,
+          fullName: formData.fullName.trim(),
           isConsentToPhoto: formData.isConsentToPhoto,
         };
 
@@ -328,6 +327,22 @@ export default function MemberEditModal({
           updateData.nextIncentiveValue = formData.nextIncentiveValue;
         }
 
+        if (isAdminManagerEmptyOnly) {
+          // Do not resend locked legacy values (e.g. email-based usernames)
+          // when a manager only corrects a name or fills an empty field.
+          const lockedFields: Array<[keyof UpdateMemberData, unknown]> = [
+            ['phone', existingPhone], ['username', existingUsername],
+            ['address', existingAddress], ['birthPlace', existingBirthPlace],
+            ['birthDate', existingBirthDate], ['gender', existingGender],
+            ['emergencyContact', existingEmergencyContact], ['emergencyContactPhone', existingEmergencyContact],
+            ['firstIncentiveType', memberData.firstIncentiveType], ['firstIncentiveValue', memberData.firstIncentiveValue],
+            ['nextIncentiveType', memberData.nextIncentiveType], ['nextIncentiveValue', memberData.nextIncentiveValue],
+          ];
+          for (const [key, value] of lockedFields) if (managerFieldLocked(value)) delete updateData[key];
+          delete updateData.isConsentToPhoto;
+          delete updateData.referralCodeId;
+          delete updateData.memberPassword;
+        }
         await updateMemberApi(memberId!, updateData);
         showToast.success('Member berhasil diupdate');
       }
@@ -386,7 +401,7 @@ export default function MemberEditModal({
           <div className="space-y-6">
             {isAdminManagerEmptyOnly && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                Admin Manager hanya dapat melengkapi field yang masih kosong. Field yang sudah terisi dikunci.
+                Admin Manager dapat mengubah nama lengkap dan melengkapi field yang masih kosong. Field lain yang sudah terisi tetap dikunci.
               </div>
             )}
             
@@ -406,7 +421,8 @@ export default function MemberEditModal({
                     name="fullName"
                     value={formData.fullName}
                     onChange={handleInputChange}
-                    disabled={managerFieldLocked(existingFullName)}
+                    disabled={loading}
+                    minLength={3}
                     required
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="Masukkan nama lengkap"

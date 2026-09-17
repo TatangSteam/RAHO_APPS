@@ -1,6 +1,8 @@
 import { prisma } from '../../../../lib/prisma';
 import { MemberUpdateService } from '../member-update.service';
 import { Role } from '@prisma/client';
+import { logAudit } from '../../../../utils/auditLog';
+import { updateMemberSchema } from '../../members.schema';
 
 jest.mock('../../../../lib/prisma', () => ({
   prisma: {
@@ -22,6 +24,7 @@ jest.mock('../../../../utils/auditLog', () => ({
 jest.mock('../../../../config/minio', () => ({
   deleteFileByUrl: jest.fn(),
 }));
+jest.mock('../../../zoho/zoho.contact.service', () => ({ enqueueContactSafely: jest.fn() }));
 
 const prismaMock = prisma as any;
 
@@ -107,6 +110,32 @@ describe('MemberUpdateService duplicate checks', () => {
     });
 
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('lets Admin Manager correct an existing name without changing member identity and audits the change', async () => {
+    const original = await prismaMock.member.findUnique();
+    const profileUpdate = jest.fn();
+    const memberUpdate = jest.fn();
+    const userUpdate = jest.fn();
+    const updated = { ...original, registrationBranchId: 'branch-1', createdAt: new Date(), updatedAt: new Date(), user: { ...original.user, profile: { ...original.user.profile, fullName: 'Nama Baru' } } };
+    prismaMock.member.findMany.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) => work({ userProfile: { update: profileUpdate }, member: { update: memberUpdate, findUnique: jest.fn().mockResolvedValue(updated) }, user: { update: userUpdate } }));
+    const result = await new MemberUpdateService().updateMember('member-1', { fullName: ' Nama   Baru ' }, 'manager-1', Role.ADMIN_MANAGER);
+    expect(result.fullName).toBe('Nama Baru');
+    expect(profileUpdate).toHaveBeenCalledWith({ where: { userId: 'user-1' }, data: { fullName: 'Nama Baru' } });
+    expect(memberUpdate).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ userId: 'manager-1', resourceId: 'member-1', meta: { changes: { fullName: ' Nama   Baru ' } } }));
+  });
+
+  it('still refuses duplicate name and birth date for Admin Manager', async () => {
+    prismaMock.member.findMany.mockResolvedValue([{ user: { profile: { fullName: 'Nama Baru' } } }]);
+    await expect(new MemberUpdateService().updateMember('member-1', { fullName: 'Nama Baru' }, 'manager-1', Role.ADMIN_MANAGER)).rejects.toMatchObject({ status: 409, code: 'MEMBER_NAME_BIRTH_DATE_EXISTS' });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '  ', ' A '])('refuses an invalid name %j at the API boundary', (fullName) => {
+    expect(updateMemberSchema.safeParse({ fullName }).success).toBe(false);
   });
 
   it('allows an Admin Manager request that only fills an empty field', async () => {

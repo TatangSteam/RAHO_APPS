@@ -287,6 +287,27 @@ export class MembersController {
       const validated = updateMemberSchema.parse(req.body);
       const { userId, role } = req.user!;
 
+      if (role === Role.ADMIN_MANAGER) {
+        if (req.user!.adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
+          throw { status: 403, code: 'ADMIN_MANAGER_MEMBER_VIEW_ONLY', message: 'Akses Admin Manager ini hanya untuk melihat data member.' };
+        }
+        const member = await prisma.member.findUnique({
+          where: { id: memberId },
+          select: { registrationBranchId: true, branchAccesses: { select: { branchId: true } } },
+        });
+        if (!member) throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan.' };
+        const assignment = await prisma.managerBranch.findFirst({
+          where: {
+            userId,
+            branchId: { in: Array.from(new Set([member.registrationBranchId, ...member.branchAccesses.map((access) => access.branchId)])) },
+            accessScope: 'FULL',
+            branch: { isActive: true },
+          },
+          select: { id: true },
+        });
+        if (!assignment) throw { status: 403, code: 'BRANCH_ACCESS_DENIED', message: 'Anda tidak memiliki akses edit ke cabang member ini.' };
+      }
+
       const result = await membersService.updateMember(memberId, validated, userId, role as Role);
 
       sendSuccess(res, result);

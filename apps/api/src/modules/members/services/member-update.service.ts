@@ -356,7 +356,7 @@ export class MemberUpdateService {
       delete effective[key];
     };
 
-    protect('fullName', member.user.profile?.fullName, 'Nama lengkap', cleanMemberName(effective.fullName ?? ''));
+    // Managers may correct member names. Other populated fields remain locked.
     protect('nik', member.nik, 'NIK');
     protect('birthPlace', member.tempatLahir, 'Tempat lahir');
     protect('birthDate', member.dateOfBirth, 'Tanggal lahir');
@@ -395,7 +395,7 @@ export class MemberUpdateService {
       throw {
         status: 403,
         code: 'ADMIN_MANAGER_MEMBER_FIELD_LOCKED',
-        message: `Admin Manager hanya dapat mengisi data member yang masih kosong. Field terkunci: ${Array.from(blocked).join(', ')}.`,
+        message: `Admin Manager dapat mengubah nama dan mengisi data member yang masih kosong. Field terkunci: ${Array.from(blocked).join(', ')}.`,
       };
     }
 

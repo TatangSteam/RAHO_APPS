@@ -231,7 +231,7 @@ export const createMemberSchema = z.object({
 }).passthrough(); // Allow additional fields (like psp, photo) to pass through without validation
 
 export const updateMemberSchema = z.object({
-  fullName: z.string().min(3).optional(),
+  fullName: z.string().trim().min(3, 'Nama lengkap minimal 3 karakter').optional(),
   nik: z.string().optional(),
   birthPlace: z.string().optional(),
   birthDate: z.string().optional(),
