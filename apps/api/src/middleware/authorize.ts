@@ -185,6 +185,7 @@ export const ALLSTAFF: Role[] = [
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
   Role.DOCTOR,
   Role.NURSE,
 ];

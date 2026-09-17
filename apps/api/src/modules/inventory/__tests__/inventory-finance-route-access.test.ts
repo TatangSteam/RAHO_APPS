@@ -60,8 +60,8 @@ describe('Finance & Logistics Controller inventory route access', () => {
     expect(response.status).not.toHaveBeenCalled();
   });
 
-  it('continues to reject members from inventory ledger balances', async () => {
-    const guard = getRoleGuard('/ledger/balances');
+  it.each(readRoutes)('continues to reject members from %s', async (path) => {
+    const guard = getRoleGuard(path);
     const request = {
       user: { role: Role.MEMBER },
       params: {},

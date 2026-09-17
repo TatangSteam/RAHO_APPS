@@ -12,7 +12,7 @@ import { TreatmentBomController } from './treatment-bom.controller';
 import { InventoryControlController } from './inventory-control.controller';
 import { LogisticsReportController } from './logistics-report.controller';
 import { authenticate } from '../../middleware/authenticate';
-import { authorize } from '../../middleware/authorize';
+import { ALLSTAFF, authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
 import { uploadPaymentProof, uploadShipmentReceipt } from '../../middleware/upload';
 import { Role } from '@prisma/client';
@@ -74,16 +74,6 @@ const goodsReceiptController = new GoodsReceiptController();
 const treatmentBomController = new TreatmentBomController();
 const inventoryControlController = new InventoryControlController();
 const logisticsReportController = new LogisticsReportController();
-
-const ALLSTAFF: Role[] = [
-  Role.SUPER_ADMIN,
-  Role.ADMIN_MANAGER,
-  Role.ADMIN_CABANG,
-  Role.ADMIN_LAYANAN,
-  Role.ADMIN_LOGISTIK,
-  Role.DOCTOR,
-  Role.NURSE,
-];
 
 const ADMIN_ROLES: Role[] = [
   Role.SUPER_ADMIN,
