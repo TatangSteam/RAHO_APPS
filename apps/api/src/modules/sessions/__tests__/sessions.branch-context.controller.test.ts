@@ -27,6 +27,8 @@ jest.mock('../sessions.service', () => ({
     getSessionById: jest.fn(),
     getAllSessions: jest.fn(),
     createInfusion: jest.fn(),
+    createEvaluation: jest.fn(),
+    updateEvaluation: jest.fn(),
     updateSessionDetails: jest.fn(),
     updateTherapyPlanSetForSession: jest.fn(),
   })),
@@ -48,6 +50,65 @@ describe('SessionsController branch context', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  const doctorId = 'clxxxxxxxxxxxxxxxxxxxxxxx';
+  const incompleteSession = {
+    branchId: 'session-branch', doctorId, sessionDoctors: [], sessionNurses: [],
+    adminLayananId: 'mso-1', nurseId: 'nurse-1', encounter: { diagnoses: [] },
+    therapyPlan: null, vitalSigns: [], infusion: null, materials: [], skipInventoryConsumption: false,
+  };
+  const doctorRequest = (body: Record<string, unknown>) => ({
+    params: { sessionId: 'session-1' }, body,
+    user: { userId: doctorId, role: Role.DOCTOR, branchId: 'session-branch', branches: [] },
+  } as unknown as Request);
+
+  it.each(['createEvaluation', 'updateEvaluation'] as const)('assigned doctor can %s before previous steps are filled', async (method) => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue(incompleteSession);
+    sessionsServiceMock[method].mockResolvedValue({ id: 'evaluation-1' });
+    const req = doctorRequest({ subjective: 'Catatan dokter', writtenBy: doctorId });
+    const res = {} as Response;
+    const next = jest.fn();
+    await controller[method](req, res, next);
+    expect(sessionsServiceMock[method]).toHaveBeenCalledWith('session-1', expect.objectContaining({ subjective: 'Catatan dokter' }), doctorId);
+    expect(sendError).not.toHaveBeenCalled();
+    expect(sendSuccess).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('additional assigned doctor can save SOAP early', async () => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({ ...incompleteSession, doctorId: 'primary-other', sessionDoctors: [{ id: 'assignment' }] });
+    sessionsServiceMock.createEvaluation.mockResolvedValue({ id: 'evaluation-1' });
+    await controller.createEvaluation(doctorRequest({ assessment: 'Catatan dokter', writtenBy: doctorId }), {} as Response, jest.fn());
+    expect(sessionsServiceMock.createEvaluation).toHaveBeenCalled();
+    expect(sendError).not.toHaveBeenCalled();
+  });
+
+  it.each(['createEvaluation', 'updateEvaluation', 'createInfusion'] as const)('unassigned doctor cannot %s even in the same branch', async (method) => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({ ...incompleteSession, doctorId: 'other-doctor' });
+    const res = {} as Response;
+    await controller[method](doctorRequest(method === 'createInfusion' ? { ifa250: 1 } : { subjective: 'Catatan', writtenBy: doctorId }), res, jest.fn());
+    expect(sessionsServiceMock[method]).not.toHaveBeenCalled();
+    expect(sendError).toHaveBeenCalledWith(res, 403, 'DOCTOR_NOT_ASSIGNED', expect.any(String));
+  });
+
+  it.each([false, true])('assigned doctor can save infusion with missing earlier steps (additional=%s)', async (additional) => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({ ...incompleteSession, ...(additional ? { doctorId: 'primary-other', sessionDoctors: [{ id: 'assignment' }] } : {}) });
+    sessionsServiceMock.createInfusion.mockResolvedValue({ id: 'infusion-1' });
+    await controller.createInfusion(doctorRequest({ ifa250: 1 }), {} as Response, jest.fn());
+    expect(sessionsServiceMock.createInfusion).toHaveBeenCalledWith('session-1', expect.objectContaining({ ifa250: 1 }), doctorId, 'session-branch');
+    expect(sendError).not.toHaveBeenCalled();
+  });
+
+  it.each([Role.NURSE, Role.ADMIN_LAYANAN])('early SOAP save remains blocked for %s', async (role) => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue(incompleteSession);
+    const req = doctorRequest({ subjective: 'Catatan', writtenBy: doctorId });
+    req.user.role = role;
+    req.user.userId = role === Role.NURSE ? 'nurse-1' : 'mso-1';
+    const res = {} as Response;
+    await controller.createEvaluation(req, res, jest.fn());
+    expect(sessionsServiceMock.createEvaluation).not.toHaveBeenCalled();
+    expect(sendError).toHaveBeenCalledWith(res, 409, 'DOCTOR_EVALUATION_NOT_READY', expect.any(String));
   });
 
   it('uses the session branch when SUPER_ADMIN edits infusion data', async () => {

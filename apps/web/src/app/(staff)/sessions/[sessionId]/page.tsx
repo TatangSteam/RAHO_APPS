@@ -27,6 +27,7 @@ import WhatsAppReportCard from '@/components/sessions/WhatsAppReportCard';
 import { SessionWorkflowDraftProvider, type SessionDraftKey } from '@/components/sessions/SessionWorkflowDraftContext';
 import {
   SESSION_STEP_OWNER,
+  areSessionStepPrerequisitesMet,
   buildCompletionSummary,
   canActivateSessionMaterials,
   canEditSessionStep,
@@ -756,20 +757,9 @@ export default function SessionDetailPage() {
   );
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
-  // All assigned session participants may view every step. These prerequisites
-  // only control editing, preserving the required clinical sequence.
-  const areStepPrerequisitesMet = (step: number): boolean => {
-    if (step === 1) return true; // Diagnosis always accessible
-    if (step === 2) return steps.step1_diagnosis; // Therapy Plan needs diagnosis
-    if (step === 3) return steps.step2_therapyPlan; // Vital Before needs therapy plan
-    if (step === 4) return steps.step2_therapyPlan && steps.step3_vitalBefore; // Infusion needs therapy plan and vital before
-    if (step === 5) return steps.step4_infusion; // Materials needs infusion
-    if (step === 6) return steps.step5_materials; // Photo needs materials (optional step)
-    if (step === 7) return steps.step5_materials; // Vital After needs materials (photo is optional)
-    if (step === 8) return steps.step7_vitalAfter; // Complaints & Recommendations needs vital after (optional step)
-    if (step === 9) return steps.step7_vitalAfter; // Evaluation needs vital after (step 8 is optional)
-    return false;
-  };
+  const areStepPrerequisitesMet = (step: number): boolean => (
+    areSessionStepPrerequisitesMet(user?.role, step, steps)
+  );
 
   const hasViewableStepData = (step: number): boolean => {
     if (step === 1) return Boolean(session.diagnosis);

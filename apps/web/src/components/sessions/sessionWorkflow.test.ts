@@ -1,5 +1,6 @@
 import {
   buildCompletionSummary,
+  areSessionStepPrerequisitesMet,
   canActivateSessionMaterials,
   canEditSessionStep,
   canFinalizeSession,
@@ -20,6 +21,28 @@ const completeSteps: StepCompletion = {
 };
 
 describe('sessionWorkflow', () => {
+  const emptySteps = Object.fromEntries(Object.keys(completeSteps).map((key) => [key, false])) as unknown as StepCompletion;
+
+  it('dokter dapat mengisi infus aktual dan evaluasi tanpa melengkapi langkah sebelumnya', () => {
+    for (const step of [4, 9]) {
+      expect(canEditSessionStep('DOCTOR', step)).toBe(true);
+      expect(areSessionStepPrerequisitesMet('DOCTOR', step, emptySteps)).toBe(true);
+    }
+    expect(canEditSessionStep('DOCTOR', 3)).toBe(false);
+    expect(canEditSessionStep('DOCTOR', 5)).toBe(false);
+    expect(areSessionStepPrerequisitesMet('DOCTOR', 2, emptySteps)).toBe(false);
+    expect(getMissingRequiredSteps(emptySteps)).toHaveLength(7);
+  });
+
+  it.each(['NURSE', 'ADMIN_LAYANAN', 'SUPER_ADMIN'] as const)('prasyarat %s dan langkah lain tetap berlaku', (role) => {
+    expect(areSessionStepPrerequisitesMet(role, 4, emptySteps)).toBe(false);
+    expect(areSessionStepPrerequisitesMet(role, 9, emptySteps)).toBe(false);
+    expect(areSessionStepPrerequisitesMet(role, 4, completeSteps)).toBe(true);
+    expect(areSessionStepPrerequisitesMet(role, 9, completeSteps)).toBe(true);
+    expect(areSessionStepPrerequisitesMet(role, 5, emptySteps)).toBe(false);
+    expect(areSessionStepPrerequisitesMet(role, 7, emptySteps)).toBe(false);
+  });
+
   it('mengizinkan Nakes dan MSO mengisi seluruh workflow sesi', () => {
     expect(canEditSessionStep('DOCTOR', 1)).toBe(true);
     expect(canEditSessionStep('DOCTOR', 9)).toBe(true);

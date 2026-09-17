@@ -133,7 +133,9 @@ export class SessionsController {
         (session.skipInventoryConsumption || session.materials.length > 0) &&
         session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
 
-      if (!prerequisitesReady) {
+      // Assigned doctors can save SOAP independently of operational steps.
+      // Assignment checks above and completion checks remain unchanged.
+      if (!prerequisitesReady && user.role !== Role.DOCTOR) {
         throw {
           status: 409,
           code: 'DOCTOR_EVALUATION_NOT_READY',
@@ -891,6 +893,20 @@ export class SessionsController {
       }
 
       const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+
+      if (req.user!.role === Role.DOCTOR) {
+        const session = await prisma.treatmentSession.findUnique({
+          where: { id: sessionId },
+          select: {
+            doctorId: true,
+            sessionDoctors: { where: { doctorId: req.user!.userId }, select: { id: true } },
+          },
+        });
+        if (!session) return sendError(res, 404, 'SESSION_NOT_FOUND', 'Sesi tidak ditemukan');
+        if (session.doctorId !== req.user!.userId && session.sessionDoctors.length === 0) {
+          return sendError(res, 403, 'DOCTOR_NOT_ASSIGNED', 'Anda bukan dokter yang ditugaskan pada sesi ini');
+        }
+      }
 
       const result = await sessionsService.createInfusion(sessionId, validation.data, req.user!.userId, branchId);
       return sendSuccess(res, result, 201);

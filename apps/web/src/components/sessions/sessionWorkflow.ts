@@ -5,7 +5,7 @@ export const SESSION_STEP_OWNER: Record<number, string> = {
   1: 'Dokter',
   2: 'Dokter',
   3: 'Nakes',
-  4: 'Nakes',
+  4: 'Nakes / Dokter',
   5: 'Nakes',
   6: 'Nakes',
   7: 'Nakes',
@@ -19,7 +19,21 @@ export function canEditSessionStep(role: Role | undefined, step: number): boolea
   if (!role) return false;
   if (MANAGER_ROLES.includes(role)) return true;
   if (role === 'NURSE' || role === 'ADMIN_LAYANAN') return step >= 1 && step <= 9;
-  if (step === 1 || step === 2 || step === 9) return role === 'DOCTOR';
+  if (step === 1 || step === 2 || step === 4 || step === 9) return role === 'DOCTOR';
+  return false;
+}
+
+export function areSessionStepPrerequisitesMet(role: Role | undefined, step: number, steps: StepCompletion): boolean {
+  // Doctors may document these two sections independently. This does not
+  // mark earlier steps complete or relax session finalization requirements.
+  if (role === 'DOCTOR' && (step === 4 || step === 9)) return true;
+  if (step === 1) return true;
+  if (step === 2) return steps.step1_diagnosis;
+  if (step === 3) return steps.step2_therapyPlan;
+  if (step === 4) return steps.step2_therapyPlan && steps.step3_vitalBefore;
+  if (step === 5) return steps.step4_infusion;
+  if (step === 6 || step === 7) return steps.step5_materials;
+  if (step === 8 || step === 9) return steps.step7_vitalAfter;
   return false;
 }
 
