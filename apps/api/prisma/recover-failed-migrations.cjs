@@ -1,7 +1,8 @@
 const { spawnSync } = require('node:child_process');
-const { existsSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { PrismaClient } = require('@prisma/client');
+const { ALIGNMENT_MIGRATIONS, buildAlignmentRepair, isKnownAlignmentFailure } = require('./schema-alignment-recovery.cjs');
 
 const RECOVERABLE_MIGRATION = '20260722100000_add_deferred_revenue_recognition';
 const REPAIR_MIGRATION = '20260722150000_recover_deferred_revenue_recognition';
@@ -22,53 +23,71 @@ async function findFailedMigrations(prisma) {
   }
 }
 
-async function main() {
-  const repairPath = join(
-    process.cwd(),
-    'prisma',
-    'migrations',
-    REPAIR_MIGRATION,
-    'migration.sql',
-  );
-  if (!existsSync(repairPath)) {
-    throw new Error(`Repair migration ${REPAIR_MIGRATION} is missing; refusing automatic recovery.`);
-  }
+function runPrisma(args) {
+  const windows = process.platform === 'win32';
+  const executable = windows ? process.execPath : 'npx';
+  const command = windows ? [require.resolve('prisma/build/index.js'), ...args] : ['prisma', ...args];
+  const resolution = spawnSync(executable, command, { stdio: 'inherit', env: process.env });
+  if (resolution.error) throw resolution.error;
+  if (resolution.status !== 0) throw new Error(`Prisma ${args.join(' ')} exited with code ${resolution.status}.`);
+}
 
-  const prisma = new PrismaClient();
+async function recoverFailedMigrations(prisma, options = {}) {
+  const root = options.root || process.cwd();
+  const resolveMigration = options.runPrisma || runPrisma;
   const failed = await findFailedMigrations(prisma);
-  await prisma.$disconnect();
   if (failed.length === 0) {
     console.log('No unresolved failed migrations found.');
     return;
   }
 
-  const unexpected = failed.filter((row) => row.migration_name !== RECOVERABLE_MIGRATION);
-  if (unexpected.length > 0) {
-    for (const row of unexpected) {
-      console.error(`Unrecognized failed migration: ${row.migration_name}`);
-      if (row.logs) console.error(String(row.logs));
+  // Build and validate ALL plans before any DDL or migration resolution.
+  const plans = failed.map((row) => {
+    if (row.migration_name === RECOVERABLE_MIGRATION) return { row, statements: null };
+    if (Object.prototype.hasOwnProperty.call(ALIGNMENT_MIGRATIONS, row.migration_name)) {
+      const source = readFileSync(join(root, 'prisma', 'migrations', row.migration_name, 'migration.sql'), 'utf8');
+      if (isKnownAlignmentFailure(row, source)) return { row, statements: buildAlignmentRepair(row.migration_name, source) };
     }
-    throw new Error('Automatic migration recovery refused for an unrecognized failure.');
+    throw new Error(`Automatic migration recovery refused for unrecognized failure: ${row.migration_name}`);
+  });
+  const repairPath = join(
+    root,
+    'prisma',
+    'migrations',
+    REPAIR_MIGRATION,
+    'migration.sql',
+  );
+  if (plans.some((plan) => !plan.statements) && !existsSync(repairPath)) {
+    throw new Error(`Repair migration ${REPAIR_MIGRATION} is missing; refusing automatic recovery.`);
+  }
+  const alignmentReconciliation = join(root, 'prisma', 'migrations', '20260917100000_reconcile_schema_alignment_indexes', 'migration.sql');
+  if (plans.some((plan) => plan.statements) && !existsSync(alignmentReconciliation)) {
+    throw new Error('Final schema alignment reconciliation migration is missing; refusing recovery.');
   }
 
-  const failedRow = failed[0];
-  console.warn(`Recovering known failed migration: ${RECOVERABLE_MIGRATION}`);
-  if (failedRow.logs) console.warn(String(failedRow.logs));
-  console.warn(`Schema and data will be reconciled by ${REPAIR_MIGRATION}.`);
-
-  const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const resolution = spawnSync(
-    executable,
-    ['prisma', 'migrate', 'resolve', '--applied', RECOVERABLE_MIGRATION],
-    { stdio: 'inherit', env: process.env },
-  );
-  if (resolution.error) throw resolution.error;
-  if (resolution.status !== 0) {
-    throw new Error(`Prisma migrate resolve exited with code ${resolution.status}.`);
+  for (const { row, statements } of plans) {
+    console.warn(`Recovering known failed migration: ${row.migration_name}`);
+    if (statements) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '5s'");
+        await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '30s'");
+        for (const statement of statements) await tx.$executeRawUnsafe(statement);
+      }, { maxWait: 5000, timeout: 60000 });
+      console.log(`Reconciled ${statements.length} schema operations before migration resolution; future-table indexes are handled by the final reconciliation migration.`);
+    } else {
+      console.warn(`Schema and data will be reconciled by ${REPAIR_MIGRATION}.`);
+    }
+    // Never mark an alignment migration applied unless its entire repair
+    // committed successfully. If resolve fails, the repair is safe to replay.
+    await resolveMigration(['migrate', 'resolve', '--applied', row.migration_name]);
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+async function main() {
+  const prisma = new PrismaClient();
+  try { await recoverFailedMigrations(prisma); }
+  finally { await prisma.$disconnect(); }
+}
+
+module.exports = { recoverFailedMigrations, findFailedMigrations };
+if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1; });
