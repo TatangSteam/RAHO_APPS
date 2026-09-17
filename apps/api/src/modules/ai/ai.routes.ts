@@ -9,6 +9,7 @@ import { logger } from '@lib/logger';
 import { chatBody, compareQuery, overdueQuery, performanceQuery, tasksQuery, todayQuery } from './ai.schema';
 import { compareMyPerformance, getMyPerformance, getMyTasks } from './ai.service';
 import { chatThroughOpenClaw, resolveOpenClawSession } from './openclaw.service';
+import { envelope } from './ai.service';
 
 export const aiRouter = Router();
 aiRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -58,6 +59,7 @@ aiRouter.use(rateLimit({
 const handle = (work: (req: Request) => Promise<unknown>) => async (req: Request, res: Response, next: NextFunction) => {
   try { res.json(await work(req)); } catch (error) { next(error); }
 };
+aiRouter.get('/me', handle(async (req) => envelope(req.user, new Date())));
 aiRouter.get('/me/performance/today', handle((req) => {
   todayQuery.parse(req.query);
   return getMyPerformance(req.user, { period: 'today' });

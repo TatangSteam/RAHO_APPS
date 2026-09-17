@@ -10,6 +10,7 @@ const rangeFields = {
 };
 const range = object(rangeFields);
 const definitions = [
+  ['get_my_identity', 'identity', 'Nama tampilan dan identitas akun ERP yang sedang terautentikasi. Gunakan tool ini jika pengguna menanyakan nama atau akun yang sedang dipakai.', object({})],
   ['get_my_daily_performance', 'daily', 'Ringkasan task personal yang jatuh tempo hari ini dari ERP.', object({})],
   ['get_my_performance', 'performance', 'Ringkasan task personal untuk periode berdasarkan dueAt. Gunakan angka backend tanpa menghitung ulang.', range],
   ['compare_my_performance', 'compare', 'Bandingkan dua periode personal. Delta selalu A dikurangi B dan sudah dihitung ERP.', object({ periodA: range, periodB: range }, ['periodA', 'periodB'])],

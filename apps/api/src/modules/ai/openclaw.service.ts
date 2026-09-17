@@ -88,7 +88,16 @@ export async function chatThroughOpenClaw(
     body: JSON.stringify({
       model: `openclaw/${env.OPENCLAW_AGENT_ID}`,
       stream: false,
-      messages: [{ role: 'user', content: message }],
+      messages: [
+        {
+          role: 'system',
+          content: `Konteks akun tepercaya: pengguna yang sedang login bernama ${user.fullName}. Jika pengguna menanyakan namanya atau identitas akun yang sedang dipakai, jawab berdasarkan nama ini. Jangan menebak identitas lain.`,
+        },
+        {
+          role: 'user',
+          content: `[RAIN_AUTH_CONTEXT display_name="${user.fullName.replaceAll('"', '\\"')}"]\n${message}`,
+        },
+      ],
     }),
   });
   let body: OpenClawCompletion;

@@ -25,6 +25,9 @@ describe('OpenClaw ERP session bridge', () => {
     expect(headers.Authorization).toBe('Bearer test-gateway-token-value');
     expect(headers['x-openclaw-session-key']).toMatch(/^agent:rain:rain-erp-[a-f0-9]{32}$/);
     expect(String(init?.body)).not.toContain('user-1');
+    const payload = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
+    expect(payload.messages[0]).toEqual(expect.objectContaining({ role: 'system', content: expect.stringContaining('James') }));
+    expect(payload.messages[1]).toEqual({ role: 'user', content: '[RAIN_AUTH_CONTEXT display_name="James"]\nKinerja hari ini' });
     const key = headers['x-openclaw-session-key'].split(':').at(-1);
     expect(resolveOpenClawSession(key)).toEqual(user);
   });

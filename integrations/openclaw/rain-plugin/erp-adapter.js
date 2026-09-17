@@ -1,4 +1,5 @@
 const ROUTES = {
+  identity: '/api/v1/ai/me',
   daily: '/api/v1/ai/me/performance/today',
   performance: '/api/v1/ai/me/performance',
   compare: '/api/v1/ai/me/performance/compare',
@@ -60,6 +61,9 @@ function validatePerformance(value) {
 
 function validateBody(operation, body) {
   validateEnvelope(body);
+  if (operation === 'identity' && typeof body.user?.name !== 'string') {
+    throw new RainError('INVALID_RESPONSE', 'Identitas ERP tidak tersedia.');
+  }
   if (operation === 'daily' || operation === 'performance') validatePerformance(body.performance);
   if (operation === 'compare') {
     validatePerformance(body.periodA?.performance);
