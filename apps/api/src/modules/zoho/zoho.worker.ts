@@ -12,6 +12,7 @@ export type ZohoEventHandler = (event: IntegrationEvent) => Promise<unknown>;
 
 const handlers = new Map<string, ZohoEventHandler>();
 export const ZOHO_SYNC_EVENT_TYPES = [
+  'ZOHO_EXCEL_MASTER_IMPORTED',
   'TREATMENT_COMPLETED',
   'TREATMENT_COMPLETION_CANCELLED',
   'PARTNERSHIP_GOODS_SHIPPED',
@@ -52,6 +53,7 @@ export function calculateRetryAt(attemptNo: number, retryAfterMs?: number): Date
 }
 
 const MASTER_SYNC_EVENT_TYPES = [
+  'ZOHO_EXCEL_MASTER_IMPORTED',
   'PARTNERSHIP_CONTACT_UPSERTED',
   'MEMBER_CONTACT_UPSERTED',
   'SUPPLIER_CONTACT_UPSERTED',

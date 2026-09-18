@@ -33,8 +33,9 @@ import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { ZohoExistingDataGuide } from '@/components/zoho/ZohoExistingDataGuide';
+import { ZohoExcelImport } from '@/components/zoho/ZohoExcelImport';
 
-type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
+type Tab = 'connection' | 'excelImport' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 type ZohoDataOrigin = 'UNKNOWN' | 'ERP' | 'MANUAL_ZOHO';
 type ZohoManagementMode = 'REVIEW_REQUIRED' | 'ERP_MANAGED' | 'MANUAL_ONLY';
@@ -121,6 +122,7 @@ type SyncAttempt = {
   errorCode: string | null;
   errorMessage: string | null;
   startedAt: string;
+  responseSummary?: unknown;
 };
 type SyncEvent = {
   id: string;
@@ -898,6 +900,7 @@ export default function ZohoIntegrationPage() {
   const [goLive, setGoLive] = useState<GoLiveData | null>(null);
   const [canaryBranchIds, setCanaryBranchIds] = useState('');
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
+  const [importOnly, setImportOnly] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
@@ -920,10 +923,10 @@ export default function ZohoIntegrationPage() {
 
   const loadQueue = useCallback(async () => {
     const response = await api.get<{ data: QueueData }>('/integrations/zoho/events', {
-      params: { limit: 50, ...(statusFilter ? { status: statusFilter } : {}) },
+      params: { limit: 50, ...(statusFilter ? { status: statusFilter } : {}), ...(importOnly ? { eventType: 'ZOHO_EXCEL_MASTER_IMPORTED' } : {}) },
     });
     setQueue(response.data.data);
-  }, [statusFilter]);
+  }, [statusFilter, importOnly]);
 
   const loadDiscovery = useCallback(async () => {
     const response = await api.get<{ data: DiscoveryData }>('/integrations/zoho/discovery');
@@ -2019,6 +2022,7 @@ export default function ZohoIntegrationPage() {
       <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto border-b border-neutral-200 dark:border-neutral-700">
         {([
           ['connection', 'Koneksi', PlugZap],
+          ['excelImport', 'Impor Excel', FileInput],
           ['queue', 'Antrean Sinkronisasi', List],
           ['discovery', 'Master Zoho', Database],
           ['contacts', 'Customer & Vendor', Users],
@@ -2045,6 +2049,10 @@ export default function ZohoIntegrationPage() {
           </button>
         ))}
       </div>
+
+      {tab === 'excelImport' && <ZohoExcelImport canManage={canManageConnection} onViewQueue={() => {
+        setImportOnly(true); setStatusFilter(''); setTab('queue');
+      }} />}
 
       {tab === 'connection' && (
         <>
@@ -2112,10 +2120,13 @@ export default function ZohoIntegrationPage() {
                 {canManageConnection && (
                   <button
                     type="button"
-                    onClick={() => setShowZohoApiForm((value) => !value)}
+                    onClick={() => {
+                      setZohoApiForm((current) => ({ ...current, redirectUri: current.redirectUri === 'http://localhost:3000/api/zoho/callback' ? `${window.location.origin}/api/zoho/callback` : current.redirectUri }));
+                      setShowZohoApiForm((value) => !value);
+                    }}
                     className="mt-2 text-xs font-semibold text-violet-600 hover:underline"
                   >
-                    + Tambah API Zoho
+                    + Input kode API Zoho
                   </button>
                 )}
               </div>
@@ -2201,8 +2212,8 @@ export default function ZohoIntegrationPage() {
               <form onSubmit={addZohoApi} className="mt-5 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900 dark:bg-violet-950/20">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">Tambah OAuth API Zoho</h3>
-                    <p className="mt-1 text-xs text-neutral-500">Client secret disimpan terenkripsi dan tidak akan ditampilkan kembali.</p>
+                    <h3 className="font-semibold">Input kode API Zoho secara manual</h3>
+                    <p className="mt-1 text-xs text-neutral-500">Salin Client ID dan Client Secret dari Zoho API Console. Secret disimpan terenkripsi dan tidak akan ditampilkan kembali. Setelah menyimpan, klik Hubungkan / Hubungkan ulang dan izinkan akses Zoho Books.</p>
                   </div>
                   <button type="button" onClick={() => setShowZohoApiForm(false)} className="text-sm text-neutral-500">Tutup</button>
                 </div>
@@ -2234,7 +2245,7 @@ export default function ZohoIntegrationPage() {
                 </div>
                 <p className="mt-3 text-xs text-amber-700">Redirect URI harus sama persis dengan yang didaftarkan pada Zoho API Console.</p>
                 <button type="submit" disabled={!!action} className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                  {action === 'add-zoho-api' ? 'Menyimpan...' : 'Simpan API Zoho'}
+                  {action === 'add-zoho-api' ? 'Menyimpan...' : 'Simpan kode API Zoho'}
                 </button>
               </form>
             )}
@@ -2392,7 +2403,8 @@ export default function ZohoIntegrationPage() {
               <h2 className="font-semibold">Antrean sinkronisasi</h2>
               <p className="text-sm text-neutral-500">{queue?.pagination.total || 0} event ditemukan.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={importOnly} onChange={(event) => setImportOnly(event.target.checked)} />Hanya impor Excel</label>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as EventStatus | '')} className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700">
                 {eventStatuses.map((value) => <option key={value} value={value}>{value || 'Semua status'}</option>)}
               </select>
@@ -4194,6 +4206,9 @@ export default function ZohoIntegrationPage() {
                 <div key={attempt.id} className="rounded-lg border p-3 text-xs dark:border-neutral-700">
                   #{attempt.attemptNo} · {attempt.status} · {when(attempt.startedAt)}
                   {attempt.errorMessage && <p className="mt-1 text-red-600">{attempt.errorCode}: {attempt.errorMessage}</p>}
+                  {selectedEvent.eventType === 'ZOHO_EXCEL_MASTER_IMPORTED' && attempt.responseSummary !== undefined && (
+                    <pre className="mt-2 overflow-auto rounded bg-neutral-100 p-2 dark:bg-neutral-800">{JSON.stringify(attempt.responseSummary, null, 2)}</pre>
+                  )}
                 </div>
               ))}
               {!selectedEvent.syncAttempts.length && <p className="text-xs text-neutral-500">Belum pernah diproses worker.</p>}

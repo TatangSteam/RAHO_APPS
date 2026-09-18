@@ -358,7 +358,7 @@ router.put('/managers/:managerId',
   updateAdminManager
 );
 
-// Convert Admin Manager to a global Logistics or Finance & Logistics account
+// Grant Logistics/Finance roles or revoke them back to an unassigned Admin Manager
 router.post('/managers/:managerId/convert-role',
   authorize(['SUPER_ADMIN']),
   validate(convertAdminManagerRoleSchema),

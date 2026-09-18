@@ -4,9 +4,10 @@ import { AuditAction, Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateStaffCode } from '../../../utils/codeGenerator';
 
-type ManagerConversionRole = 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER';
+type ManagerConversionRole = 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER' | 'ADMIN_MANAGER';
 
 const MANAGER_CONVERSION_TEMPLATE_CODES: Record<ManagerConversionRole, string> = {
+  [Role.ADMIN_MANAGER]: 'ADMIN_MANAGER_DEFAULT',
   [Role.ADMIN_LOGISTIK]: 'ADMIN_LOGISTIK_DEFAULT',
   [Role.FINANCE_LOGISTICS_CONTROLLER]: 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT',
 };
@@ -271,7 +272,8 @@ export class UserManagementService {
 
   /**
    * Convert an Admin Manager into a global Logistics or Finance & Logistics
-   * account. Only IAM assignments are replaced; business and audit history
+   * account, or revoke either role back to an unassigned Admin Manager.
+   * Only IAM assignments are replaced; business and audit history
    * remain linked to the same user id.
    */
   async convertAdminManagerRole(
@@ -279,6 +281,10 @@ export class UserManagementService {
     targetRole: ManagerConversionRole,
     currentUserId: string,
   ) {
+    const revoking = targetRole === Role.ADMIN_MANAGER;
+    if (!Object.prototype.hasOwnProperty.call(MANAGER_CONVERSION_TEMPLATE_CODES, targetRole)) {
+      throw { status: 400, code: 'INVALID_TARGET_ROLE', message: 'Peran tujuan tidak valid.' };
+    }
     if (managerId === currentUserId) {
       throw {
         status: 403,
@@ -294,6 +300,7 @@ export class UserManagementService {
           id: true,
           email: true,
           role: true,
+          isActive: true,
           profile: { select: { fullName: true } },
         },
       }),
@@ -303,12 +310,19 @@ export class UserManagementService {
       }),
     ]);
 
-    if (!manager || manager.role !== Role.ADMIN_MANAGER) {
+    const validSource = manager && (revoking
+      ? ([Role.ADMIN_LOGISTIK, Role.FINANCE_LOGISTICS_CONTROLLER] as Role[]).includes(manager.role)
+      : manager.role === Role.ADMIN_MANAGER);
+    if (!validSource) {
       throw {
         status: 404,
         code: 'MANAGER_NOT_FOUND',
-        message: 'Admin Manager tidak ditemukan.',
+        message: revoking ? 'Akun Finance atau Logistik tidak ditemukan atau aksesnya sudah dicabut.' : 'Admin Manager tidak ditemukan.',
       };
+    }
+
+    if (!revoking && !manager.isActive) {
+      throw { status: 409, code: 'MANAGER_INACTIVE', message: 'Aktifkan akun sebelum memberikan peran Finance atau Logistik.' };
     }
 
     if (!roleTemplate?.isActive) {
@@ -332,6 +346,12 @@ export class UserManagementService {
         tx.staffBranch.deleteMany({ where: { userId: managerId } }),
       ]);
 
+      // Remove explicit ALLOW grants on downgrade so global/branch privileges
+      // cannot survive the revoked role. Keep DENY rules and business history.
+      if (revoking) {
+        await tx.userPermissionOverride.deleteMany({ where: { userId: managerId, effect: 'ALLOW' } });
+      }
+
       if (targetRole === Role.FINANCE_LOGISTICS_CONTROLLER) {
         await Promise.all([
           tx.managerBranch.createMany({
@@ -353,7 +373,8 @@ export class UserManagementService {
       }
 
       return tx.user.update({
-        where: { id: managerId },
+        // A concurrent conversion must roll back this entire transaction.
+        where: { id: managerId, role: manager.role },
         data: {
           role: targetRole,
           roleTemplateId: roleTemplate.id,
@@ -379,7 +400,9 @@ export class UserManagementService {
       resourceId: managerId,
       entityType: 'User',
       entityId: managerId,
-      description: `Admin Manager dikonversi menjadi ${roleTemplate.name}.`,
+      description: revoking
+        ? 'Peran Finance/Logistik dicabut; kembali ke Admin Manager tanpa assignment cabang dan override ALLOW.'
+        : `Admin Manager dikonversi menjadi ${roleTemplate.name}.`,
       beforeData: {
         role: manager.role,
         fullName: manager.profile?.fullName,
@@ -395,6 +418,7 @@ export class UserManagementService {
       ...converted,
       assignedBranchCount: operationalBranches.length,
       historyPreserved: true,
+      accessRevoked: revoking,
     };
   }
 

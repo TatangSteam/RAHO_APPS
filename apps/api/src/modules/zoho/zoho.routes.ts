@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
+import { authorize, SUPER_ADMIN_ONLY } from '@middleware/authorize';
 import { requirePermission } from '@middleware/requirePermission';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import * as controller from './zoho.controller';
+import * as excelImport from './zoho.excel-import.controller';
 
 const router = Router();
 router.get('/callback', controller.callback);
 router.post('/webhooks/:organizationId', controller.receiveWebhook);
 router.use(authenticate);
+router.get('/excel-import/template', authorize(SUPER_ADMIN_ONLY), requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), excelImport.templateExcel);
+router.post('/excel-import/inspect', authorize(SUPER_ADMIN_ONLY), requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), excelImport.excelImportLimiter, excelImport.excelImportUpload, excelImport.inspectExcel);
+router.post('/excel-import/preview', authorize(SUPER_ADMIN_ONLY), requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), excelImport.excelImportLimiter, excelImport.excelImportUpload, excelImport.previewExcel);
+router.post('/excel-import/commit', authorize(SUPER_ADMIN_ONLY), requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), excelImport.excelImportLimiter, excelImport.commitExcel);
 router.get('/status', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.status);
 router.get('/events', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.events);
 router.get('/events/:id', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.event);

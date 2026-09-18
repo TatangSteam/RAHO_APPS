@@ -18,6 +18,7 @@ export interface ManagerBranchAssignment {
 }
 
 export interface AdminManager {
+  role?: AdminManagerConversionRole | 'ADMIN_MANAGER';
   id: string;
   email: string;
   fullName: string;
@@ -53,9 +54,10 @@ export type AdminManagerConversionRole = 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_C
 export interface ConvertAdminManagerRoleResult {
   id: string;
   email: string;
-  role: AdminManagerConversionRole;
+  role: AdminManagerConversionRole | 'ADMIN_MANAGER';
   assignedBranchCount: number;
   historyPreserved: boolean;
+  accessRevoked?: boolean;
   roleTemplate: {
     id: string;
     code: string;
@@ -114,6 +116,7 @@ export const adminManagersApi = {
    * Get all admin managers
    */
   getAdminManagers: async (params?: {
+    role?: AdminManagerConversionRole | 'ADMIN_MANAGER';
     search?: string;
     isActive?: boolean;
     status?: 'active' | 'inactive' | string;
@@ -187,7 +190,7 @@ export const adminManagersApi = {
    */
   convertAdminManagerRole: async (
     managerId: string,
-    targetRole: AdminManagerConversionRole,
+    targetRole: AdminManagerConversionRole | 'ADMIN_MANAGER',
   ): Promise<{ data: ConvertAdminManagerRoleResult }> => {
     const response = await api.post(`/admin/managers/${managerId}/convert-role`, { targetRole });
     return response.data;

@@ -15,6 +15,16 @@ Tidak perlu menandai migrasi sebagai applied secara manual. Penyelesaian SQL leb
 
 ## Pengaman
 
+### Menjalankan API lokal (Windows/macOS/Linux)
+
+Dari folder `apps/api`, jalankan `npm run dev`. Tahap `predev` sekarang memakai `prisma/deploy-with-recovery.cjs`: memuat `.env` API, memulihkan hanya kegagalan yang dikenali dengan pengaman yang sama seperti produksi, lalu menjalankan migrasi yang belum applied. Jika pemulihan gagal, server tidak dinyalakan.
+
+Untuk menjalankan migrasi saja: `npm run db:deploy:recover`. Siapkan backup sebelum memakai recovery pada database berisi data penting; script ini tidak membuat backup otomatis. Jalur deployment produksi dan backup workflow tetap tidak berubah.
+
+Perintah Prisma langsung adalah `npx prisma migrate deploy`, **bukan** `npx migrate deploy`. Perintah kedua menjalankan paket npm lain dan mencari folder `migrations` yang bukan milik Prisma. Jangan menggunakan `migrate reset` untuk mengatasi `P3009` pada database berisi data.
+
+### Batas pemulihan
+
 - File migrasi lama tidak diubah; helper memverifikasi checksum SQL yang sudah direview. Hanya dua migrasi alignment di atas dan jalur recovery deferred revenue yang sebelumnya ada yang dikenali.
 - Hanya error missing index/constraint milik migrasi tersebut yang dapat masuk recovery alignment. Error permission, foreign key/data integrity, SQL berbeda, atau migrasi lain ditolak.
 - Semua operasi alignment yang berlaku dijalankan dalam transaksi. Rename yang sudah selesai boleh diulang; source dan target sama-sama hilang atau keduanya ada menyebabkan rollback.

@@ -792,6 +792,95 @@ describe('AdminManagersTab', () => {
   });
 
   describe('Finance and Logistics assignment', () => {
+    it('filters converted accounts and lets Super Admin revoke their access', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      mockGetAdminManagers.mockResolvedValueOnce({ data: mockManagers, meta: mockPaginationMeta })
+        .mockResolvedValueOnce({ data: [{ ...mockManagers[0], role: 'FINANCE_LOGISTICS_CONTROLLER' }], meta: { ...mockPaginationMeta, total: 1 } })
+        .mockResolvedValueOnce({ data: [], meta: { ...mockPaginationMeta, total: 0 } });
+      mockConvertAdminManagerRole.mockResolvedValueOnce({ data: {
+        id: 'manager-1', email: 'manager1@raho.id', role: 'ADMIN_MANAGER',
+        assignedBranchCount: 0, historyPreserved: true, accessRevoked: true, roleTemplate: null,
+      } });
+      render(<AdminManagersTab />);
+      await screen.findByText('Manager One');
+      fireEvent.change(screen.getByLabelText('Peran'), { target: { value: 'FINANCE_LOGISTICS_CONTROLLER' } });
+      const button = await screen.findByRole('button', { name: 'Cabut Akses untuk Manager One' });
+      expect(mockGetAdminManagers).toHaveBeenLastCalledWith({ page: 1, limit: 10, role: 'FINANCE_LOGISTICS_CONTROLLER' });
+      expect(screen.queryByRole('button', { name: 'Set Finance & Logistik untuk Manager One' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Lihat Detail & Kelola' })).not.toBeInTheDocument();
+      fireEvent.click(button);
+      await waitFor(() => expect(mockConvertAdminManagerRole).toHaveBeenCalledWith('manager-1', 'ADMIN_MANAGER'));
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('izin tambahan ALLOW dicabut'));
+      await waitFor(() => expect(mockShowToastSuccess).toHaveBeenCalledWith(expect.stringContaining('berhasil dicabut')));
+      await waitFor(() => expect(screen.queryByText('Manager One')).not.toBeInTheDocument());
+      confirmSpy.mockRestore();
+    });
+    it('permits revocation of an inactive logistics account', async () => {
+      mockGetAdminManagers.mockResolvedValueOnce({ data: [{ ...mockManagers[2], role: 'ADMIN_LOGISTIK' }], meta: mockPaginationMeta });
+      render(<AdminManagersTab />);
+      expect(await screen.findByRole('button', { name: 'Cabut Akses untuk Manager Three' })).toBeEnabled();
+    });
+    it('does not revoke access when the user cancels', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+      mockGetAdminManagers.mockResolvedValueOnce({ data: [{ ...mockManagers[0], role: 'ADMIN_LOGISTIK' }], meta: mockPaginationMeta });
+      render(<AdminManagersTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cabut Akses untuk Manager One' }));
+      expect(mockConvertAdminManagerRole).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+    it('shows a revocation rejection in the standard nested API error format', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      mockGetAdminManagers.mockResolvedValueOnce({ data: [{ ...mockManagers[0], role: 'ADMIN_LOGISTIK' }], meta: mockPaginationMeta });
+      mockConvertAdminManagerRole.mockRejectedValueOnce({ response: { data: { error: { message: 'Akses sudah dicabut.' } } } });
+      render(<AdminManagersTab />);
+      const button = await screen.findByRole('button', { name: 'Cabut Akses untuk Manager One' });
+      fireEvent.click(button);
+      await waitFor(() => expect(mockShowToastError).toHaveBeenCalledWith('Akses sudah dicabut.'));
+      expect(button).toBeEnabled();
+      expect(mockShowToastSuccess).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+    it('lets Super Admin choose Logistics without granting the Finance role', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      mockConvertAdminManagerRole.mockResolvedValueOnce({ data: {
+        id: 'manager-1', email: 'manager1@raho.id', role: 'ADMIN_LOGISTIK',
+        assignedBranchCount: 0, historyPreserved: true, roleTemplate: null,
+      } });
+      render(<AdminManagersTab />);
+      const button = await screen.findByRole('button', { name: 'Set Logistik untuk Manager One' });
+      fireEvent.click(button);
+      await waitFor(() => expect(mockConvertAdminManagerRole).toHaveBeenCalledWith('manager-1', 'ADMIN_LOGISTIK'));
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('bukan dirangkap'));
+      expect(mockShowToastSuccess).toHaveBeenCalledWith(expect.stringContaining('sebagai Admin Logistik.'));
+      confirmSpy.mockRestore();
+    });
+
+    it('does not change roles when confirmation is cancelled', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+      render(<AdminManagersTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Set Logistik untuk Manager One' }));
+      expect(mockConvertAdminManagerRole).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
+    it('disables both role actions for inactive managers', async () => {
+      render(<AdminManagersTab />);
+      expect(await screen.findByRole('button', { name: 'Set Logistik untuk Manager Three' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Set Finance & Logistik untuk Manager Three' })).toBeDisabled();
+    });
+
+    it('shows a backend rejection and allows another attempt', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      mockConvertAdminManagerRole.mockRejectedValueOnce({ response: { data: { message: 'Template role belum aktif.' } } });
+      render(<AdminManagersTab />);
+      const button = await screen.findByRole('button', { name: 'Set Logistik untuk Manager One' });
+      fireEvent.click(button);
+      await waitFor(() => expect(mockShowToastError).toHaveBeenCalledWith('Template role belum aktif.'));
+      expect(button).toBeEnabled();
+      expect(mockShowToastSuccess).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
     it('lets Super Admin convert an active manager directly from the list', async () => {
       const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
       render(<AdminManagersTab />);

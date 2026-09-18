@@ -413,6 +413,7 @@ export class ImpersonationService {
    * Get Admin Managers (for Super Admin)
    */
   async getAdminManagers(filters?: {
+    role?: 'ADMIN_MANAGER' | 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER';
     search?: string;
     isActive?: boolean;
     page?: number;
@@ -423,7 +424,7 @@ export class ImpersonationService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.UserWhereInput = {
-      role: 'ADMIN_MANAGER'
+      role: filters?.role || 'ADMIN_MANAGER'
     };
 
     if (filters?.search) {
@@ -464,6 +465,7 @@ export class ImpersonationService {
     return {
       managers: managers.map(manager => ({
         id: manager.id,
+        role: manager.role,
         email: manager.email,
         fullName: manager.profile?.fullName || manager.email,
         phoneNumber: manager.profile?.phone || '',

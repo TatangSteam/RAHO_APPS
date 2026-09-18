@@ -612,11 +612,13 @@ export async function getProductCategories(req: Request, res: Response, next: Ne
  */
 export async function getAdminManagers(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { search, isActive, page, limit } = req.query;
+    const { search, isActive, page, limit, role } = req.query;
+    const activeFilter: unknown = isActive;
 
     const result = await impersonationService.getAdminManagers({
+      role: role as 'ADMIN_MANAGER' | 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER' | undefined,
       search: search as string,
-      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      isActive: activeFilter === true || activeFilter === 'true' ? true : activeFilter === false || activeFilter === 'false' ? false : undefined,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });

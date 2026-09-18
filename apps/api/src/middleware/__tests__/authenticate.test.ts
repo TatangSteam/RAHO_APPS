@@ -100,6 +100,20 @@ describe('authenticate middleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('does not retain revoked Finance/Logistics role or all-branch access from an old token', async () => {
+    req.headers = { authorization: 'Bearer previously-finance-token' };
+    (verifyAccessToken as jest.Mock).mockReturnValue({
+      userId: 'manager-id', email: 'manager@raho.id', role: 'FINANCE_LOGISTICS_CONTROLLER',
+      branchId: null, branchCode: null, fullName: 'Manager', staffCode: null,
+    } satisfies JwtPayload);
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue([]);
+    (getEffectivePermissionCodes as jest.Mock).mockResolvedValue(['INVOICE.READ']);
+    await authenticate(req as Request, res as Response, next);
+    expect(req.user).toMatchObject({ role: 'ADMIN_MANAGER', roleTemplateId: 'role-manager', accessibleBranchIds: [], branches: [] });
+    expect(req.user?.permissions).not.toContain('BRANCH.ACCESS_ALL');
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects an inactive or deleted database user', async () => {
     req.headers = { authorization: 'Bearer valid-token' };
     (verifyAccessToken as jest.Mock).mockReturnValue({ userId: 'missing-user' });

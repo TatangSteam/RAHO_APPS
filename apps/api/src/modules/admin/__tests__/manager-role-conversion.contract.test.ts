@@ -11,7 +11,7 @@ describe('Admin Manager role conversion contract', () => {
     expect(routes).toContain("'/managers/:managerId/convert-role'");
     expect(routes).toContain("authorize(['SUPER_ADMIN'])");
     expect(routes).toContain('validate(convertAdminManagerRoleSchema)');
-    expect(schema).toContain("z.enum(['ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER'])");
+    expect(schema).toContain("z.enum(['ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_MANAGER'])");
   });
 
   it('keeps the user row and business history while replacing IAM assignments atomically', () => {

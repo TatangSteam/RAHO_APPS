@@ -189,7 +189,7 @@ export class AdminService {
 
   async convertAdminManagerRole(
     managerId: string,
-    targetRole: 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER',
+    targetRole: 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER' | 'ADMIN_MANAGER',
     currentUserId: string,
   ) {
     return await this.userManagementService.convertAdminManagerRole(

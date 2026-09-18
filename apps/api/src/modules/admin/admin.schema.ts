@@ -118,7 +118,7 @@ export const createAdminManagerSchema = z.object({
 );
 
 export const convertAdminManagerRoleSchema = z.object({
-  targetRole: z.enum(['ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER']),
+  targetRole: z.enum(['ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER', 'ADMIN_MANAGER']),
 });
 
 // ============================================================
@@ -319,6 +319,7 @@ export const packagePricingFilterSchema = z.object({
 // ============================================================
 
 export const getAdminManagersQuerySchema = z.object({
+  role: z.enum(['ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER']).optional(),
   search: z.string().optional(),
   isActive: z.string()
     .transform(val => val === 'true' ? true : val === 'false' ? false : undefined)

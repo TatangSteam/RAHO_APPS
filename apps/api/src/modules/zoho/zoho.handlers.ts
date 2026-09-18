@@ -12,6 +12,8 @@ import {
   STOCK_LOCATION_EVENT,
 } from './zoho.master.service';
 import { registerZohoEventHandler } from './zoho.worker';
+import { handleExcelImportEvent } from './zoho.excel-import.service';
+import { EXCEL_IMPORT_EVENT } from './zoho.excel-import.policy';
 import {
   handleInvoiceEvent,
   INVOICE_FINALIZED_EVENT,
@@ -66,6 +68,7 @@ let registered = false;
 
 export function registerZohoHandlers(): void {
   if (registered) return;
+  registerZohoEventHandler(EXCEL_IMPORT_EVENT, handleExcelImportEvent);
   registerZohoEventHandler(MEMBER_CONTACT_EVENT, handleContactEvent);
   registerZohoEventHandler(SUPPLIER_CONTACT_EVENT, handleContactEvent);
   registerZohoEventHandler(PARTNERSHIP_CONTACT_EVENT, handleContactEvent);
