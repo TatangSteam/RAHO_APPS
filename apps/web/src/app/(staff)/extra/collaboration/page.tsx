@@ -38,6 +38,7 @@ import {
   type Team,
 } from '@/lib/collaborationApi';
 import { useAuthStore } from '@/stores/authStore';
+import DailyTaskGuide from '@/components/collaboration/DailyTaskGuide';
 import styles from './page.module.css';
 
 const EMPTY_DATA: CollaborationBootstrap = {
@@ -377,6 +378,8 @@ export default function CollaborationPage() {
           {canManage && <button className="btn btn-primary" onClick={() => { resetTaskForm(); setModal('task'); }}><Plus size={17} /> Tugas Baru</button>}
         </div>
       </section>
+
+      <DailyTaskGuide teamRole={selectedTeam?.myRole} />
 
       <section className={styles.toolbar}>
         <label className={styles.teamPicker}>

@@ -24,7 +24,7 @@ jest.mock('../../../../utils/auditLog', () => ({
 jest.mock('../../../../config/minio', () => ({
   deleteFileByUrl: jest.fn(),
 }));
-jest.mock('../../../zoho/zoho.contact.service', () => ({ enqueueContactSafely: jest.fn() }));
+jest.mock('../../../zoho/zoho.contact.service', () => ({ enqueueContact: jest.fn(), enqueueContactSafely: jest.fn() }));
 
 const prismaMock = prisma as any;
 

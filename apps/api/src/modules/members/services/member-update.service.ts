@@ -7,7 +7,8 @@ import {
   hasMatchingMemberName,
   parseMemberBirthDate,
 } from './member-registration.helpers';
-import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
+import { enqueueContact, enqueueContactSafely } from '../../zoho/zoho.contact.service';
+import { AppError } from '../../../middleware/errorHandler';
 
 const HASH_ROUNDS = 12;
 
@@ -246,6 +247,18 @@ export class MemberUpdateService {
         });
       }
 
+      // A name change and its durable Zoho event must commit together.
+      // This only writes the local outbox; Zoho HTTP requests remain asynchronous.
+      if (data.fullName !== undefined) {
+        try {
+          await enqueueContact('MEMBER', memberId, tx);
+        } catch (error) {
+          if (error instanceof AppError) throw error;
+          throw new AppError(503, 'MEMBER_SYNC_QUEUE_UNAVAILABLE',
+            'Perubahan nama belum tersimpan karena antrean sinkronisasi sedang bermasalah. Silakan coba lagi.');
+        }
+      }
+
       // Return updated member
       return await tx.member.findUnique({
         where: { id: memberId },
@@ -274,7 +287,7 @@ export class MemberUpdateService {
       resourceId: memberId,
       meta: { changes: data },
     });
-    await enqueueContactSafely('MEMBER', memberId);
+    if (data.fullName === undefined) await enqueueContactSafely('MEMBER', memberId);
 
     return this.formatMemberData(updated);
   }

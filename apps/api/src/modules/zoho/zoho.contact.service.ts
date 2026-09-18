@@ -32,9 +32,9 @@ function assertEntityType(value: string): asserts value is ContactEntityType {
   }
 }
 
-async function localSnapshot(entityType: ContactEntityType, id: string): Promise<LocalContactSnapshot> {
+async function localSnapshot(entityType: ContactEntityType, id: string, database: Prisma.TransactionClient = prisma): Promise<LocalContactSnapshot> {
   if (entityType === 'MEMBER') {
-    const member = await prisma.member.findUnique({
+    const member = await database.member.findUnique({
       where: { id },
       include: { user: { include: { profile: true } } },
     });
@@ -55,7 +55,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
     };
   }
   if (entityType === 'PARTNERSHIP_BRANCH') {
-    const branch = await prisma.branch.findUnique({ where: { id } });
+    const branch = await database.branch.findUnique({ where: { id } });
     if (!branch || branch.type !== 'PARTNERSHIP') {
       throw new AppError(
         404,
@@ -78,7 +78,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
       isActive: branch.isActive,
     };
   }
-  const supplier = await prisma.supplier.findUnique({ where: { id } });
+  const supplier = await database.supplier.findUnique({ where: { id } });
   if (!supplier) throw new AppError(404, 'SUPPLIER_NOT_FOUND', 'Supplier tidak ditemukan.');
   return {
     entityType,
@@ -238,27 +238,27 @@ export async function findContactMatch(entityTypeValue: string, id: string) {
   return { decision, review: null };
 }
 
-export async function enqueueContact(entityTypeValue: string, id: string) {
+export async function enqueueContact(entityTypeValue: string, id: string, database: Prisma.TransactionClient = prisma) {
   assertEntityType(entityTypeValue);
-  const snapshot = await localSnapshot(entityTypeValue, id);
+  const snapshot = await localSnapshot(entityTypeValue, id, database);
   const payload = {
     externalKey: snapshot.externalKey,
     entityType: snapshot.entityType,
     localEntityId: snapshot.localEntityId,
     contact: buildZohoContactPayload(
       snapshot,
-      externalIdField(await prisma.zohoConnection.findFirst({ where: { isActive: true } })).fieldId || undefined,
+      externalIdField(await database.zohoConnection.findFirst({ where: { isActive: true } })).fieldId || undefined,
     ),
     isActive: snapshot.isActive,
   };
   const eventType = eventTypeFor(snapshot.entityType);
-  const existing = await prisma.integrationEvent.findUnique({
+  const existing = await database.integrationEvent.findUnique({
     where: { eventType_aggregateId: { eventType, aggregateId: snapshot.localEntityId } },
   });
   if (existing?.status === IntegrationEventStatus.PROCESSING) {
     throw new AppError(409, 'ZOHO_CONTACT_SYNC_IN_PROGRESS', 'Contact sedang diproses worker.');
   }
-  return prisma.integrationEvent.upsert({
+  return database.integrationEvent.upsert({
     where: { eventType_aggregateId: { eventType, aggregateId: snapshot.localEntityId } },
     create: {
       eventType,

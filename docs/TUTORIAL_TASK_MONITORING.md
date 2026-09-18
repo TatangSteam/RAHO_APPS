@@ -2,6 +2,84 @@
 
 Dokumen ini menjelaskan penggunaan fitur **Tim & Tugas** pada versi aplikasi saat ini.
 
+## Panduan langsung di aplikasi web
+
+Untuk pengguna baru, buka **Ekstra → Tim & Tugas → Dashboard Monitoring**, lalu klik **Panduan Daily Task** di bawah judul halaman. Panduan yang sama tersedia pada **Tugas & Subtask** dan **Tim Saya**, termasuk saat belum ada tim.
+
+Panduan ini tidak membuat, mengubah, atau menghapus data. Anda aman membacanya sebelum mencoba fitur.
+
+1. Mulai dari **Mulai di sini** jika belum pernah menggunakan fitur ini.
+2. Klik **Bagian berikutnya** untuk membaca secara berurutan.
+3. Klik nama topik jika hanya membutuhkan penjelasan tertentu.
+4. Klik **Bagian sebelumnya** untuk mengulang penjelasan.
+5. Klik **Tutup panduan** atau **Selesai membaca** untuk kembali fokus ke pekerjaan. Menutup panduan tidak menghapus tugas.
+
+Ada sepuluh bagian: pengenalan, arti angka dashboard, rutinitas anggota, pembuatan tim, pembuatan tugas, pemeriksaan hasil, subtask, diskusi, edit/hapus, dan bantuan jika bermasalah. Masing-masing memuat langkah bernomor, contoh, dan hal yang perlu diingat.
+
+## Mulai cepat untuk pengguna yang belum terbiasa
+
+Fitur ini seperti buku catatan pekerjaan bersama. **Tim** adalah kelompok kerja. **Tugas** adalah pekerjaan. **Assignee** adalah orang yang ditunjuk untuk mengerjakan. **Tenggat** adalah tanggal dan jam batas waktu. **Review** adalah pemeriksaan hasil. **Revisi** adalah perbaikan yang diminta pemeriksa.
+
+### Jika Anda hanya diminta mengerjakan tugas
+
+1. Login menggunakan akun karyawan sendiri.
+2. Buka **Ekstra → Tim & Tugas → Dashboard Monitoring**. Pada HP, tampilkan menu samping terlebih dahulu jika tersembunyi.
+3. Pada **Tim aktif**, klik kotak pilihan bertanda panah dan pilih tim Anda. Pilihan ini hanya mengganti tim yang dilihat; tidak memulai pekerjaan.
+4. Jika belum ada tim, minta Owner menambahkan akun Anda. Jangan membuat tim baru hanya agar tugas dari tim lain muncul.
+5. Buka **Tugas & Subtask**. Klik kotak **Cari tugas...** dan ketik sebagian judul, misalnya `laporan stok`.
+6. Klik judul tugas. Baca deskripsi, tenggat, dan daftar Assignee. Nama Anda harus tercantum untuk menjalankan tombol kerja.
+7. Saat benar-benar mulai bekerja, klik **Mulai kerjakan**. Membuka tugas saja tidak mengubah status.
+8. Kerjakan pekerjaan yang diminta. Jika ada kendala, tulis di **Diskusi**, lalu klik ikon kirim. Pastikan tulisan muncul pada daftar komentar.
+9. Setelah hasil siap diperiksa, klik **Kirim untuk review**. Ini belum berarti tugas selesai.
+10. Jika status menjadi **Perlu revisi**, tanyakan atau baca arahan Leader, perbaiki hasil, lalu **Kirim untuk review** lagi.
+11. Tugas menjadi **Selesai** setelah Owner/Leader menyetujui hasilnya.
+
+Contoh sehari-hari: Siti mendapat tugas **Laporan stok Air Nano** dengan tenggat pukul 16.00. Pukul 09.00 Siti klik **Mulai kerjakan**. Pukul 15.00 ia menulis hasil pada Diskusi dan klik **Kirim untuk review**. Leader memeriksa dan klik **Setujui & selesai**. Barulah tugas berstatus **Selesai**.
+
+Komentar seperti “sudah selesai” tidak menggantikan tombol pengiriman untuk review. Begitu juga **Hapus** atau **Batalkan** bukan cara menandai pekerjaan berhasil.
+
+### Jika Anda mengatur atau memeriksa pekerjaan
+
+1. Pilih tim yang benar pada **Tim aktif**.
+2. Jika Anda Owner dan tim belum memiliki anggota, buka **Tim Saya → Tambah Anggota**, pilih akun dan peran, lalu klik **Tambahkan**.
+3. Klik **Tugas Baru**. Isi judul yang jelas, deskripsi hasil yang diharapkan, prioritas, tanggal dan jam tenggat, serta centang nama pelaksana pada Assignee.
+4. Klik **Buat Tugas**, tunggu pesan berhasil, lalu buka tugasnya untuk memeriksa isian.
+5. Untuk memeriksa hasil, buka **Tugas & Subtask** dan pilih filter **Menunggu review**.
+6. Klik tugas dan periksa hasil melalui proses kerja tim Anda. Jika hasil benar, klik **Setujui & selesai**.
+7. Jika perlu perbaikan, klik **Minta revisi**, tulis alasan yang jelas, lalu klik **Simpan status**. Sampaikan arahan juga lewat Diskusi agar mudah dibaca pelaksana.
+8. Jika pekerjaan tidak jadi dilakukan, gunakan **Batalkan** dan isi alasan. Pada tugas utama, pembatalan dapat ikut membatalkan subtask yang masih berjalan.
+
+**Owner** mengatur tim dan anggota sekaligus mengelola tugas. **Leader** membagikan dan memeriksa tugas, tetapi bukan pengelola anggota. **Staff** menjalankan tugas yang ditugaskan kepadanya. Peran ini berlaku pada tim aktif dan tidak otomatis sama dengan jabatan akun ERP.
+
+### Cara membaca angka dashboard
+
+Dashboard saat ini **bukan laporan khusus hari ini**. Angkanya berdasarkan tim aktif dan tugas yang boleh dilihat; tugas lama juga bisa masuk. Dalam kebijakan tertentu, Staff tidak melihat semua tugas tim. Angka dua orang karena itu bisa berbeda.
+
+| Tulisan pada kartu | Arti dalam bahasa sederhana |
+|---|---|
+| Total pekerjaan | Tugas utama dan subtask yang terlihat, termasuk yang selesai atau dibatalkan. Satu tugas utama dengan dua subtask dapat dihitung sebagai tiga pekerjaan. |
+| Sedang dikerjakan | Pekerjaan yang saat ini berstatus Dikerjakan. Perlu revisi dan Menunggu review tidak masuk angka ini. |
+| Menunggu review | Sudah dikirim pelaksana, tetapi masih menunggu persetujuan pemeriksa. |
+| Selesai | Sudah disetujui dan berstatus Selesai. |
+| Terlambat | Tanggal dan jam tenggat sudah lewat, tetapi pekerjaan belum Selesai atau Dibatalkan. Bisa termasuk pekerjaan dari hari sebelumnya. |
+
+Jangan menjumlahkan kelima kartu untuk mencari total: tugas terlambat dapat sekaligus berstatus Dikerjakan atau Menunggu review. Kartu angka juga bukan tombol filter. Untuk mencari pekerjaan, gunakan halaman **Tugas & Subtask**.
+
+**Fokus terbaru** menampilkan sebagian daftar tugas yang bisa diklik untuk membuka detail. **Aktivitas tim** berisi catatan perubahan terbaru, bukan chat. Percakapan ada pada **Diskusi** di detail tugas. Muat ulang halaman menggunakan refresh browser jika perubahan rekan belum terlihat; dashboard tidak menjamin pembaruan langsung setiap saat.
+
+### Jika tugas atau tombol tidak terlihat
+
+1. Periksa **Tim aktif**.
+2. Hapus teks di **Cari tugas...** dan pilih **Semua status**.
+3. Muat ulang halaman.
+4. Untuk tombol kerja, pastikan nama Anda masuk Assignee dan status tugas masih sesuai.
+5. Untuk **Tugas Baru**, pensil, dan tempat sampah, Anda harus Owner/Leader. Untuk pengaturan tim atau anggota, Anda harus Owner.
+6. Jika tetap tidak terlihat, minta Owner/Leader memeriksa penugasan, membership, dan kebijakan visibilitas.
+
+Jika muncul pesan konflik karena data berubah bersamaan, tutup detail lalu buka lagi. Jika gagal menyimpan, periksa daftar/detail terlebih dahulu sebelum mengulangi supaya tidak membuat data duplikat. Saat meminta bantuan, sertakan nama tim, judul/nomor tugas, tindakan yang dilakukan, dan pesan error. Jangan membagikan password.
+
+Pada versi ini belum ada filter khusus hari ini, lampiran, atau pengulangan tugas otomatis di workspace. Pemantauan harian dilakukan dengan membuka tugas dan memeriksa tenggatnya setiap hari.
+
 ## 1. Akses fitur
 
 1. Login menggunakan akun internal ERP. Akun `MEMBER` tidak menggunakan workspace ini.
