@@ -44,7 +44,7 @@ describe('UnfinishedSessionReminderModal', () => {
         sessionCode: 'SES-JKT-001',
         treatmentDate: '2026-08-21T03:00:00.000Z',
         kind: 'OPERATIONAL_STEPS',
-        missingSteps: [{ key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi' }],
+        missingSteps: [{ key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi', actionable: true }],
         branch: { id: 'branch-1', name: 'Premier Jakarta', branchCode: 'JKT' },
         member: { memberId: 'member-1', memberNo: 'MBR-001', fullName: 'Siti Aminah' },
       }],
@@ -60,8 +60,8 @@ describe('UnfinishedSessionReminderModal', () => {
     render(<UnfinishedSessionReminderModal />);
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Sesi terapi belum selesai')).toBeInTheDocument();
-    expect(screen.getByText('Vital sign sesudah terapi')).toBeInTheDocument();
+    expect(screen.getByText('Sesi terapi perlu dilengkapi')).toBeInTheDocument();
+    expect(screen.getByText('Isi: Vital sign sesudah terapi')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Siti Aminah/ }));
 
@@ -83,11 +83,69 @@ describe('UnfinishedSessionReminderModal', () => {
   it('does not show or request reminders while filling a treatment session', async () => {
     pathname = '/sessions/session-1';
 
-    render(<UnfinishedSessionReminderModal />);
+    const sessionRender = render(<UnfinishedSessionReminderModal />);
 
     await waitFor(() => {
       expect(sessionApi.getUnfinishedSessionReminders).not.toHaveBeenCalled();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+
+    sessionRender.unmount();
+    pathname = '/dashboard/doctor';
+    render(<UnfinishedSessionReminderModal />);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows doctors which missing work must be coordinated with another role', async () => {
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({
+      user: { userId: 'doctor-1', role: 'DOCTOR' },
+      accessToken: 'token',
+    });
+    (sessionApi.getUnfinishedSessionReminders as jest.Mock).mockResolvedValue({
+      total: 1,
+      items: [{
+        sessionId: 'session-1',
+        sessionCode: 'SES-JKT-001',
+        treatmentDate: '2026-08-21T03:00:00.000Z',
+        kind: 'OPERATIONAL_STEPS',
+        missingSteps: [
+          { key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi', actionable: false },
+          { key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: true },
+        ],
+        branch: { id: 'branch-1', name: 'Premier Jakarta', branchCode: 'JKT' },
+        member: { memberId: 'member-1', memberNo: 'MBR-001', fullName: 'Siti Aminah' },
+      }],
+    });
+
+    render(<UnfinishedSessionReminderModal />);
+
+    expect(await screen.findByText('Koordinasikan: Vital sign sesudah terapi')).toBeInTheDocument();
+    expect(screen.getByText('Isi: Evaluasi dokter')).toBeInTheDocument();
+  });
+
+  it('retries after a temporary reminder request failure', async () => {
+    (sessionApi.getUnfinishedSessionReminders as jest.Mock).mockRejectedValueOnce(new Error('network'));
+    const firstRender = render(<UnfinishedSessionReminderModal />);
+
+    await waitFor(() => expect(sessionApi.getUnfinishedSessionReminders).toHaveBeenCalledTimes(1));
+    firstRender.unmount();
+    (sessionApi.getUnfinishedSessionReminders as jest.Mock).mockResolvedValue({
+      total: 1,
+      items: [{
+        sessionId: 'session-1',
+        sessionCode: 'SES-JKT-001',
+        treatmentDate: '2026-08-21T03:00:00.000Z',
+        kind: 'OPERATIONAL_STEPS',
+        missingSteps: [{ key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi', actionable: true }],
+        branch: { id: 'branch-1', name: 'Premier Jakarta', branchCode: 'JKT' },
+        member: { memberId: 'member-1', memberNo: 'MBR-001', fullName: 'Siti Aminah' },
+      }],
+    });
+
+    render(<UnfinishedSessionReminderModal />);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(sessionApi.getUnfinishedSessionReminders).toHaveBeenCalledTimes(2);
   });
 });

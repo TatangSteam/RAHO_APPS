@@ -28,6 +28,7 @@ export type UnfinishedSessionReminderKind = 'OPERATIONAL_STEPS' | 'DOCTOR_EVALUA
 export interface UnfinishedSessionStep {
   key: UnfinishedSessionStepKey;
   label: string;
+  actionable: boolean;
 }
 
 export interface UnfinishedSessionState {
@@ -58,6 +59,31 @@ const PRE_EVALUATION_STEPS: Array<{
   { state: 'vitalAfter', key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi' },
 ];
 
+const DOCTOR_ACTIONABLE_STEPS = new Set<UnfinishedSessionStepKey>([
+  'DIAGNOSIS',
+  'THERAPY_PLAN',
+  'INFUSION',
+  'DOCTOR_EVALUATION',
+  'FINALIZE',
+]);
+
+function canRoleActOnStep(role: Role, step: UnfinishedSessionStepKey): boolean {
+  if (role === Role.DOCTOR) return DOCTOR_ACTIONABLE_STEPS.has(step);
+  if (role === Role.ADMIN_CABANG) return step !== 'DOCTOR_EVALUATION';
+
+  return role === Role.ADMIN_LAYANAN || role === Role.NURSE;
+}
+
+function toReminderStep(
+  role: Role,
+  step: Pick<UnfinishedSessionStep, 'key' | 'label'>,
+): UnfinishedSessionStep {
+  return {
+    ...step,
+    actionable: canRoleActOnStep(role, step.key),
+  };
+}
+
 type EvaluationSnapshot = Pick<
   DoctorEvaluation,
   'subjective' | 'objective' | 'assessment' | 'plan' | 'generalNotes'
@@ -76,50 +102,41 @@ export function hasFilledDoctorEvaluation(evaluation: EvaluationSnapshot): boole
 }
 
 /**
- * Divides unfinished work by assignment. Nakes and MSO may complete every
- * workflow step, including the SOAP evaluation and finalization.
+ * Shows the complete checklist to every assigned staff member. The actionable
+ * marker distinguishes work the current role can fill from work that must be
+ * followed up with another assigned role. Nakes and MSO can complete every
+ * workflow step; doctors can still see operational gaps outside their scope.
  */
 export function resolveUnfinishedSessionReminder(
   role: Role,
   state: UnfinishedSessionState,
 ): ResolvedUnfinishedSessionReminder | null {
+  if (!UNFINISHED_SESSION_REMINDER_ROLES.includes(role)) return null;
+
   const missingOperationalSteps = PRE_EVALUATION_STEPS
     .filter((step) => !state[step.state])
-    .map(({ key, label }) => ({ key, label }));
+    .map(({ key, label }) => toReminderStep(role, { key, label }));
 
-  if (role === Role.DOCTOR) {
-    if (missingOperationalSteps.length > 0 || state.doctorEvaluation) return null;
+  const missingSteps = state.doctorEvaluation
+    ? missingOperationalSteps
+    : [
+      ...missingOperationalSteps,
+      toReminderStep(role, { key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter' }),
+    ];
 
+  if (missingSteps.length > 0) {
     return {
-      kind: 'DOCTOR_EVALUATION',
-      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter' }],
+      kind: missingSteps.length === 1 && missingSteps[0].key === 'DOCTOR_EVALUATION'
+        ? 'DOCTOR_EVALUATION'
+        : 'OPERATIONAL_STEPS',
+      missingSteps,
     };
   }
 
-  const operationalRoles: Role[] = [Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.NURSE];
-  if (!operationalRoles.includes(role)) {
-    return null;
-  }
-
-  if (missingOperationalSteps.length > 0) {
-    return { kind: 'OPERATIONAL_STEPS', missingSteps: missingOperationalSteps };
-  }
-
-  if (!state.doctorEvaluation && (role === Role.ADMIN_LAYANAN || role === Role.NURSE)) {
-    return {
-      kind: 'DOCTOR_EVALUATION',
-      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi SOAP' }],
-    };
-  }
-
-  if (state.doctorEvaluation) {
-    return {
-      kind: 'OPERATIONAL_STEPS',
-      missingSteps: [{ key: 'FINALIZE', label: 'Finalisasi sesi' }],
-    };
-  }
-
-  return null;
+  return {
+    kind: 'OPERATIONAL_STEPS',
+    missingSteps: [toReminderStep(role, { key: 'FINALIZE', label: 'Finalisasi sesi' })],
+  };
 }
 
 export function buildUnfinishedSessionAssignmentScope(input: {

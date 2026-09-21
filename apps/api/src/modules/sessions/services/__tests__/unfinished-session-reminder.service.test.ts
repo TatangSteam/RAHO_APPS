@@ -16,24 +16,32 @@ const completePrerequisites: UnfinishedSessionState = {
 };
 
 describe('unfinished session reminder responsibility', () => {
-  it('does not remind a doctor while a prerequisite is missing', () => {
+  it('shows a doctor every missing section and marks work outside doctor access', () => {
     const reminder = resolveUnfinishedSessionReminder(Role.DOCTOR, {
       ...completePrerequisites,
+      infusion: false,
       vitalAfter: false,
     });
 
-    expect(reminder).toBeNull();
-  });
-
-  it('reminds an assigned doctor only for evaluation after prerequisites are ready', () => {
-    expect(resolveUnfinishedSessionReminder(Role.DOCTOR, completePrerequisites)).toEqual({
-      kind: 'DOCTOR_EVALUATION',
-      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter' }],
+    expect(reminder).toEqual({
+      kind: 'OPERATIONAL_STEPS',
+      missingSteps: [
+        { key: 'INFUSION', label: 'Pelaksanaan infus', actionable: true },
+        { key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi', actionable: false },
+        { key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: true },
+      ],
     });
   });
 
-  it.each([Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.NURSE])(
-    'gives missing workflow work to %s',
+  it('reminds an assigned doctor about evaluation when it is the only missing section', () => {
+    expect(resolveUnfinishedSessionReminder(Role.DOCTOR, completePrerequisites)).toEqual({
+      kind: 'DOCTOR_EVALUATION',
+      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: true }],
+    });
+  });
+
+  it.each([Role.ADMIN_LAYANAN, Role.NURSE])(
+    'shows MSO/Nakes all missing sections as actionable for %s',
     (role) => {
       const reminder = resolveUnfinishedSessionReminder(role, {
         ...completePrerequisites,
@@ -44,8 +52,9 @@ describe('unfinished session reminder responsibility', () => {
       expect(reminder).toEqual({
         kind: 'OPERATIONAL_STEPS',
         missingSteps: [
-          { key: 'INFUSION', label: 'Pelaksanaan infus' },
-          { key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi' },
+          { key: 'INFUSION', label: 'Pelaksanaan infus', actionable: true },
+          { key: 'VITAL_AFTER', label: 'Vital sign sesudah terapi', actionable: true },
+          { key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: true },
         ],
       });
     },
@@ -56,13 +65,16 @@ describe('unfinished session reminder responsibility', () => {
     (role) => {
       expect(resolveUnfinishedSessionReminder(role, completePrerequisites)).toEqual({
         kind: 'DOCTOR_EVALUATION',
-        missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi SOAP' }],
+        missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: true }],
       });
     },
   );
 
-  it('keeps Admin Cabang waiting when only evaluation is missing', () => {
-    expect(resolveUnfinishedSessionReminder(Role.ADMIN_CABANG, completePrerequisites)).toBeNull();
+  it('shows Admin Cabang a missing doctor evaluation as coordination work', () => {
+    expect(resolveUnfinishedSessionReminder(Role.ADMIN_CABANG, completePrerequisites)).toEqual({
+      kind: 'DOCTOR_EVALUATION',
+      missingSteps: [{ key: 'DOCTOR_EVALUATION', label: 'Evaluasi dokter', actionable: false }],
+    });
   });
 
   it('returns finalization to operational staff after evaluation is filled', () => {
@@ -71,7 +83,7 @@ describe('unfinished session reminder responsibility', () => {
       doctorEvaluation: true,
     })).toEqual({
       kind: 'OPERATIONAL_STEPS',
-      missingSteps: [{ key: 'FINALIZE', label: 'Finalisasi sesi' }],
+      missingSteps: [{ key: 'FINALIZE', label: 'Finalisasi sesi', actionable: true }],
     });
   });
 });

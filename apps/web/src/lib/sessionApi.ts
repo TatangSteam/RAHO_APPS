@@ -34,6 +34,7 @@ export interface UnfinishedSessionReminderItem {
       | 'DOCTOR_EVALUATION'
       | 'FINALIZE';
     label: string;
+    actionable: boolean;
   }>;
   branch: {
     id: string;
