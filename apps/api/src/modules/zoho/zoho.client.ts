@@ -164,11 +164,18 @@ export async function listOrganizationsWithToken(
   accessToken: string,
 ): Promise<ZohoOrganization[]> {
   try {
-    const response = await axios.get<{ organizations: ZohoOrganization[] }>(
+    const response = await axios.get<{ code?: number; message?: string; organizations?: ZohoOrganization[] }>(
       new URL('/books/v3/organizations', apiDomain).toString(),
       { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }, timeout: 20_000 },
     );
-    return response.data.organizations || [];
+    if (response.data.code !== undefined && response.data.code !== 0) {
+      throw new ZohoApiError('Zoho menolak akses daftar organisasi. Periksa izin Zoho Books lalu hubungkan ulang.', String(response.data.code), 502, false);
+    }
+    if (!Array.isArray(response.data.organizations)
+      || response.data.organizations.some((organization) => !organization.organization_id || !organization.name)) {
+      throw new ZohoApiError('Respons organisasi Zoho tidak valid. Coba hubungkan ulang.', 'ZOHO_ORGANIZATION_RESPONSE_INVALID', 502, false);
+    }
+    return response.data.organizations;
   } catch (error) {
     throw normalizeZohoError(error);
   }

@@ -43,6 +43,19 @@ function stateSecret(): string {
   return `${env.JWT_ACCESS_SECRET}:zoho-oauth`;
 }
 
+function tokenFailure(errorCode: string): AppError {
+  if (/invalid_code|invalid_grant/i.test(errorCode)) {
+    return new AppError(409, 'ZOHO_AUTHORIZATION_CODE_INVALID', 'Kode otorisasi Zoho sudah kedaluwarsa atau pernah dipakai. Kembali ke halaman integrasi lalu klik Hubungkan Zoho satu kali.');
+  }
+  if (/invalid_client/i.test(errorCode)) {
+    return new AppError(502, 'ZOHO_CLIENT_INVALID', 'Client ID atau Client Secret ditolak Zoho. Periksa kode API aktif dan data center akun Zoho, lalu hubungkan kembali.');
+  }
+  if (/redirect/i.test(errorCode)) {
+    return new AppError(502, 'ZOHO_REDIRECT_INVALID', 'Redirect URI ditolak Zoho. Samakan Authorized Redirect URI di ERP dan Zoho API Console, lalu hubungkan kembali.');
+  }
+  return new AppError(502, 'ZOHO_TOKEN_FAILED', 'Pertukaran token Zoho gagal. Periksa kode API aktif, data center, dan koneksi internet server, lalu coba kembali.');
+}
+
 function webRedirect(status: 'success' | 'error', message?: string): string {
   const base = env.ZOHO_WEB_REDIRECT_URL || `${env.CORS_ORIGIN.split(',')[0]}/admin/integrations/zoho`;
   const url = new URL(base);
@@ -103,31 +116,21 @@ export async function handleCallback(code: string, state: string, accountsServer
     token = await exchangeAuthorizationCode(code, accountsBaseUrl, runtimeConfig);
   } catch (error) {
     const normalized = normalizeZohoError(error);
-    if (/invalid_code|invalid_grant/i.test(`${normalized.code} ${normalized.message}`)) {
-      throw new AppError(
-        409,
-        'ZOHO_AUTHORIZATION_CODE_INVALID',
-        'Kode otorisasi Zoho sudah kedaluwarsa atau pernah dipakai. Kembali ke halaman integrasi lalu klik “Hubungkan ulang” satu kali.',
-      );
-    }
-    throw new AppError(502, 'ZOHO_TOKEN_FAILED', `Pertukaran token Zoho gagal (${normalized.code}).`);
+    throw tokenFailure(`${normalized.code} ${normalized.message}`);
   }
-  if (!token.access_token || !token.refresh_token) {
-    if (/invalid_code|invalid_grant/i.test(`${token.error || ''} ${token.error_description || ''}`)) {
-      throw new AppError(
-        409,
-        'ZOHO_AUTHORIZATION_CODE_INVALID',
-        'Kode otorisasi Zoho sudah kedaluwarsa atau pernah dipakai. Kembali ke halaman integrasi lalu klik “Hubungkan ulang” satu kali.',
-      );
-    }
-    throw new AppError(
-      502,
-      'ZOHO_TOKEN_FAILED',
-      token.error_description || token.error || 'Zoho tidak mengembalikan refresh token. Cabut izin aplikasi lalu coba kembali.',
-    );
+  if (token.error || !token.access_token) {
+    throw tokenFailure(`${token.error || ''} ${token.error_description || ''}`);
+  }
+  if (!token.refresh_token) {
+    throw new AppError(502, 'ZOHO_REFRESH_TOKEN_MISSING', 'Zoho tidak memberikan refresh token. Cabut izin aplikasi ERP di akun Zoho lalu klik Hubungkan Zoho dan setujui kembali.');
   }
   const apiDomain = token.api_domain || runtimeConfig.apiBaseUrl;
-  const organizations = await listOrganizationsWithToken(apiDomain, token.access_token);
+  let organizations: Awaited<ReturnType<typeof listOrganizationsWithToken>>;
+  try {
+    organizations = await listOrganizationsWithToken(apiDomain, token.access_token);
+  } catch {
+    throw new AppError(502, 'ZOHO_ORGANIZATIONS_FAILED', 'Token diterima, tetapi organisasi Zoho Books gagal dimuat. Periksa akses Zoho Books dan koneksi internet server, lalu hubungkan kembali.');
+  }
   if (!organizations.length) {
     throw new AppError(422, 'ZOHO_ORGANIZATION_NOT_FOUND', 'Tidak ada organisasi Zoho Books yang dapat diakses.');
   }
@@ -281,7 +284,7 @@ export async function getStatus() {
 }
 
 export async function testConnection() {
-  assertConfigured();
+  await assertConfigured();
   const client = await getActiveZohoClient(false);
   const connection = client.connection;
   try {

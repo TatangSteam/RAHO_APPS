@@ -34,6 +34,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { ZohoExistingDataGuide } from '@/components/zoho/ZohoExistingDataGuide';
 import { ZohoExcelImport } from '@/components/zoho/ZohoExcelImport';
+import { finishZohoOAuth, type ZohoOAuthFeedback } from '@/lib/zohoOAuth';
 
 type Tab = 'connection' | 'excelImport' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
@@ -905,10 +906,12 @@ export default function ZohoIntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const oauthCallbackHandled = useRef(false);
+  const [oauthFeedback, setOauthFeedback] = useState<ZohoOAuthFeedback | null>(null);
 
   const loadStatus = useCallback(async () => {
     const response = await api.get<{ data: Status }>('/integrations/zoho/status');
     setStatus(response.data.data);
+    return response.data.data;
   }, []);
 
   const loadRuntimeDatabases = useCallback(async () => {
@@ -1117,22 +1120,21 @@ export default function ZohoIntegrationPage() {
     const result = searchParams.get('zoho');
     if (!result || oauthCallbackHandled.current) return;
     oauthCallbackHandled.current = true;
+    setOauthFeedback({ type: 'pending', message: 'Memeriksa hasil koneksi Zoho...' });
     const finishOAuth = async () => {
-      if (result === 'success') {
-        toast.success('Zoho Books berhasil dihubungkan. Menyiapkan integrasi...');
-        try {
+      const connected = await finishZohoOAuth({
+        result,
+        message: searchParams.get('message'),
+        refreshStatus: loadStatus,
+        feedback: setOauthFeedback,
+        errorMessage: (error) => apiErrorMessage(error, 'Gagal memuat hasil koneksi. Klik Muat ulang status untuk mencoba kembali.'),
+        setup: async () => {
           const response = await api.post<{ data: SetupData }>('/integrations/zoho/setup');
           setDiscovery(response.data.data.discovery);
-          toast.success('Prasyarat Contact dan Item Zoho berhasil disiapkan.');
-        } catch (error) {
-      assertCaughtError(error);
-          toast.error(apiErrorMessage(error, 'Zoho terhubung, tetapi konfigurasi otomatis belum selesai. Klik “Siapkan otomatis”.'));
-        }
-      } else {
-        toast.error(searchParams.get('message') || 'Koneksi Zoho gagal.');
-      }
-      await loadStatus().catch(() => undefined);
-      router.replace('/admin/integrations/zoho');
+        },
+      });
+      // Keep errors in the URL so they remain visible after a refresh.
+      if (connected) router.replace('/admin/integrations/zoho');
     };
     void finishOAuth();
   }, [loadStatus, router, searchParams]);
@@ -2019,6 +2021,13 @@ export default function ZohoIntegrationPage() {
         </p>
       </div>
 
+      {oauthFeedback && (
+        <div role={oauthFeedback.type === 'error' ? 'alert' : 'status'} className={`rounded-xl border p-4 text-sm ${oauthFeedback.type === 'error' ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300' : oauthFeedback.type === 'warning' ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300' : 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>
+          <p className="font-semibold">Hasil koneksi Zoho</p>
+          <p className="mt-1 break-words">{oauthFeedback.message}</p>
+        </div>
+      )}
+
       <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto border-b border-neutral-200 dark:border-neutral-700">
         {([
           ['connection', 'Koneksi', PlugZap],
@@ -2275,9 +2284,20 @@ export default function ZohoIntegrationPage() {
               </div>
               {canManageConnection && (
                 <div className="flex max-w-full flex-wrap gap-2">
+                  <button onClick={async () => {
+                    setAction('refreshStatus');
+                    try {
+                      const refreshed = await loadStatus();
+                      if (refreshed.connected) setOauthFeedback({ type: 'success', message: 'Zoho Books sudah terhubung. Klik Tes koneksi untuk memeriksa akses.' });
+                    } catch (error) {
+                      setOauthFeedback({ type: 'error', message: apiErrorMessage(error, 'Gagal memuat status koneksi Zoho.') });
+                    } finally { setAction(null); }
+                  }} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:border-neutral-700">
+                    <RefreshCw size={16} className={action === 'refreshStatus' ? 'animate-spin' : ''} /> Muat ulang status
+                  </button>
                   {status?.connected && (
                     <button onClick={testConnection} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:border-neutral-700">
-                      <RefreshCw size={16} className={action === 'test' ? 'animate-spin' : ''} /> Tes
+                      <RefreshCw size={16} className={action === 'test' ? 'animate-spin' : ''} /> Tes koneksi
                     </button>
                   )}
                   {status?.connected && status.connections.some((connection) => (

@@ -1,4 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
+import { AppError } from '@middleware/errorHandler';
+import { logger } from '@lib/logger';
 import { IntegrationEventStatus, ZohoDiscoveryResourceType } from '@prisma/client';
 import { z } from 'zod';
 import { sendSuccess } from '@utils/response';
@@ -192,7 +194,9 @@ export async function callback(req: Request, res: Response) {
     if (!code || !state) return res.redirect(service.webRedirect('error', 'Callback Zoho tidak lengkap.'));
     return res.redirect(await service.handleCallback(code, state, accountsServer));
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Koneksi Zoho gagal.';
+    // Never log authorization codes, token responses, callback URLs, or raw DB errors.
+    logger.warn('Zoho OAuth callback failed', { code: error instanceof AppError ? error.code : 'ZOHO_CALLBACK_FAILED' });
+    const message = error instanceof AppError ? error.message : 'Koneksi Zoho gagal disimpan. Periksa log server lalu klik Hubungkan Zoho untuk mencoba kembali.';
     return res.redirect(service.webRedirect('error', message));
   }
 }

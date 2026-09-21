@@ -15,6 +15,17 @@ Fitur ada di **Integrasi Zoho → Koneksi / Impor Excel** (`/admin/integrations/
 
 Untuk mengganti kredensial, tambahkan profil API baru atau pilih profil API yang sudah tersimpan, lalu hubungkan ulang organisasi yang ingin menggunakannya. Organisasi yang sudah terhubung tetap memakai profil API asal sampai diotorisasi ulang. **Tidak perlu mengganti Database aktif**: pengaturan itu memengaruhi database ERP, bukan sekadar akun Zoho.
 
+### Setelah menekan Setujui di Zoho
+
+1. Tunggu sampai kembali ke halaman **Integrasi Zoho Books** di ERP.
+2. Baca kotak **Hasil koneksi Zoho**. Pesan kegagalan tidak hanya muncul sebagai notifikasi singkat; pesan tetap terlihat, termasuk setelah refresh untuk callback yang gagal.
+3. Koneksi berhasil jika kartu menampilkan **Zoho Books terhubung** dan organisasi muncul. Tombol tidak hilang, tetapi berubah menjadi **Hubungkan ulang**. Tombol itu untuk mengulang izin, bukan tanda bahwa koneksi gagal.
+4. Klik **Muat ulang status** bila tampilan belum diperbarui, lalu **Tes koneksi** jika sudah terhubung.
+5. Jika pesan mengatakan penyiapan otomatis belum selesai, koneksinya tetap sudah terhubung. Klik **Siapkan otomatis**; tidak perlu mengulang login Zoho.
+6. Jika masih gagal, ikuti pesan pada kotak hasil: periksa credential/data center, samakan Redirect URI, atau mulai otorisasi baru untuk kode kedaluwarsa. Jangan refresh URL callback atau menggunakan ulang kode otorisasi lama.
+
+Status **terhubung** tidak otomatis mengaktifkan pengiriman LIVE. Mode aman dan pengaman pengiriman data tetap berlaku. Jangan membagikan Client Secret, token, atau URL callback yang berisi `code` dan `state`.
+
 ## 2. Data yang dapat diimpor
 
 | Jenis | Kolom wajib | Kolom opsional |
