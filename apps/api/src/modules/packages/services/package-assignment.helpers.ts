@@ -30,6 +30,11 @@ const ADD_ON_CATALOG: readonly AddOnCatalogItem[] = [
   { type: 'LAINNYA', name: 'Lainnya', code: 'LAIN-001', price: 0 },
 ];
 
+export function physicalAddOnCatalog() {
+  return ADD_ON_CATALOG.filter((item) => item.inventorySku && item.inventoryQuantityPerUnit)
+    .map((item) => ({ code: item.code, inventorySku: item.inventorySku!, unitsPerSale: item.inventoryQuantityPerUnit! }));
+}
+
 const ADD_ON_BY_CODE = new Map<string, AddOnCatalogItem>(
   ADD_ON_CATALOG.flatMap((item) => [
     [item.code, item] as const,

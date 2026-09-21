@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Droplets, Cigarette } from 'lucide-react';
 import { AddOnPricing, AIR_NANO_PRICING, ROKOK_KENKOU_PRICING } from '@/types/package';
+import type { AddOnAvailability } from '@/lib/packagesApi';
 import { formatCurrency } from '@/lib/formatNumber';
 
 interface AddOnSectionProps {
+  availability?: Record<string, AddOnAvailability>;
   isAddOnSelected: (code: string) => boolean;
   getAddOnQuantity: (code: string) => number;
   toggleAddOn: (addon: AddOnPricing) => void;
@@ -55,6 +57,7 @@ function AddOnQuantityInput({
 }
 
 export default function AddOnSection({
+  availability,
   isAddOnSelected,
   getAddOnQuantity,
   toggleAddOn,
@@ -62,6 +65,8 @@ export default function AddOnSection({
   title = 'ADD-ONS (Opsional)',
   description = 'Tambahkan produk non-terapi seperti Air Nano atau Rokok Kenkou',
 }: AddOnSectionProps) {
+  const tobaccoStock = availability?.[ROKOK_KENKOU_PRICING.code];
+  const tobaccoUnavailable = availability !== undefined && (!tobaccoStock || tobaccoStock.availableUnits < 1);
   return (
     <div className="assign-package-section space-y-3">
       <h4 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
@@ -82,10 +87,12 @@ export default function AddOnSection({
           <div className="space-y-2">
             {AIR_NANO_PRICING.map((addon) => {
               const isSelected = isAddOnSelected(addon.code);
+              const stock = availability?.[addon.code];
+              const unavailable = availability !== undefined && (!stock || stock.availableUnits < 1);
               return (
                 <div key={addon.code}>
                   <label 
-                    className={`assign-package-option flex items-center p-2.5 rounded-lg cursor-pointer transition-all border ${
+                    className={`assign-package-option flex items-center p-2.5 rounded-lg transition-all border ${unavailable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                       isSelected 
                         ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/50' 
                         : 'border-transparent hover:bg-amber-100/50 dark:hover:bg-amber-500/10'
@@ -94,12 +101,15 @@ export default function AddOnSection({
                     <input 
                       type="checkbox" 
                       checked={isSelected} 
+                      disabled={unavailable}
                       onChange={() => toggleAddOn(addon)} 
                       className="w-4 h-4 mr-2.5 rounded border-amber-400 dark:border-amber-500/50 text-amber-600 focus:ring-amber-500 bg-white dark:bg-neutral-800"
                     />
                     <span className="assign-package-option-name flex-1 text-sm font-medium text-neutral-800 dark:text-neutral-200">{addon.name}</span>
                     <span className="assign-package-option-price text-xs font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(addon.price)}</span>
                   </label>
+                  {unavailable && <p className="ml-9 text-xs text-amber-700 dark:text-amber-300">{stock?.reason || 'Stok siap jual belum tersedia di cabang ini.'}</p>}
+                  {!unavailable && stock && stock.availableUnits < 10 && <p className="ml-9 text-xs text-neutral-500">Tersedia: {stock.availableUnits}</p>}
                   {isSelected && (
                     <div className="assign-package-option-details ml-9 mt-2 p-2.5 rounded-lg bg-amber-100/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
                       <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Jumlah</label>
@@ -131,17 +141,19 @@ export default function AddOnSection({
                 isAddOnSelected(ROKOK_KENKOU_PRICING.code) 
                   ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/50' 
                   : 'border-transparent hover:bg-amber-100/50 dark:hover:bg-amber-500/10'
-              }`}
+              } ${tobaccoUnavailable ? 'cursor-not-allowed opacity-50' : ''}`}
             >
               <input 
                 type="checkbox" 
                 checked={isAddOnSelected(ROKOK_KENKOU_PRICING.code)} 
+                disabled={tobaccoUnavailable}
                 onChange={() => toggleAddOn(ROKOK_KENKOU_PRICING)} 
                 className="w-4 h-4 mr-2.5 rounded border-amber-400 dark:border-amber-500/50 text-amber-600 focus:ring-amber-500 bg-white dark:bg-neutral-800"
               />
               <span className="assign-package-option-name flex-1 text-sm font-medium text-neutral-800 dark:text-neutral-200">{ROKOK_KENKOU_PRICING.name}</span>
               <span className="assign-package-option-price text-xs font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(ROKOK_KENKOU_PRICING.price)}</span>
             </label>
+            {tobaccoUnavailable && <p className="ml-9 text-xs text-amber-700 dark:text-amber-300">{tobaccoStock?.reason || 'Stok siap jual belum tersedia di cabang ini.'}</p>}
             {isAddOnSelected(ROKOK_KENKOU_PRICING.code) && (
               <div className="assign-package-option-details ml-9 mt-2 p-2.5 rounded-lg bg-amber-100/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
                 <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Jumlah Bungkus</label>

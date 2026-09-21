@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import AssignAddOnModal, { type AddOnTransactionData } from './AssignAddOnModal';
 
-function Harness({ onSubmit }: { onSubmit: () => void }) {
+function Harness({ onSubmit, available = true }: { onSubmit: () => void; available?: boolean }) {
   const [data, setData] = useState<AddOnTransactionData>({
     selectedAddOns: [],
     transactionDate: '2026-09-03',
@@ -13,6 +13,7 @@ function Harness({ onSubmit }: { onSubmit: () => void }) {
   return (
     <AssignAddOnModal
       show
+      availability={{ 'PRD-ANN-KNG-001': { code: 'PRD-ANN-KNG-001', availableUnits: available ? 2 : 0, reason: available ? null : 'Belum ada HPP valid pada cabang ini.' } }}
       branchName="Raho Premier Jakarta"
       msoStaff={[{
         userId: 'mso-1',
@@ -52,5 +53,14 @@ describe('AssignAddOnModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Buat Transaksi' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents unavailable stock from being selected or submitted', () => {
+    const onSubmit = jest.fn();
+    render(<Harness onSubmit={onSubmit} available={false} />);
+    const product = screen.getByRole('checkbox', { name: /Air Nano Kuning 600ml 1 Botol/i });
+    expect(product).toBeDisabled();
+    expect(screen.getByText('Belum ada HPP valid pada cabang ini.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Buat Transaksi' })).toBeDisabled();
   });
 });

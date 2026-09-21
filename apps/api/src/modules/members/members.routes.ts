@@ -125,6 +125,14 @@ router.post(
 import { PackagesController } from '../packages/packages.controller';
 const packagesController = new PackagesController();
 
+router.get(
+  '/:memberId/add-on-availability',
+  authenticate,
+  authorize(MEMBER_MUTATORS),
+  assertBranchAccess,
+  packagesController.getAddOnAvailability.bind(packagesController),
+);
+
 // POST /api/v1/members/:memberId/packages - Assign package
 router.post(
   '/:memberId/packages',

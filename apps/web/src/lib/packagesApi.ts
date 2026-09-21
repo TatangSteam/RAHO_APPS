@@ -49,6 +49,12 @@ export interface AssignPackageData {
   };
 }
 
+export interface AddOnAvailability {
+  code: string;
+  availableUnits: number;
+  reason: string | null;
+}
+
 export interface VerifyPaymentData {
   notes?: string;
   paidAmount?: number;
@@ -68,6 +74,10 @@ export interface PackagePricingData {
 }
 
 export const packagesApi = {
+  getAddOnAvailability: async (memberId: string) => {
+    const response = await api.get<{ data: { branchId: string; products: AddOnAvailability[] } }>(`/members/${memberId}/add-on-availability`);
+    return response.data.data;
+  },
   // Upload payment proof file
   uploadPaymentProof: async (file: File) => {
     const formData = new FormData();

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PackagesService } from './packages.service';
 import { prisma } from '@lib/prisma';
+import { getAddOnAvailability } from './services/add-on-availability.service';
 import {
   assignPackageSchema,
   verifyPaymentSchema,
@@ -20,6 +21,20 @@ import path from 'path';
 const packagesService = new PackagesService();
 
 export class PackagesController {
+  async getAddOnAvailability(req: Request, res: Response, next: NextFunction) {
+    try {
+      const member = await prisma.member.findUnique({
+        where: { id: req.params.memberId },
+        select: { registrationBranchId: true, branchAccesses: { select: { branchId: true } } },
+      });
+      if (!member) return next({ status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' });
+      const branchId = req.user?.role === 'SUPER_ADMIN' ? member.registrationBranchId : req.user?.branchId;
+      if (!branchId || (branchId !== member.registrationBranchId && !member.branchAccesses.some((access) => access.branchId === branchId))) {
+        return next({ status: 403, code: 'MEMBER_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke member ini' });
+      }
+      return sendSuccess(res, { branchId, products: await getAddOnAvailability(branchId) });
+    } catch (error) { return next(error); }
+  }
   // Assign package to member
   async assignPackage(req: Request, res: Response, next: NextFunction) {
     try {

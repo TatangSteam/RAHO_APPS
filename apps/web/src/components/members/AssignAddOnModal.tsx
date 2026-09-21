@@ -7,6 +7,7 @@ import type { AddOnPricing, AddOnType } from '@/types/package';
 import type { StaffMember } from '@/lib/usersApi';
 import { formatCurrency } from '@/lib/formatNumber';
 import AddOnSection from './AssignPackageModal/AddOnSection';
+import type { AddOnAvailability } from '@/lib/packagesApi';
 
 export interface AddOnTransactionSelection {
   type: AddOnType;
@@ -24,6 +25,9 @@ export interface AddOnTransactionData {
 }
 
 interface Props {
+  availability?: Record<string, AddOnAvailability>;
+  availabilityLoading?: boolean;
+  availabilityError?: string;
   show: boolean;
   branchName?: string;
   msoStaff: StaffMember[];
@@ -36,6 +40,9 @@ interface Props {
 }
 
 export default function AssignAddOnModal({
+  availability,
+  availabilityLoading = false,
+  availabilityError,
   show,
   branchName,
   msoStaff,
@@ -85,6 +92,10 @@ export default function AssignAddOnModal({
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
+  const selectedStockIssue = data.selectedAddOns.find((item) => {
+    const stock = availability?.[item.code];
+    return !stock || stock.availableUnits < item.quantity;
+  });
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
@@ -157,7 +168,16 @@ export default function AssignAddOnModal({
               </div>
             </div>
 
+            {availabilityLoading && <p role="status" className="text-sm text-amber-600">Memeriksa stok siap jual cabang...</p>}
+            {availabilityError && <p role="alert" className="text-sm text-red-500">{availabilityError}</p>}
+            {availability && Object.values(availability).length > 0 && Object.values(availability).every((stock) => stock.availableUnits === 0) && (
+              <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+                Belum ada add-on dengan stok dan HPP siap jual di cabang ini. Minta tim Logistik membuka Dashboard Logistik → Nilai Stok untuk memeriksa produk. Jangan menambah stok lagi jika jumlahnya sudah tercatat.
+              </p>
+            )}
+            {selectedStockIssue && availability && <p role="alert" className="text-sm text-red-500">Stok siap jual untuk {selectedStockIssue.name} tidak cukup. Kurangi jumlah atau pilih produk lain.</p>}
             <AddOnSection
+              availability={availabilityLoading || availabilityError ? {} : availability}
               isAddOnSelected={isSelected}
               getAddOnQuantity={getQuantity}
               toggleAddOn={toggle}
@@ -194,6 +214,10 @@ export default function AssignAddOnModal({
               onClick={onSubmit}
               disabled={
                 submitting ||
+                availabilityLoading ||
+                !!availabilityError ||
+                !availability ||
+                !!selectedStockIssue ||
                 data.selectedAddOns.length === 0 ||
                 !data.transactionDate ||
                 !data.sellerMsoId

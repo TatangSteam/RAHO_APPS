@@ -4,7 +4,7 @@ import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
-import { packagesApi, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
+import { packagesApi, type AddOnAvailability, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
 import type { MemberDetail } from '@/types/member';
@@ -133,6 +133,9 @@ export default function MemberDetailPage() {
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showAddOnModal, setShowAddOnModal] = useState(false);
+  const [addOnAvailability, setAddOnAvailability] = useState<Record<string, AddOnAvailability> | undefined>();
+  const [addOnAvailabilityLoading, setAddOnAvailabilityLoading] = useState(false);
+  const [addOnAvailabilityError, setAddOnAvailabilityError] = useState('');
   const [msoStaff, setMsoStaff] = useState<StaffMember[]>([]);
   const [loadingMsoStaff, setLoadingMsoStaff] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -401,6 +404,14 @@ export default function MemberDetailPage() {
 
     setShowAddOnModal(true);
     setLoadingMsoStaff(true);
+    setAddOnAvailability(undefined);
+    setAddOnAvailabilityError('');
+    setAddOnAvailabilityLoading(true);
+    void packagesApi.getAddOnAvailability(memberId).then((result) => {
+      setAddOnAvailability(Object.fromEntries(result.products.map((product) => [product.code, product])));
+    }).catch((error) => {
+      setAddOnAvailabilityError(error.response?.data?.error?.message || 'Status stok cabang gagal dimuat. Tutup lalu buka kembali transaksi.');
+    }).finally(() => setAddOnAvailabilityLoading(false));
     try {
       const staff = await usersApi.getAdminLayanan(branchId);
       setMsoStaff(staff);
@@ -1193,6 +1204,9 @@ export default function MemberDetailPage() {
 
       <AssignAddOnModal
         show={showAddOnModal}
+        availability={addOnAvailability}
+        availabilityLoading={addOnAvailabilityLoading}
+        availabilityError={addOnAvailabilityError}
         branchName={member.registrationBranch?.name}
         msoStaff={msoStaff}
         loadingMsoStaff={loadingMsoStaff}
