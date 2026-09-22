@@ -24,6 +24,9 @@ interface PackageRefundModalProps {
   onReturnAddOnsToStockChange: (value: boolean) => void;
   onProofChange?: (value: { file: File | null; preview: string | null }) => void;
   onSubmit: () => void;
+  itemLabel?: string;
+  forceReturnStock?: boolean;
+  allowZeroRefund?: boolean;
 }
 
 export default function PackageRefundModal({
@@ -41,6 +44,9 @@ export default function PackageRefundModal({
   onReturnAddOnsToStockChange,
   onProofChange,
   onSubmit,
+  itemLabel = 'Paket',
+  forceReturnStock = false,
+  allowZeroRefund = false,
 }: PackageRefundModalProps) {
   const [compressing, setCompressing] = useState(false);
   const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
@@ -91,7 +97,7 @@ export default function PackageRefundModal({
   return (
     <PackageActionModal
       open={show}
-      title="💰 Refund Paket"
+      title={`Refund ${itemLabel}`}
       onClose={onClose}
       footer={(
         <>
@@ -102,16 +108,23 @@ export default function PackageRefundModal({
             unstyled
             onClick={onSubmit}
             className={styles.btnDanger}
-            disabled={submitting || compressing || !reason || reason.length < 8 || refundAmount <= 0}
+            disabled={
+              submitting
+              || compressing
+              || !reason
+              || reason.length < 8
+              || (allowZeroRefund ? refundAmount < 0 : refundAmount <= 0)
+              || (forceReturnStock && !returnAddOnsToStock)
+            }
           >
-            {submitting ? 'Memproses...' : 'Refund Paket'}
+            {submitting ? 'Memproses...' : `Refund ${itemLabel}`}
           </Button>
         </>
       )}
     >
           <div className={styles.infoBox}>
-            <p><strong>Kode Paket:</strong> {packageCode}</p>
-            <p><strong>Harga Paket:</strong> Rp {finalPrice.toLocaleString('id-ID')}</p>
+            <p><strong>Kode {itemLabel}:</strong> {packageCode}</p>
+            <p><strong>Harga {itemLabel}:</strong> Rp {finalPrice.toLocaleString('id-ID')}</p>
           </div>
 
           <div className={styles.formGroup}>
@@ -144,7 +157,10 @@ export default function PackageRefundModal({
               min={0}
               max={finalPrice}
             />
-            <small className={styles.hint}>Maksimal: Rp {finalPrice.toLocaleString('id-ID')}</small>
+            <small className={styles.hint}>
+              Maksimal: Rp {finalPrice.toLocaleString('id-ID')}
+              {allowZeroRefund && finalPrice === 0 ? ' (transaksi gratis dapat dibatalkan)' : ''}
+            </small>
           </div>
 
           <div className={styles.formGroup}>
@@ -153,13 +169,15 @@ export default function PackageRefundModal({
                 type="checkbox"
                 checked={returnAddOnsToStock}
                 onChange={(event) => onReturnAddOnsToStockChange(event.target.checked)}
-                disabled={submitting}
+                disabled={submitting || forceReturnStock}
                 style={{ marginTop: '3px' }}
               />
               <span>
                 Kembalikan add-on fisik ke stok
                 <small className={styles.hint} style={{ display: 'block', fontWeight: 400 }}>
-                  Centang hanya jika barang add-on benar-benar sudah diterima kembali. Stok dan HPP akan direversal otomatis.
+                  {forceReturnStock
+                    ? 'Wajib untuk pembatalan transaksi add-on oleh Super Admin. Stok dan HPP akan direversal otomatis.'
+                    : 'Centang hanya jika barang add-on benar-benar sudah diterima kembali. Stok dan HPP akan direversal otomatis.'}
                 </small>
               </span>
             </label>
@@ -197,7 +215,7 @@ export default function PackageRefundModal({
           <div className={styles.warningBox}>
             <p>⚠️ <strong>Perhatian:</strong></p>
             <ul>
-              <li>Paket akan dibatalkan dan status menjadi CANCELLED</li>
+              <li>{itemLabel} akan dibatalkan dan status menjadi CANCELLED</li>
               <li>Sesi terapi yang sudah dilakukan tidak akan terpengaruh</li>
               <li>Invoice akan dibatalkan</li>
               <li>Tindakan ini tidak dapat dibatalkan</li>

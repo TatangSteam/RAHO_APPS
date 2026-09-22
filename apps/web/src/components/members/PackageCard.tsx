@@ -324,6 +324,18 @@ export default function PackageCard({
                   ✅ Verify Payment
                 </button>
                 )}
+                {onCancelPackage && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCancelPackage(addon.addOnId, addon.addOnCode);
+                    }}
+                    className={styles.cancelButton}
+                    style={{ marginTop: 0 }}
+                  >
+                    Hapus &amp; Kembalikan Stok
+                  </button>
+                )}
               </div>
             )}
             
@@ -350,6 +362,18 @@ export default function PackageCard({
                     style={{ marginTop: 0 }}
                   >
                     ✅ Verify Termin Berikutnya
+                  </button>
+                )}
+                {onRefundPackage && addon.status === 'ACTIVE' && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRefundPackage(addon.addOnId, addon.addOnCode, addon.totalPrice);
+                    }}
+                    className={styles.refundButton}
+                    style={{ marginTop: 0 }}
+                  >
+                    Batalkan &amp; Kembalikan Stok
                   </button>
                 )}
               </div>

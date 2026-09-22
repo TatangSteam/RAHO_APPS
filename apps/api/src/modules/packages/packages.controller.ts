@@ -383,11 +383,11 @@ export class PackagesController {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      if (!branchId) {
+      if (!branchId && req.user?.role !== 'SUPER_ADMIN') {
         throw {
           status: 403,
           code: 'BRANCH_REQUIRED',
-          message: 'Hanya staff cabang yang bisa melakukan refund',
+          message: 'Hanya staff cabang atau Super Admin yang bisa melakukan refund',
         };
       }
 
@@ -398,7 +398,8 @@ export class PackagesController {
         packageId,
         {
           reason: data.reason,
-          refundAmount: data.refundAmount
+          refundAmount: data.refundAmount,
+          returnAddOnsToStock: data.returnAddOnsToStock,
         },
         userId,
         branchId,

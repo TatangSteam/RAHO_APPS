@@ -194,11 +194,13 @@ export default function MemberDetailPage() {
   const [refundFinalPrice, setRefundFinalPrice] = useState(0);
   const [returnAddOnsToStock, setReturnAddOnsToStock] = useState(false);
   const [refundProof, setRefundProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
+  const [refundTargetIsAddOn, setRefundTargetIsAddOn] = useState(false);
 
   // Cancel modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelPackageCode, setCancelPackageCode] = useState('');
+  const [cancelTargetIsAddOn, setCancelTargetIsAddOn] = useState(false);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -742,8 +744,10 @@ export default function MemberDetailPage() {
       showToast.error('Alasan refund minimal 8 karakter');
       return;
     }
-    if (refundAmount <= 0) {
-      showToast.error('Jumlah refund wajib diisi');
+    if (refundTargetIsAddOn ? refundAmount < 0 : refundAmount <= 0) {
+      showToast.error(refundTargetIsAddOn
+        ? 'Jumlah refund tidak boleh negatif'
+        : 'Jumlah refund wajib diisi');
       return;
     }
 
@@ -753,13 +757,16 @@ export default function MemberDetailPage() {
         reason: refundReason,
         refundAmount,
         refundProof: refundProof.file || undefined,
-        returnAddOnsToStock,
+        returnAddOnsToStock: refundTargetIsAddOn ? true : returnAddOnsToStock,
       });
-      showToast.success('Paket berhasil di-refund');
+      showToast.success(refundTargetIsAddOn
+        ? 'Transaksi dibatalkan dan stok berhasil dikembalikan'
+        : 'Paket berhasil di-refund');
       setShowRefundModal(false);
       setRefundReason('');
       setRefundAmount(0);
       setReturnAddOnsToStock(false);
+      setRefundTargetIsAddOn(false);
       setRefundProof({ file: null, preview: null });
       setSelectedPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
@@ -773,8 +780,8 @@ export default function MemberDetailPage() {
   };
 
   const handleCancelPackage = async () => {
-    if (!cancelReason) {
-      showToast.error('Alasan pembatalan wajib diisi');
+    if (cancelReason.trim().length < 5) {
+      showToast.error('Alasan pembatalan minimal 5 karakter');
       return;
     }
 
@@ -786,6 +793,7 @@ export default function MemberDetailPage() {
       showToast.success('Pembelian berhasil dibatalkan');
       setShowCancelModal(false);
       setCancelReason('');
+      setCancelTargetIsAddOn(false);
       setSelectedPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error) {
@@ -1118,6 +1126,21 @@ export default function MemberDetailPage() {
                 addOns={addOnTransactions}
                 loading={loadingPackages}
                 onVerifyPayment={canAssignPackage ? handleOpenPaymentVerification : undefined}
+                onCancelAddOn={isSuperAdmin ? (addOnId, addOnCode) => {
+                  setSelectedPackageId(addOnId);
+                  setCancelPackageCode(addOnCode);
+                  setCancelTargetIsAddOn(true);
+                  setShowCancelModal(true);
+                } : undefined}
+                onReturnAddOn={isSuperAdmin ? (addOnId, addOnCode, totalPrice) => {
+                  setSelectedPackageId(addOnId);
+                  setRefundPackageCode(addOnCode);
+                  setRefundFinalPrice(totalPrice);
+                  setRefundAmount(totalPrice);
+                  setReturnAddOnsToStock(true);
+                  setRefundTargetIsAddOn(true);
+                  setShowRefundModal(true);
+                } : undefined}
               />
             </section>
           )}
@@ -1264,6 +1287,7 @@ export default function MemberDetailPage() {
           setRefundReason('');
           setRefundAmount(0);
           setReturnAddOnsToStock(false);
+          setRefundTargetIsAddOn(false);
           setRefundProof({ file: null, preview: null });
           setSelectedPackageId('');
         }}
@@ -1272,6 +1296,9 @@ export default function MemberDetailPage() {
         onReturnAddOnsToStockChange={setReturnAddOnsToStock}
         onProofChange={setRefundProof}
         onSubmit={handleRefundPackage}
+        itemLabel={refundTargetIsAddOn ? 'Add-On' : 'Paket'}
+        forceReturnStock={refundTargetIsAddOn}
+        allowZeroRefund={refundTargetIsAddOn}
       />
 
       <PackageCancelModal
@@ -1282,10 +1309,13 @@ export default function MemberDetailPage() {
         onClose={() => {
           setShowCancelModal(false);
           setCancelReason('');
+          setCancelTargetIsAddOn(false);
           setSelectedPackageId('');
         }}
         onReasonChange={setCancelReason}
         onSubmit={handleCancelPackage}
+        itemLabel={cancelTargetIsAddOn ? 'Add-On' : 'Paket'}
+        returnsStock={cancelTargetIsAddOn}
       />
 
       <EditPackageModal

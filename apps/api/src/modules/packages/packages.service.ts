@@ -1,4 +1,4 @@
-import type { AdjustVoucherBalanceInput, AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
+import type { AdjustVoucherBalanceInput, AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput, RefundPackageInput } from './packages.schema';
 import { PackageAssignmentService } from './services/package-assignment.service';
 import { PaymentVerificationService } from './services/payment-verification.service';
 import { PackageRetrievalService } from './services/package-retrieval.service';
@@ -137,7 +137,7 @@ export class PackagesService {
    */
   async refundPackage(
     packageId: string,
-    data: { reason: string; refundAmount?: number },
+    data: RefundPackageInput,
     userId: string,
     branchId: string | null,
     refundProofFile?: Express.Multer.File

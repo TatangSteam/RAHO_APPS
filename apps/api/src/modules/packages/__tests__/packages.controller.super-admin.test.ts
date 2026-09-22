@@ -86,4 +86,49 @@ describe('PackagesController Super Admin assignment', () => {
     });
     expect(next).not.toHaveBeenCalled();
   });
+
+  it('allows a Super Admin without a home branch to refund and return an add-on', async () => {
+    const refundPackage = jest
+      .spyOn(PackagesService.prototype, 'refundPackage')
+      .mockResolvedValue({ addOnsReturnedToStock: true } as never);
+    const controller = new PackagesController();
+    const req = {
+      params: { packageId: 'addon-1' },
+      body: {
+        reason: 'Barang dikembalikan oleh member',
+        refundAmount: 15_000,
+        returnAddOnsToStock: true,
+      },
+      user: {
+        id: 'super-admin-1',
+        userId: 'super-admin-1',
+        email: 'superadmin@raho.id',
+        role: 'SUPER_ADMIN',
+        branchId: null,
+        branchCode: null,
+        fullName: 'Super Admin',
+        staffCode: null,
+      },
+    } as unknown as Request;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    } as unknown as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.refundPackage(req, res, next);
+
+    expect(refundPackage).toHaveBeenCalledWith(
+      'addon-1',
+      {
+        reason: 'Barang dikembalikan oleh member',
+        refundAmount: 15_000,
+        returnAddOnsToStock: true,
+      },
+      'super-admin-1',
+      null,
+      undefined,
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
 });

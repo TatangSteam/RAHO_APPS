@@ -14,9 +14,17 @@ interface Props {
     proofUrl?: string,
     proofFileName?: string,
   ) => void;
+  onCancelAddOn?: (addOnId: string, addOnCode: string) => void;
+  onReturnAddOn?: (addOnId: string, addOnCode: string, totalPrice: number) => void;
 }
 
-export default function MemberAddOnsTab({ addOns, loading, onVerifyPayment }: Props) {
+export default function MemberAddOnsTab({
+  addOns,
+  loading,
+  onVerifyPayment,
+  onCancelAddOn,
+  onReturnAddOn,
+}: Props) {
   if (loading) {
     return (
       <div className={styles.emptyState}>
@@ -46,6 +54,8 @@ export default function MemberAddOnsTab({ addOns, loading, onVerifyPayment }: Pr
           key={addOn.addOnId}
           pkg={addOn}
           onVerifyPayment={onVerifyPayment}
+          onCancelPackage={onCancelAddOn}
+          onRefundPackage={onReturnAddOn}
         />
       ))}
     </div>

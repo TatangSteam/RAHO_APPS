@@ -12,6 +12,8 @@ interface PackageCancelModalProps {
   onClose: () => void;
   onReasonChange: (value: string) => void;
   onSubmit: () => void;
+  itemLabel?: string;
+  returnsStock?: boolean;
 }
 
 export default function PackageCancelModal({
@@ -22,6 +24,8 @@ export default function PackageCancelModal({
   onClose,
   onReasonChange,
   onSubmit,
+  itemLabel = 'Paket',
+  returnsStock = false,
 }: PackageCancelModalProps) {
   if (!show) return null;
 
@@ -39,7 +43,7 @@ export default function PackageCancelModal({
             unstyled
             onClick={onSubmit}
             className={styles.btnDanger}
-            disabled={submitting || !reason}
+            disabled={submitting || reason.trim().length < 5}
           >
             {submitting ? 'Memproses...' : 'Batalkan Pembelian'}
           </Button>
@@ -47,7 +51,7 @@ export default function PackageCancelModal({
       )}
     >
           <div className={styles.infoBox}>
-            <p><strong>Kode Paket:</strong> {packageCode}</p>
+            <p><strong>Kode {itemLabel}:</strong> {packageCode}</p>
           </div>
 
           <div className={styles.formGroup}>
@@ -59,14 +63,21 @@ export default function PackageCancelModal({
               rows={4}
               className={styles.textarea}
               disabled={submitting}
+              minLength={5}
             />
+            {reason.length > 0 && reason.trim().length < 5 && (
+              <small className={styles.error} style={{ color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                Alasan pembatalan minimal 5 karakter ({reason.trim().length}/5)
+              </small>
+            )}
           </div>
 
           <div className={styles.warningBox}>
             <p>⚠️ <strong>Perhatian:</strong></p>
             <ul>
               <li>Invoice akan dibatalkan</li>
-              <li>Paket akan dihapus dari sistem</li>
+              <li>{itemLabel} akan dibatalkan dan tetap tersimpan dalam histori audit</li>
+              {returnsStock && <li>Reservasi stok akan dilepas sehingga stok siap dijual kembali</li>}
               <li>Tidak ada refund karena belum ada pembayaran</li>
               <li>Tindakan ini tidak dapat dibatalkan</li>
             </ul>

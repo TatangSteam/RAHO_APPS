@@ -224,11 +224,12 @@ export class PackageCancelService {
     if (!addOn) {
       throw { status: 404, code: 'PACKAGE_NOT_FOUND', message: 'Paket atau add-on tidak ditemukan' };
     }
-    if (addOn.status !== 'PENDING_PAYMENT') {
+    const cancellableStatuses = ['PENDING_PAYMENT', 'WAITING_VERIFICATION'];
+    if (!cancellableStatuses.includes(addOn.status)) {
       throw {
         status: 400,
         code: 'INVALID_STATUS',
-        message: 'Hanya add-on dengan status PENDING_PAYMENT yang bisa dibatalkan',
+        message: 'Hanya add-on yang belum dibayar atau masih menunggu verifikasi yang bisa dibatalkan',
       };
     }
     const invoice = await prisma.invoice.findFirst({
@@ -272,7 +273,7 @@ export class PackageCancelService {
       meta: {
         action: 'CANCEL',
         reason: data.reason,
-        previousStatus: 'PENDING_PAYMENT',
+        previousStatus: addOn.status,
         newStatus: 'CANCELLED',
         invoiceId: invoice?.id,
       },
