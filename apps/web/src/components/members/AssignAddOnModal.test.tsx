@@ -38,7 +38,7 @@ describe('AssignAddOnModal', () => {
 
     expect(screen.getByRole('heading', { name: 'Tambah Air Nano & Add-On' })).toBeInTheDocument();
     expect(screen.getByText('Cabang transaksi: Raho Premier Jakarta')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Buat Transaksi' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Tambahkan Produk' })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/MSO yang menjual/i), {
       target: { value: 'mso-1' },
@@ -48,10 +48,10 @@ describe('AssignAddOnModal', () => {
       name: /Air Nano Kuning 600ml 1 Botol/i,
     }));
 
-    expect(screen.getByRole('button', { name: 'Buat Transaksi' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Tambahkan Produk' })).toBeEnabled();
     expect(screen.getAllByText('Rp 15.000').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Buat Transaksi' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tambahkan Produk' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
@@ -61,6 +61,6 @@ describe('AssignAddOnModal', () => {
     const product = screen.getByRole('checkbox', { name: /Air Nano Kuning 600ml 1 Botol/i });
     expect(product).toBeDisabled();
     expect(screen.getByText('Harga modal stok belum tersedia pada cabang ini.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Buat Transaksi' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Tambahkan Produk' })).toBeDisabled();
   });
 });

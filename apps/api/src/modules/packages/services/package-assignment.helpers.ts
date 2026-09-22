@@ -32,7 +32,20 @@ const ADD_ON_CATALOG: readonly AddOnCatalogItem[] = [
 
 export function physicalAddOnCatalog() {
   return ADD_ON_CATALOG.filter((item) => item.inventorySku && item.inventoryQuantityPerUnit)
-    .map((item) => ({ code: item.code, inventorySku: item.inventorySku!, unitsPerSale: item.inventoryQuantityPerUnit! }));
+    .map((item) => ({
+      code: item.code,
+      inventorySku: item.inventorySku!,
+      inventorySkus: inventorySkuCandidates(item.inventorySku!),
+      unitsPerSale: item.inventoryQuantityPerUnit!,
+    }));
+}
+
+/** Support stock created by both the older H2S seed and the current HJU seed. */
+export function inventorySkuCandidates(inventorySku: string): string[] {
+  const match = /^PRD-ANN-(HJU|H2S)-(001|002)$/.exec(inventorySku);
+  if (!match) return [inventorySku];
+  const alternateColor = match[1] === 'HJU' ? 'H2S' : 'HJU';
+  return [inventorySku, `PRD-ANN-${alternateColor}-${match[2]}`];
 }
 
 const ADD_ON_BY_CODE = new Map<string, AddOnCatalogItem>(

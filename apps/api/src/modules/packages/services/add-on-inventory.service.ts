@@ -11,6 +11,7 @@ import {
   postAddOnCostInTransaction,
   reverseAddOnCostInTransaction,
 } from '@modules/accounting/accounting.service';
+import { inventorySkuCandidates } from './package-assignment.helpers';
 
 type Tx = Prisma.TransactionClient;
 
@@ -78,9 +79,11 @@ export async function reserveAddOnStockInTransaction(
   const inventoryItem = await tx.inventoryItem.findFirst({
     where: {
       branchId: addOn.branchId,
-      masterProduct: { sku: addOn.inventorySku, isActive: true },
+      stockLocationId: { not: null },
+      masterProduct: { sku: { in: inventorySkuCandidates(addOn.inventorySku) }, isActive: true },
     },
     select: { id: true, stockLocationId: true },
+    orderBy: { stock: 'desc' },
   });
   if (!inventoryItem?.stockLocationId) {
     throw errors.unprocessable(
@@ -142,7 +145,7 @@ export async function reserveAddOnStockInTransaction(
     if (available.isZero()) {
       throw errors.unprocessable(
         'ADD_ON_VALUED_STOCK_UNAVAILABLE',
-        `Stok siap jual ${addOn.inventorySku} belum memiliki HPP yang valid. Buka Dashboard Logistik → Nilai Stok, pilih cabang transaksi, lalu cari SKU tersebut. Jangan menambah stok lagi jika jumlahnya sudah tercatat.`,
+        `Stok siap jual ${addOn.inventorySku} belum memiliki harga modal yang valid. Buka Dashboard Logistik → Nilai Stok, pilih cabang transaksi, lalu cari SKU tersebut. Jangan menambah stok lagi jika jumlahnya sudah tercatat.`,
       );
     }
     throw errors.unprocessable(

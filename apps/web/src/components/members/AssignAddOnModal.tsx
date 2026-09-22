@@ -225,7 +225,7 @@ export default function AssignAddOnModal({
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 font-bold text-black disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              {submitting ? 'Menyimpan...' : 'Buat Transaksi'}
+              {submitting ? 'Menambahkan...' : 'Tambahkan Produk'}
             </button>
           </div>
         </div>

@@ -85,7 +85,7 @@ async function ensureCurrentAccountingPeriod(branchId: string, actorUserId: stri
  * authoritative through the existing direct valuation service.
  */
 export async function prepareAddOnInventoryForSale(branchId: string, actorUserId: string) {
-  const skus = [...new Set(physicalAddOnCatalog().map((entry) => entry.inventorySku))];
+  const skus = [...new Set(physicalAddOnCatalog().flatMap((entry) => entry.inventorySkus || [entry.inventorySku]))];
   const products = await prisma.masterProduct.findMany({
     where: { sku: { in: skus }, isActive: true },
     select: { sku: true, defaultUnitCost: true },

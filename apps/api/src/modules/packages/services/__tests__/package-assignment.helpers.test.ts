@@ -1,11 +1,19 @@
 import {
   allocatePackageDiscount,
   calculatePurchaseDiscount,
+  inventorySkuCandidates,
   InvalidAddOnError,
   normalizeAddOnAssignments,
 } from '../package-assignment.helpers';
 
 describe('package assignment helpers', () => {
+  it('supports both current HJU and legacy H2S green inventory SKUs', () => {
+    expect(inventorySkuCandidates('PRD-ANN-HJU-001')).toEqual([
+      'PRD-ANN-HJU-001',
+      'PRD-ANN-H2S-001',
+    ]);
+  });
+
   describe('normalizeAddOnAssignments', () => {
     it('uses the server catalog instead of client-supplied price and name', () => {
       expect(
