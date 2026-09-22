@@ -4,7 +4,7 @@ import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
-import { packagesApi, type AddOnAvailability, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
+import { packagesApi, type AddOnAvailability, type AddOnInventorySetupResult, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
 import type { MemberDetail } from '@/types/member';
@@ -409,8 +409,21 @@ export default function MemberDetailPage() {
     setAddOnAvailability(undefined);
     setAddOnAvailabilityError('');
     setAddOnAvailabilityLoading(true);
-    void packagesApi.getAddOnAvailability(memberId).then((result) => {
+    const availabilityRequest: Promise<{
+      branchId: string;
+      products: AddOnAvailability[];
+      setup?: AddOnInventorySetupResult;
+    }> = isSuperAdmin
+      ? packagesApi.prepareAddOnInventory(memberId)
+      : packagesApi.getAddOnAvailability(memberId);
+    void availabilityRequest.then((result) => {
       setAddOnAvailability(Object.fromEntries(result.products.map((product) => [product.code, product])));
+      if (result.setup && result.setup.prepared > 0) {
+        showToast.success(`Harga modal ${result.setup.prepared} stok berhasil disiapkan otomatis.`);
+      }
+      if (result.setup && result.setup.issues.length > 0) {
+        showToast.warning(result.setup.issues[0].message || 'Sebagian stok masih perlu diperiksa oleh Super Admin.');
+      }
     }).catch((error) => {
       setAddOnAvailabilityError(error.response?.data?.error?.message || 'Status stok cabang gagal dimuat. Tutup lalu buka kembali transaksi.');
     }).finally(() => setAddOnAvailabilityLoading(false));

@@ -68,6 +68,7 @@ export const createMasterProductSchema = z.object({
   tracksExpiry: z.boolean().default(false),
   isAutoUsedPerSession: z.boolean().default(false),
   isAutoAddedToBranch: z.boolean().default(false),
+  defaultUnitCost: z.union([positiveDecimal, z.null()]).optional(),
 });
 
 export const updateMasterProductSchema = createMasterProductSchema.partial().extend({

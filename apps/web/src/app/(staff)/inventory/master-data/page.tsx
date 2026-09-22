@@ -2,7 +2,7 @@
 
 import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { InventoryMasterProduct, inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
@@ -21,7 +21,8 @@ export default function InventoryMasterDataPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [uomForm, setUomForm] = useState({ code: '', name: '', category: 'GENERAL', precision: 4 });
-  const [productForm, setProductForm] = useState({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', tracksBatch: false, tracksExpiry: false });
+  const [productForm, setProductForm] = useState({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', defaultUnitCost: '', tracksBatch: false, tracksExpiry: false });
+  const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [batchForm, setBatchForm] = useState({ masterProductId: '', batchNumber: '', manufactureDate: '', expiryDate: '' });
   const [conversionForm, setConversionForm] = useState({ productId: '', baseUomId: '', usageUomId: '', factor: '1' });
   const [previewForm, setPreviewForm] = useState({ quantity: '', factor: '1', direction: 'BASE_TO_USAGE' as 'BASE_TO_USAGE' | 'USAGE_TO_BASE' });
@@ -41,7 +42,14 @@ export default function InventoryMasterDataPage() {
       const loadedUoms = uomResponse.data?.data || [];
       setUoms(loadedUoms);
       const productResponse = await inventoryApi.getMasterProducts();
-      setProducts(productResponse.data?.data?.products || []);
+      const loadedProducts = productResponse.data?.data?.products || [];
+      setProducts(loadedProducts);
+      setCostDrafts(Object.fromEntries(loadedProducts.map((product: InventoryMasterProduct) => [
+        product.id,
+        product.defaultUnitCost === null || product.defaultUnitCost === undefined
+          ? ''
+          : String(product.defaultUnitCost),
+      ])));
 
       if (!effectivePermissions.has('INVENTORY.MASTER.MANAGE')) {
         setTab('UOM');
@@ -113,6 +121,25 @@ export default function InventoryMasterDataPage() {
     }
   };
 
+  const saveDefaultUnitCost = async (product: InventoryMasterProduct) => {
+    const value = costDrafts[product.id]?.trim() || '';
+    if (!/^\d+(?:\.\d{1,4})?$/.test(value) || Number(value) <= 0) {
+      showToast.error('Harga modal harus lebih dari Rp0 dan maksimal 4 angka desimal.');
+      return;
+    }
+    try {
+      setSaving(true);
+      await inventoryApi.updateMasterProduct(product.id, { defaultUnitCost: value });
+      showToast.success(`Harga modal ${product.sku || product.name} berhasil disimpan.`);
+      await load();
+    } catch (requestError) {
+      assertCaughtError(requestError);
+      showToast.error(requestError.response?.data?.error?.message || 'Harga modal gagal disimpan.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -174,18 +201,19 @@ export default function InventoryMasterDataPage() {
           </section>}
 
           {tab === 'PRODUCT' && <section>
-            {canManage && <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createMasterProduct(productForm), () => setProductForm({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', tracksBatch: false, tracksExpiry: false }))}>
+            {canManage && <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createMasterProduct({ ...productForm, defaultUnitCost: productForm.defaultUnitCost || undefined }), () => setProductForm({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', defaultUnitCost: '', tracksBatch: false, tracksExpiry: false }))}>
               <label className={styles.field}><span>SKU</span><input className={styles.input} required value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
               <label className={styles.field}><span>Nama produk</span><input className={styles.input} required value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /></label>
               <label className={styles.field}><span>Kategori</span><select className={styles.select} value={productForm.category} onChange={(event) => setProductForm({ ...productForm, category: event.target.value })}><option>MEDICINE</option><option>DEVICE</option><option>CONSUMABLE</option></select></label>
               <label className={styles.field}><span>Base UOM</span><select className={styles.select} required value={productForm.baseUomId} onChange={(event) => setProductForm({ ...productForm, baseUomId: event.target.value })}><option value="">Pilih</option>{uoms.map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
               <label className={styles.field}><span>Usage UOM</span><select className={styles.select} required value={productForm.usageUomId} onChange={(event) => setProductForm({ ...productForm, usageUomId: event.target.value })}><option value="">Pilih</option>{uoms.map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
               <label className={styles.field}><span>Faktor konversi</span><input className={styles.input} required value={productForm.conversionFactor} onChange={(event) => setProductForm({ ...productForm, conversionFactor: event.target.value })} /></label>
+              <label className={styles.field}><span>Harga modal bawaan</span><input className={styles.input} inputMode="decimal" placeholder="Contoh: 15000" value={productForm.defaultUnitCost} onChange={(event) => setProductForm({ ...productForm, defaultUnitCost: event.target.value })} /></label>
               <label><input type="checkbox" checked={productForm.tracksBatch} onChange={(event) => setProductForm({ ...productForm, tracksBatch: event.target.checked, tracksExpiry: event.target.checked ? productForm.tracksExpiry : false })} /> Batch</label>
               <label><input type="checkbox" disabled={!productForm.tracksBatch} checked={productForm.tracksExpiry} onChange={(event) => setProductForm({ ...productForm, tracksExpiry: event.target.checked })} /> Expiry</label>
               <button className={styles.button} disabled={saving || uoms.length === 0}><Plus size={15} /> Produk</button>
             </form>}
-            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>SKU</th><th>Produk</th><th>Kategori</th><th>Konversi</th><th>Tracking</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.sku || '-'}</td><td>{product.name}</td><td>{product.category}</td><td>{product.baseUnit} x {String(product.conversionFactor)} {product.usageUnit}</td><td>{product.tracksBatch ? `Batch${product.tracksExpiry ? ' + Expiry' : ''}` : '-'}</td><td><span className={product.isActive ? styles.badge : styles.inactiveBadge}>{product.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && product.isActive ? <button className={styles.dangerButton} title="Nonaktifkan produk" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.updateMasterProduct(product.id, { isActive: false }), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
+            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>SKU</th><th>Produk</th><th>Kategori</th><th>Konversi</th><th>Harga Modal</th><th>Tracking</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.sku || '-'}</td><td>{product.name}</td><td>{product.category}</td><td>{product.baseUnit} x {String(product.conversionFactor)} {product.usageUnit}</td><td>{canManage ? <div className="flex min-w-40 items-center gap-2"><input aria-label={`Harga modal ${product.sku || product.name}`} className={styles.input} inputMode="decimal" placeholder="Belum diatur" value={costDrafts[product.id] ?? ''} onChange={(event) => setCostDrafts((current) => ({ ...current, [product.id]: event.target.value }))} /><button type="button" className={styles.secondaryButton} title="Simpan harga modal" disabled={saving || !costDrafts[product.id]} onClick={() => void saveDefaultUnitCost(product)}><Save size={14} /></button></div> : product.defaultUnitCost ? `Rp ${product.defaultUnitCost.toLocaleString('id-ID')}` : '-'}</td><td>{product.tracksBatch ? `Batch${product.tracksExpiry ? ' + Expiry' : ''}` : '-'}</td><td><span className={product.isActive ? styles.badge : styles.inactiveBadge}>{product.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && product.isActive ? <button className={styles.dangerButton} title="Nonaktifkan produk" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.updateMasterProduct(product.id, { isActive: false }), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
           </section>}
 
           {tab === 'BATCH' && <section>

@@ -90,15 +90,15 @@ export async function seedProducts(prisma: PrismaClient) {
 
     // ==================== AIR NANO (ANN) ====================
     // NOTE: Air Nano Hijau TIDAK mengandung "H2S" di nama agar tidak tertukar dengan Cairan H2S therapy
-    { sku: 'PRD-ANN-KNG-001', name: 'Air Nano Kuning 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 600ml' },
-    { sku: 'PRD-ANN-BRU-001', name: 'Air Nano Biru 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 600ml' },
-    { sku: 'PRD-ANN-HJU-001', name: 'Air Nano Hijau 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 600ml' },
-    { sku: 'PRD-ANN-KNG-002', name: 'Air Nano Kuning 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 1500ml' },
-    { sku: 'PRD-ANN-BRU-002', name: 'Air Nano Biru 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 1500ml' },
-    { sku: 'PRD-ANN-HJU-002', name: 'Air Nano Hijau 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 1500ml' },
+    { sku: 'PRD-ANN-KNG-001', name: 'Air Nano Kuning 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 600ml', defaultUnitCost: 15_000 },
+    { sku: 'PRD-ANN-BRU-001', name: 'Air Nano Biru 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 600ml', defaultUnitCost: 15_000 },
+    { sku: 'PRD-ANN-HJU-001', name: 'Air Nano Hijau 600ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 600ml', defaultUnitCost: 15_000 },
+    { sku: 'PRD-ANN-KNG-002', name: 'Air Nano Kuning 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 1500ml', defaultUnitCost: 35_000 },
+    { sku: 'PRD-ANN-BRU-002', name: 'Air Nano Biru 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 1500ml', defaultUnitCost: 35_000 },
+    { sku: 'PRD-ANN-HJU-002', name: 'Air Nano Hijau 1500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 1500ml', defaultUnitCost: 35_000 },
 
     // ==================== CONSUMABLES (CON) ====================
-    { sku: 'PRD-CON-RKK-001', name: 'Rokok Kenkou', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Rokok Kenkou' },
+    { sku: 'PRD-CON-RKK-001', name: 'Rokok Kenkou', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Rokok Kenkou', defaultUnitCost: 20_000 },
 
     // ==================== FURNITURE (FUR) ====================
     { sku: 'PRD-FUR-TIF-001', name: 'Tiang Infus Portable', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tiang infus portable' },
@@ -145,6 +145,7 @@ export async function seedProducts(prisma: PrismaClient) {
         isAutoUsedPerSession: (p as any).isAutoUsedPerSession ?? false,
         isAutoAddedToBranch: (p as any).isAutoAddedToBranch ?? false,
         defaultInitialStock: (p as any).defaultInitialStock ?? null,
+        defaultUnitCost: (p as any).defaultUnitCost ?? null,
       },
       create: {
         sku: p.sku,
@@ -158,6 +159,7 @@ export async function seedProducts(prisma: PrismaClient) {
         isAutoUsedPerSession: (p as any).isAutoUsedPerSession ?? false,
         isAutoAddedToBranch: (p as any).isAutoAddedToBranch ?? false,
         defaultInitialStock: (p as any).defaultInitialStock ?? null,
+        defaultUnitCost: (p as any).defaultUnitCost ?? null,
       },
     });
     createdProducts.push({ ...product, sku: p.sku });

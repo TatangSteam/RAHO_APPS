@@ -1,10 +1,14 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { logAudit } from '@utils/auditLog';
-import { createWarehouse } from '../inventory-master.service';
+import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
+import { createWarehouse, updateMasterProduct } from '../inventory-master.service';
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
     $transaction: jest.fn(),
+    masterProduct: { findUnique: jest.fn() },
+    unitOfMeasure: { findMany: jest.fn() },
   },
 }));
 
@@ -17,6 +21,11 @@ jest.mock('@modules/iam/authorization.service', () => ({
 jest.mock('@utils/auditLog', () => ({
   buildChangedFields: jest.fn(),
   logAudit: jest.fn(),
+}));
+
+jest.mock('@modules/zoho/zoho.master.service', () => ({
+  enqueueMasterSafely: jest.fn(),
+  enqueueWarehouseLocationsSafely: jest.fn(),
 }));
 
 describe('inventory master warehouse', () => {
@@ -76,5 +85,48 @@ describe('inventory master warehouse', () => {
       resource: 'Warehouse',
       resourceId: warehouse.id,
     }));
+  });
+});
+
+describe('inventory master purchase cost', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('persists an edited purchase cost as Decimal and queues the master update', async () => {
+    const before = {
+      id: 'product-1',
+      sku: 'PRD-ANN-KNG-001',
+      baseUomId: 'uom-bottle',
+      usageUomId: 'uom-bottle',
+      conversionFactor: new Prisma.Decimal(1),
+      tracksBatch: false,
+      tracksExpiry: false,
+      defaultUnitCost: new Prisma.Decimal(15_000),
+    };
+    const update = jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...before, ...data }));
+    const tx = {
+      masterProduct: { update },
+      unitConversion: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    (prisma.masterProduct.findUnique as jest.Mock).mockResolvedValue(before);
+    (prisma.unitOfMeasure.findMany as jest.Mock).mockResolvedValue([{
+      id: 'uom-bottle', code: 'BTL', name: 'Botol', isActive: true,
+    }]);
+    (prisma.$transaction as jest.Mock).mockImplementation(
+      async (operation: (client: typeof tx) => Promise<unknown>) => operation(tx),
+    );
+
+    const result = await updateMasterProduct('admin-1', 'product-1', {
+      defaultUnitCost: '12500',
+    });
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'product-1' },
+      data: expect.objectContaining({ defaultUnitCost: expect.anything() }),
+    }));
+    expect(update.mock.calls[0][0].data.defaultUnitCost.toFixed(0)).toBe('12500');
+    expect(result.defaultUnitCost.toFixed(0)).toBe('12500');
+    expect(enqueueMasterSafely).toHaveBeenCalledWith('MASTER_PRODUCT', 'product-1');
   });
 });

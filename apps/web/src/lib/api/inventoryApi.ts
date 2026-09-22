@@ -418,6 +418,7 @@ export interface InventoryMasterProduct {
   usageUnit: string;
   conversionFactor: number;
   description?: string;
+  defaultUnitCost?: number | null;
   isActive: boolean;
   baseUomId?: string;
   usageUomId?: string;

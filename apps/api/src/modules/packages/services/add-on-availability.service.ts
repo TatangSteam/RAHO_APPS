@@ -40,8 +40,8 @@ export async function getAddOnAvailability(branchId: string) {
     }
     const availableUnits = Math.max(0, Math.floor(available.div(entry.unitsPerSale).toNumber()));
     const reason = availableUnits > 0 ? null
-      : !item?.stockLocationId ? 'Stok cabang belum siap dijual: lokasi dan HPP belum tercatat. Hubungi tim Logistik.'
-        : 'Stok dengan HPP valid belum tersedia di cabang ini. Periksa Dashboard Logistik → Nilai Stok.';
+      : !item?.stockLocationId ? 'Stok cabang belum siap dijual karena lokasi atau harga modal belum tercatat.'
+        : 'Stok dengan harga modal belum tersedia di cabang ini.';
     return { code: entry.code, availableUnits, reason };
   });
 }

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PackagesService } from './packages.service';
 import { prisma } from '@lib/prisma';
 import { getAddOnAvailability } from './services/add-on-availability.service';
+import { prepareAddOnInventoryForSale } from './services/add-on-inventory-setup.service';
 import {
   assignPackageSchema,
   verifyPaymentSchema,
@@ -21,6 +22,24 @@ import path from 'path';
 const packagesService = new PackagesService();
 
 export class PackagesController {
+  async prepareAddOnInventory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const member = await prisma.member.findUnique({
+        where: { id: req.params.memberId },
+        select: { registrationBranchId: true },
+      });
+      if (!member) return next({ status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' });
+      if (!req.user?.userId) return next({ status: 401, code: 'UNAUTHORIZED', message: 'User information missing' });
+
+      const setup = await prepareAddOnInventoryForSale(member.registrationBranchId, req.user.userId);
+      return sendSuccess(res, {
+        branchId: member.registrationBranchId,
+        setup,
+        products: await getAddOnAvailability(member.registrationBranchId),
+      });
+    } catch (error) { return next(error); }
+  }
+
   async getAddOnAvailability(req: Request, res: Response, next: NextFunction) {
     try {
       const member = await prisma.member.findUnique({

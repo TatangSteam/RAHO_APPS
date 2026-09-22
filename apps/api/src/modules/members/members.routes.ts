@@ -26,6 +26,7 @@ const MEMBER_DOCUMENT_UPLOADERS = ALLSTAFF;
 const MEMBER_PROFILE_MUTATORS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
 const MEMBER_DELETERS = [Role.SUPER_ADMIN];
 const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
+const SUPER_ADMIN_ONLY = [Role.SUPER_ADMIN];
 
 // Roles that can edit therapy plans and add rows to active therapy plan sets.
 const THERAPY_PLAN_EDITORS = [
@@ -131,6 +132,13 @@ router.get(
   authorize(MEMBER_MUTATORS),
   assertBranchAccess,
   packagesController.getAddOnAvailability.bind(packagesController),
+);
+router.post(
+  '/:memberId/add-on-availability/prepare',
+  authenticate,
+  authorize(SUPER_ADMIN_ONLY),
+  assertBranchAccess,
+  packagesController.prepareAddOnInventory.bind(packagesController),
 );
 
 // POST /api/v1/members/:memberId/packages - Assign package

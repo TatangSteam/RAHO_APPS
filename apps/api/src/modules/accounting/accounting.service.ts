@@ -33,6 +33,14 @@ import { createHash } from 'crypto';
 
 type DbClient = Prisma.TransactionClient;
 
+export function expectedAdjustmentAccountType(sourceType: string, role: string) {
+  if (role.startsWith('INVENTORY_')) return AccountType.ASSET;
+  if (role === 'GAIN') {
+    return sourceType === 'INVENTORY_REVALUATION' ? AccountType.EQUITY : AccountType.REVENUE;
+  }
+  return AccountType.EXPENSE;
+}
+
 const journalInclude = {
   branch: { select: { id: true, branchCode: true, name: true } },
   accountingPeriod: { select: { id: true, name: true, fiscalYear: true, periodNo: true, status: true } },
@@ -490,7 +498,9 @@ export async function postInventoryAdjustmentDerivedJournal(input: PostJournalIn
   const accountTypes = new Map(accounts.map((account) => [account.code, account.type]));
   if (posting.lines.some((line) => {
     const role = String(line.metadata?.adjustmentRole);
-    const expected = role.startsWith('INVENTORY_') ? AccountType.ASSET : role === 'GAIN' ? AccountType.REVENUE : AccountType.EXPENSE;
+    // Giving previously unvalued legacy stock its opening cost is an opening
+    // balance entry (inventory vs equity), not operational adjustment income.
+    const expected = expectedAdjustmentAccountType(sourceType, role);
     return accountTypes.get(line.accountCode) !== expected;
   })) {
     throw errors.badRequest('ADJUSTMENT_JOURNAL_ACCOUNT_INVALID', 'Tipe akun jurnal adjustment tidak sesuai mapping reason code.');

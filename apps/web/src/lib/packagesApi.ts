@@ -55,6 +55,11 @@ export interface AddOnAvailability {
   reason: string | null;
 }
 
+export interface AddOnInventorySetupResult {
+  prepared: number;
+  issues: Array<{ sku: string; status: 'NEEDS_ATTENTION'; message?: string }>;
+}
+
 export interface VerifyPaymentData {
   notes?: string;
   paidAmount?: number;
@@ -76,6 +81,14 @@ export interface PackagePricingData {
 export const packagesApi = {
   getAddOnAvailability: async (memberId: string) => {
     const response = await api.get<{ data: { branchId: string; products: AddOnAvailability[] } }>(`/members/${memberId}/add-on-availability`);
+    return response.data.data;
+  },
+  prepareAddOnInventory: async (memberId: string) => {
+    const response = await api.post<{ data: {
+      branchId: string;
+      setup: AddOnInventorySetupResult;
+      products: AddOnAvailability[];
+    } }>(`/members/${memberId}/add-on-availability/prepare`);
     return response.data.data;
   },
   // Upload payment proof file

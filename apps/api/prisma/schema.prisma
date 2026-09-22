@@ -4068,6 +4068,7 @@ model MasterProduct {
   isAutoUsedPerSession Boolean         @default(false) @map("is_auto_used_per_session") // Auto-deduct 1 unit per infusion session
   isAutoAddedToBranch  Boolean         @default(false) @map("is_auto_added_to_branch") // Auto-add to new branch inventory
   defaultInitialStock  Decimal?        @map("default_initial_stock") @db.Decimal(10, 4) // Default stock when auto-added to branch
+  defaultUnitCost      Decimal?        @map("default_unit_cost") @db.Decimal(18, 4) // Default purchase/capital cost used to value legacy stock automatically
   isActive             Boolean         @default(true)
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt

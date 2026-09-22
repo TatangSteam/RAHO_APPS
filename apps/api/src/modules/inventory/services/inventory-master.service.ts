@@ -233,6 +233,9 @@ export async function createMasterProduct(userId: string, input: CreateMasterPro
         baseUomId: input.baseUomId, usageUomId: input.usageUomId, conversionFactor: factor,
         tracksBatch: input.tracksBatch, tracksExpiry: input.tracksExpiry,
         isAutoUsedPerSession: input.isAutoUsedPerSession, isAutoAddedToBranch: input.isAutoAddedToBranch,
+        defaultUnitCost: input.defaultUnitCost === null || input.defaultUnitCost === undefined
+          ? input.defaultUnitCost
+          : new Prisma.Decimal(input.defaultUnitCost),
       },
     });
     await tx.unitConversion.create({ data: { masterProductId: created.id, fromUomId: input.baseUomId, toUomId: input.usageUomId, factor } });
@@ -258,10 +261,14 @@ export async function updateMasterProduct(userId: string, id: string, input: Upd
   if (baseUomId === usageUomId && !factor.equals(1)) throw errors.badRequest('INVALID_UOM_CONVERSION', 'UOM yang sama harus memakai conversion factor 1.');
 
   const updated = await prisma.$transaction(async (tx) => {
+    const { defaultUnitCost, ...productInput } = input;
     const product = await tx.masterProduct.update({
       where: { id },
       data: {
-        ...input,
+        ...productInput,
+        ...(defaultUnitCost === undefined
+          ? {}
+          : { defaultUnitCost: defaultUnitCost === null ? null : new Prisma.Decimal(defaultUnitCost) }),
         conversionFactor: factor,
         baseUomId,
         usageUomId,

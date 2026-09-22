@@ -435,6 +435,7 @@ export async function getSkuValuationLookup(branchId: string, sku: string) {
     stockLocationId: null as string | null,
     valuationBatchId: null as string | null,
     valuationBatchNumber: null as string | null,
+    tracksBatch: product?.tracksBatch || false,
     mirrorQty: zero,
     onHandQty: zero,
     readyQty: zero,
@@ -527,7 +528,11 @@ export async function getSkuValuationLookup(branchId: string, sku: string) {
     status: 'NO_COST_LAYER',
     canValue: !!valuationBalance && (!product.tracksBatch || !!valuationBalance.batchId),
   };
-  if (pendingQty.greaterThan(0)) return { ...base, status: 'PENDING_VALUATION' };
+  if (pendingQty.greaterThan(0)) return {
+    ...base,
+    status: 'PENDING_VALUATION',
+    canValue: Boolean(valuationStockLocationId && !product.tracksBatch),
+  };
   if (readyQty.isZero()) return { ...base, status: 'NO_SALEABLE_HPP' };
   return { ...base, status: 'READY' };
 }

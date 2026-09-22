@@ -172,7 +172,7 @@ export default function AssignAddOnModal({
             {availabilityError && <p role="alert" className="text-sm text-red-500">{availabilityError}</p>}
             {availability && Object.values(availability).length > 0 && Object.values(availability).every((stock) => stock.availableUnits === 0) && (
               <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
-                Belum ada add-on dengan stok dan HPP siap jual di cabang ini. Minta tim Logistik membuka Dashboard Logistik → Nilai Stok untuk memeriksa produk. Jangan menambah stok lagi jika jumlahnya sudah tercatat.
+                Belum ada add-on dengan stok dan harga modal siap jual di cabang ini. Super Admin dapat mengatur harga modal pada Master Inventori, lalu membuka kembali transaksi ini.
               </p>
             )}
             {selectedStockIssue && availability && <p role="alert" className="text-sm text-red-500">Stok siap jual untuk {selectedStockIssue.name} tidak cukup. Kurangi jumlah atau pilih produk lain.</p>}

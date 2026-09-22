@@ -13,7 +13,7 @@ function Harness({ onSubmit, available = true }: { onSubmit: () => void; availab
   return (
     <AssignAddOnModal
       show
-      availability={{ 'PRD-ANN-KNG-001': { code: 'PRD-ANN-KNG-001', availableUnits: available ? 2 : 0, reason: available ? null : 'Belum ada HPP valid pada cabang ini.' } }}
+      availability={{ 'PRD-ANN-KNG-001': { code: 'PRD-ANN-KNG-001', availableUnits: available ? 2 : 0, reason: available ? null : 'Harga modal stok belum tersedia pada cabang ini.' } }}
       branchName="Raho Premier Jakarta"
       msoStaff={[{
         userId: 'mso-1',
@@ -60,7 +60,7 @@ describe('AssignAddOnModal', () => {
     render(<Harness onSubmit={onSubmit} available={false} />);
     const product = screen.getByRole('checkbox', { name: /Air Nano Kuning 600ml 1 Botol/i });
     expect(product).toBeDisabled();
-    expect(screen.getByText('Belum ada HPP valid pada cabang ini.')).toBeInTheDocument();
+    expect(screen.getByText('Harga modal stok belum tersedia pada cabang ini.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Buat Transaksi' })).toBeDisabled();
   });
 });

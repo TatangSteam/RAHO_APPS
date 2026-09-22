@@ -210,6 +210,7 @@ export class InventoryController {
           tracksBatch: true,
           tracksExpiry: true,
           description: true,
+          defaultUnitCost: true,
           isActive: true,
         },
         orderBy: [
@@ -223,6 +224,7 @@ export class InventoryController {
         products: products.map(p => ({
           ...p,
           conversionFactor: Number(p.conversionFactor),
+          defaultUnitCost: p.defaultUnitCost === null ? null : Number(p.defaultUnitCost),
         })),
         total: products.length,
       });
