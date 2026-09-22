@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { prisma } from '@lib/prisma';
+import { createAccountingPeriodService } from '@modules/accounting/accounting.service';
 import { directAdjustStock } from '@modules/inventory/services/inventory-control.service';
 import { getSkuValuationLookup } from '@modules/inventory/services/logistics-report.service';
 import { physicalAddOnCatalog } from './package-assignment.helpers';
@@ -23,6 +24,61 @@ function errorMessage(error: unknown) {
   return 'Harga modal stok belum dapat disiapkan otomatis.';
 }
 
+function jakartaMonthRange(now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now).map((part) => [part.type, part.value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const jakartaOffsetMs = 7 * 60 * 60 * 1000;
+  const nextMonthStartUtc = Date.UTC(year, month, 1) - jakartaOffsetMs;
+  return {
+    year,
+    month,
+    startDate: new Date(Date.UTC(year, month - 1, 1) - jakartaOffsetMs),
+    endDate: new Date(nextMonthStartUtc - 1),
+  };
+}
+
+async function ensureCurrentAccountingPeriod(branchId: string, actorUserId: string) {
+  const now = new Date();
+  const current = await prisma.accountingPeriod.findFirst({
+    where: {
+      scopeKey: { in: [branchId, 'GLOBAL'] },
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+  });
+  if (current) return false;
+
+  const range = jakartaMonthRange(now);
+  try {
+    await createAccountingPeriodService(actorUserId, {
+      name: `Periode Otomatis ${range.year}-${String(range.month).padStart(2, '0')}`,
+      fiscalYear: range.year,
+      periodNo: range.month,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      branchId: null,
+    });
+    return true;
+  } catch (error) {
+    // Another request may have created the same period concurrently. Only
+    // suppress the error when a usable period is now present.
+    const concurrent = await prisma.accountingPeriod.findFirst({
+      where: {
+        scopeKey: { in: [branchId, 'GLOBAL'] },
+        startDate: { lte: now },
+        endDate: { gte: now },
+      },
+    });
+    if (!concurrent) throw error;
+    return false;
+  }
+}
+
 /**
  * Gives existing legacy stock the editable default cost from Master Product.
  * Physical quantity is never changed and normal finance/audit records remain
@@ -40,6 +96,8 @@ export async function prepareAddOnInventoryForSale(branchId: string, actorUserId
     status: 'READY' | 'PREPARED' | 'SKIPPED' | 'NEEDS_ATTENTION';
     message?: string;
   }> = [];
+  let accountingPeriodChecked = false;
+  let accountingPeriodCreated = false;
 
   for (const sku of skus) {
     const lookup = await getSkuValuationLookup(branchId, sku);
@@ -85,6 +143,10 @@ export async function prepareAddOnInventoryForSale(branchId: string, actorUserId
     ]);
 
     try {
+      if (!accountingPeriodChecked) {
+        accountingPeriodCreated = await ensureCurrentAccountingPeriod(branchId, actorUserId);
+        accountingPeriodChecked = true;
+      }
       await directAdjustStock(actorUserId, lookup.inventoryItemId, {
         idempotencyKey,
         adjustment: '0',
@@ -105,5 +167,6 @@ export async function prepareAddOnInventoryForSale(branchId: string, actorUserId
     results,
     prepared: results.filter((result) => result.status === 'PREPARED').length,
     issues: results.filter((result) => result.status === 'NEEDS_ATTENTION'),
+    accountingPeriodCreated,
   };
 }

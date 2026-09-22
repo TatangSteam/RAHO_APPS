@@ -419,7 +419,9 @@ export default function MemberDetailPage() {
     void availabilityRequest.then((result) => {
       setAddOnAvailability(Object.fromEntries(result.products.map((product) => [product.code, product])));
       if (result.setup && result.setup.prepared > 0) {
-        showToast.success(`Harga modal ${result.setup.prepared} stok berhasil disiapkan otomatis.`);
+        showToast.success(
+          `Harga modal ${result.setup.prepared} stok berhasil disiapkan otomatis.${result.setup.accountingPeriodCreated ? ' Periode akuntansi bulan ini juga dibuat.' : ''}`,
+        );
       }
       if (result.setup && result.setup.issues.length > 0) {
         showToast.warning(result.setup.issues[0].message || 'Sebagian stok masih perlu diperiksa oleh Super Admin.');

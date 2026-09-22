@@ -57,6 +57,7 @@ export interface AddOnAvailability {
 
 export interface AddOnInventorySetupResult {
   prepared: number;
+  accountingPeriodCreated: boolean;
   issues: Array<{ sku: string; status: 'NEEDS_ATTENTION'; message?: string }>;
 }
 

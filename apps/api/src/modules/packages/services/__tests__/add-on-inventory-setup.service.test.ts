@@ -2,10 +2,17 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { directAdjustStock } from '@modules/inventory/services/inventory-control.service';
 import { getSkuValuationLookup } from '@modules/inventory/services/logistics-report.service';
+import { createAccountingPeriodService } from '@modules/accounting/accounting.service';
 import { prepareAddOnInventoryForSale } from '../add-on-inventory-setup.service';
 
 jest.mock('@lib/prisma', () => ({
-  prisma: { masterProduct: { findMany: jest.fn() } },
+  prisma: {
+    masterProduct: { findMany: jest.fn() },
+    accountingPeriod: { findFirst: jest.fn() },
+  },
+}));
+jest.mock('@modules/accounting/accounting.service', () => ({
+  createAccountingPeriodService: jest.fn(),
 }));
 jest.mock('@modules/inventory/services/inventory-control.service', () => ({
   directAdjustStock: jest.fn(),
@@ -40,6 +47,25 @@ describe('automatic add-on inventory setup', () => {
     }]);
     (getSkuValuationLookup as jest.Mock).mockResolvedValue(lookup);
     (directAdjustStock as jest.Mock).mockResolvedValue({ direct: true });
+    (prisma.accountingPeriod.findFirst as jest.Mock).mockResolvedValue({ id: 'period-1', status: 'OPEN' });
+    (createAccountingPeriodService as jest.Mock).mockResolvedValue({ id: 'period-1', status: 'OPEN' });
+  });
+
+  it('creates the current accounting period before valuing stock when none exists', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-22T05:00:00.000Z'));
+    (prisma.accountingPeriod.findFirst as jest.Mock).mockResolvedValueOnce(null);
+
+    const result = await prepareAddOnInventoryForSale('branch-1', 'super-1');
+
+    expect(createAccountingPeriodService).toHaveBeenCalledWith('super-1', expect.objectContaining({
+      periodNo: expect.any(Number),
+      branchId: null,
+      startDate: new Date('2026-08-31T17:00:00.000Z'),
+      endDate: new Date('2026-09-30T16:59:59.999Z'),
+    }));
+    expect(result.accountingPeriodCreated).toBe(true);
+    expect(directAdjustStock).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it('values each physical SKU once with the editable master cost', async () => {
