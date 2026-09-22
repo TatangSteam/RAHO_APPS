@@ -68,7 +68,9 @@ const skuStatusHint = (lookup: SkuLookup) => {
     case 'SKU_NOT_FOUND': return 'Periksa SKU. Untuk add-on per dus, stok biasanya memakai SKU botol penyusunnya.';
     case 'SKU_INACTIVE': return 'Aktifkan produk master sebelum transaksi.';
     case 'NOT_ASSIGNED_TO_BRANCH': return 'Pilih cabang transaksi yang benar. Jika tetap tidak ada, minta Admin menambahkan produk ke cabang ini.';
-    case 'NO_STOCK_LOCATION': return 'Minta Admin menyiapkan lokasi stok produk.';
+    case 'NO_STOCK_LOCATION': return lookup.canValue
+      ? 'Stok lama ditemukan. Klik Isi HPP; lokasi stok cabang akan disiapkan tanpa menambah jumlah stok.'
+      : 'Cabang belum memiliki warehouse/lokasi aktif atau produk memerlukan batch. Siapkan master stok terlebih dahulu.';
     case 'NO_LEDGER_BALANCE': return 'Stok sudah tercatat. Isi HPP dari dokumen; jumlah stok tidak akan bertambah.';
     case 'MIRROR_MISMATCH': return 'Minta Admin mencocokkan data stok sebelum mengisi HPP. Jangan menambah stok untuk menutup selisih.';
     case 'STOCK_IN_OTHER_LOCATION': return 'Minta Admin memindahkan stok ke lokasi jual produk.';

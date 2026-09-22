@@ -421,7 +421,7 @@ export async function getStockCard(actorUserId: string, query: StockCardQuery) {
   };
 }
 
-async function getSkuValuationLookup(branchId: string, sku: string) {
+export async function getSkuValuationLookup(branchId: string, sku: string) {
   const zero = new Prisma.Decimal(0);
   const product = await prisma.masterProduct.findFirst({
     where: { sku: { equals: sku, mode: 'insensitive' } },
@@ -461,6 +461,20 @@ async function getSkuValuationLookup(branchId: string, sku: string) {
   });
   if (!item) return { ...empty, status: 'NOT_ASSIGNED_TO_BRANCH' };
 
+  // Legacy inventory can have a mirror quantity but no location yet. Resolve
+  // the branch default up front so Super Admin can value that stock from the
+  // dashboard; the audited valuation transaction will attach the item to this
+  // location without increasing its quantity.
+  const fallbackLocation = item.stockLocationId ? null : await prisma.stockLocation.findFirst({
+    where: {
+      isActive: true,
+      warehouse: { branchId, isActive: true },
+    },
+    select: { id: true },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+  });
+  const valuationStockLocationId = item.stockLocationId || fallbackLocation?.id || null;
+
   const allOnHand = decimalSum(item.balances.map((balance) => balance.onHandQty));
   const canonical = item.balances.filter((balance) => balance.stockLocationId === item.stockLocationId);
   const onHandQty = decimalSum(canonical.map((balance) => balance.onHandQty));
@@ -487,7 +501,7 @@ async function getSkuValuationLookup(branchId: string, sku: string) {
   const base = {
     ...empty,
     inventoryItemId: item.id,
-    stockLocationId: item.stockLocationId,
+    stockLocationId: valuationStockLocationId,
     valuationBatchId: valuationBalance?.batchId || null,
     valuationBatchNumber: valuationBalance?.batch?.batchNumber || null,
     mirrorQty: item.stock,
@@ -496,7 +510,11 @@ async function getSkuValuationLookup(branchId: string, sku: string) {
     pendingQty,
     missingLayerQty,
   };
-  if (!item.stockLocationId) return { ...base, status: 'NO_STOCK_LOCATION' };
+  if (!item.stockLocationId) return {
+    ...base,
+    status: 'NO_STOCK_LOCATION',
+    canValue: Boolean(valuationStockLocationId && item.stock.greaterThan(0) && !product.tracksBatch),
+  };
   if (item.balances.length === 0 && item.stock.greaterThan(0)) {
     return { ...base, status: 'NO_LEDGER_BALANCE', canValue: !product.tracksBatch };
   }

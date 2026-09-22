@@ -208,7 +208,7 @@ test.describe('Logistics dashboard valuation', () => {
     await expect(page.getByRole('button', { name: 'Isi HPP' })).toHaveCount(0);
   });
 
-  test('lets Super Admin fill HPP when a searched SKU has no table row', async ({ page }) => {
+  test('lets Super Admin fill HPP when legacy stock has no assigned location', async ({ page }) => {
     const token = `${Buffer.from('{"alg":"none"}').toString('base64url')}.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.signature`;
     await page.context().addCookies([{ name: 'raho-auth-token', value: Buffer.from(JSON.stringify({ role: 'SUPER_ADMIN', userId: 'user-1' })).toString('base64'), domain: 'localhost', path: '/' }]);
     await page.addInitScript(({ accessToken, selectedBranchId }) => {
@@ -219,7 +219,7 @@ test.describe('Logistics dashboard valuation', () => {
     const unlisted = {
       ...mockValuation,
       data: [], meta: { ...mockValuation.meta, total: 0, totalPages: 0 },
-      skuLookup: { sku: 'PRD-ANN-BRU-001', productName: 'Air Nano Biru 600ml', baseUnit: 'Botol', inventoryItemId: 'item-1', stockLocationId: 'location-1', valuationBatchId: null, valuationBatchNumber: null, mirrorQty: '72', onHandQty: '0', readyQty: '0', pendingQty: '0', missingLayerQty: '0', canValue: true, status: 'NO_LEDGER_BALANCE' },
+      skuLookup: { sku: 'PRD-ANN-BRU-001', productName: 'Air Nano Biru 600ml', baseUnit: 'Botol', inventoryItemId: 'item-1', stockLocationId: 'location-default', valuationBatchId: null, valuationBatchNumber: null, mirrorQty: '72', onHandQty: '0', readyQty: '0', pendingQty: '0', missingLayerQty: '0', canValue: true, status: 'NO_STOCK_LOCATION' },
     };
     await page.route('**/api/v1/**', async (route) => {
       const url = route.request().url();
@@ -239,13 +239,14 @@ test.describe('Logistics dashboard valuation', () => {
     await page.getByRole('button', { name: 'Nilai Stok', exact: true }).click();
     await page.getByLabel('Cari produk').fill('PRD-ANN-BRU-001');
     await page.getByRole('button', { name: 'Cari', exact: true }).click();
-    await expect(page.getByText('Stok perlu HPP: PRD-ANN-BRU-001')).toBeVisible();
+    await expect(page.getByText('Lokasi stok belum siap: PRD-ANN-BRU-001')).toBeVisible();
+    await expect(page.getByText('Stok lama ditemukan. Klik Isi HPP;')).toBeVisible();
     await page.getByRole('button', { name: 'Isi HPP' }).click();
     const dialog = page.getByRole('dialog', { name: 'Isi HPP stok lama' });
     await dialog.getByLabel('HPP per Botol').fill('12000');
     await dialog.getByLabel('Nomor invoice / PO / dokumen saldo awal').fill('OPENING-2026-BRU');
     await dialog.getByRole('button', { name: 'Simpan HPP' }).click();
     await expect(dialog).not.toBeVisible();
-    expect(savedPayload).toMatchObject({ adjustment: 0, unitCost: '12000', valuationDocumentReference: 'OPENING-2026-BRU', stockLocationId: 'location-1' });
+    expect(savedPayload).toMatchObject({ adjustment: 0, unitCost: '12000', valuationDocumentReference: 'OPENING-2026-BRU', stockLocationId: 'location-default' });
   });
 });
