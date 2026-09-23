@@ -26,7 +26,7 @@ describe('physical add-on stock preview', () => {
     expect(prisma.inventoryItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ branchId: 'jakarta' }) }));
   });
 
-  it('uses legacy H2S inventory for the current HJU add-on code', async () => {
+  it('does not use H2S therapy stock for green Air Nano', async () => {
     (prisma.inventoryItem.findMany as jest.Mock).mockResolvedValue([{
       masterProduct: { sku: 'PRD-ANN-H2S-001' }, stockLocationId: 'loc-legacy',
       balances: [{
@@ -38,8 +38,8 @@ describe('physical add-on stock preview', () => {
 
     const rows = await getAddOnAvailability('jakarta');
 
-    expect(rows.find((row) => row.code === 'PRD-ANN-HJU-001')).toMatchObject({ availableUnits: 42, reason: null });
-    expect(rows.find((row) => row.code === 'PRD-ANN-HJU-003')).toMatchObject({ availableUnits: 1, reason: null });
+    expect(rows.find((row) => row.code === 'PRD-ANN-HJU-001')?.availableUnits).toBe(0);
+    expect(rows.find((row) => row.code === 'PRD-ANN-HJU-003')?.availableUnits).toBe(0);
   });
 
   it('uses valued stock at an active branch location even when the old item pointer differs', async () => {

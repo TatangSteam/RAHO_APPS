@@ -7,10 +7,9 @@ import {
 } from '../package-assignment.helpers';
 
 describe('package assignment helpers', () => {
-  it('supports both current HJU and legacy H2S green inventory SKUs', () => {
+  it('keeps green Air Nano inventory separate from H2S therapy products', () => {
     expect(inventorySkuCandidates('PRD-ANN-HJU-001')).toEqual([
       'PRD-ANN-HJU-001',
-      'PRD-ANN-H2S-001',
     ]);
   });
 
@@ -79,22 +78,32 @@ describe('package assignment helpers', () => {
       }]);
     });
 
-    it('accepts the H2S product code while preserving the legacy inventory SKU', () => {
+    it('accepts the HJU green product code and uses the matching inventory SKU', () => {
       expect(normalizeAddOnAssignments([{
         type: 'AIR_NANO',
-        code: 'PRD-ANN-H2S-001',
-        name: 'Air Nano Hijau H2S 600ml 1 Botol',
+        code: 'PRD-ANN-HJU-001',
+        name: 'Air Nano Hijau 600ml 1 Botol',
         price: 15_000,
         quantity: 1,
       }])).toEqual([{
         type: 'AIR_NANO',
         code: 'PRD-ANN-HJU-001',
-        name: 'Air Nano Hijau H2S 600ml 1 Botol',
+        name: 'Air Nano Hijau 600ml 1 Botol',
         price: 15_000,
         quantity: 1,
         inventorySku: 'PRD-ANN-HJU-001',
         inventoryQuantityPerUnit: 1,
       }]);
+    });
+
+    it('does not treat an H2S therapy product as green Air Nano', () => {
+      expect(() => normalizeAddOnAssignments([{
+        type: 'AIR_NANO',
+        code: 'PRD-ANN-H2S-001',
+        name: 'H2S',
+        price: 15_000,
+        quantity: 1,
+      }])).toThrow(InvalidAddOnError);
     });
 
     it('rejects an unknown code or mismatched type', () => {

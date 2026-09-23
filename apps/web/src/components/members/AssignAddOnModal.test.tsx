@@ -31,6 +31,39 @@ function Harness({ onSubmit, available = true }: { onSubmit: () => void; availab
   );
 }
 
+function GreenAirNanoHarness({ onSubmit }: { onSubmit: () => void }) {
+  const [data, setData] = useState<AddOnTransactionData>({
+    selectedAddOns: [],
+    transactionDate: '2026-09-23',
+    sellerMsoId: 'mso-1',
+    notes: '',
+  });
+
+  return <AssignAddOnModal
+    show
+    availability={{
+      'PRD-ANN-HJU-001': {
+        code: 'PRD-ANN-HJU-001',
+        availableUnits: 480,
+        reason: null,
+      },
+    }}
+    branchName="Raho Premier Jakarta"
+    msoStaff={[{
+      userId: 'mso-1',
+      staffCode: 'MSO-001',
+      fullName: 'MSO Satu',
+      role: 'ADMIN_LAYANAN',
+    }]}
+    loadingMsoStaff={false}
+    data={data}
+    submitting={false}
+    onChange={setData}
+    onClose={() => undefined}
+    onSubmit={onSubmit}
+  />;
+}
+
 describe('AssignAddOnModal', () => {
   it('creates a standalone Air Nano selection from the dedicated modal', () => {
     const onSubmit = jest.fn();
@@ -62,5 +95,18 @@ describe('AssignAddOnModal', () => {
     expect(product).toBeDisabled();
     expect(screen.getByText('Harga modal stok belum tersedia pada cabang ini.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Tambahkan Produk' })).toBeDisabled();
+  });
+
+  it('shows green Air Nano without H2S and enables it from HJU availability', () => {
+    const onSubmit = jest.fn();
+    render(<GreenAirNanoHarness onSubmit={onSubmit} />);
+
+    expect(screen.queryByText(/Air Nano Hijau H2S/i)).not.toBeInTheDocument();
+    const greenBottle = screen.getByRole('checkbox', {
+      name: /Air Nano Hijau 600ml 1 Botol/i,
+    });
+    expect(greenBottle).toBeEnabled();
+    fireEvent.click(greenBottle);
+    expect(screen.getByRole('button', { name: 'Tambahkan Produk' })).toBeEnabled();
   });
 });

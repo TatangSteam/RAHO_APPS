@@ -73,10 +73,10 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
     // ==================== AIR NANO (ANN) ====================
     { sku: 'PRD-ANN-KNG-001', name: 'Air Nano Kuning 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 600ml', stock: 100, minStock: 20 },
     { sku: 'PRD-ANN-BRU-001', name: 'Air Nano Biru 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 600ml', stock: 100, minStock: 20 },
-    { sku: 'PRD-ANN-H2S-001', name: 'Air Nano Hijau H2S 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau H2S 600ml', stock: 100, minStock: 20 },
+    { sku: 'PRD-ANN-HJU-001', name: 'Air Nano Hijau 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 600ml', stock: 100, minStock: 20 },
     { sku: 'PRD-ANN-KNG-002', name: 'Air Nano Kuning 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 1500ml', stock: 60, minStock: 15 },
     { sku: 'PRD-ANN-BRU-002', name: 'Air Nano Biru 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 1500ml', stock: 60, minStock: 15 },
-    { sku: 'PRD-ANN-H2S-002', name: 'Air Nano Hijau H2S 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau H2S 1500ml', stock: 60, minStock: 15 },
+    { sku: 'PRD-ANN-HJU-002', name: 'Air Nano Hijau 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau 1500ml', stock: 60, minStock: 15 },
 
     // ==================== CONSUMABLES (CON) ====================
     { sku: 'PRD-CON-RKK-001', name: 'Rokok Kenkou', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Rokok Kenkou', stock: 200, minStock: 50 },
