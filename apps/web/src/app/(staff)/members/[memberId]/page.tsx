@@ -413,7 +413,7 @@ export default function MemberDetailPage() {
       branchId: string;
       products: AddOnAvailability[];
       setup?: AddOnInventorySetupResult;
-    }> = isSuperAdmin
+    }> = canAssignPackage
       ? packagesApi.prepareAddOnInventory(memberId)
       : packagesApi.getAddOnAvailability(memberId);
     void availabilityRequest.then((result) => {

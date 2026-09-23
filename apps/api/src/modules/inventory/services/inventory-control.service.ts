@@ -36,6 +36,10 @@ import type {
 
 type Tx = Prisma.TransactionClient;
 type ScopedAdjustmentInput = CreateAdjustmentInput & { stockLocationId: string };
+interface DirectStockAdjustmentOptions {
+  /** Internal-only path for zero-quantity valuation using the approved master cost. */
+  automatedDefaultCostValuation?: boolean;
+}
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const documentNumber = (prefix: string) => `${prefix}/${new Date().getUTCFullYear()}/${randomUUID().slice(0, 10).toUpperCase()}`;
@@ -634,15 +638,32 @@ export async function directAdjustStock(
   userId: string,
   inventoryItemId: string,
   input: DirectStockAdjustmentInput,
+  options: DirectStockAdjustmentOptions = {},
 ) {
   const [actor, candidate] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { role: true, isActive: true } }),
     prisma.inventoryItem.findUnique({
       where: { id: inventoryItemId },
-      select: { branchId: true, branch: { select: { isActive: true } } },
+      select: {
+        branchId: true,
+        branch: { select: { isActive: true } },
+        masterProduct: { select: { sku: true, defaultUnitCost: true } },
+      },
     }),
   ]);
-  if (!actor?.isActive || actor.role !== Role.SUPER_ADMIN) {
+  const automatedDefaultCostValuation = Boolean(
+    options.automatedDefaultCostValuation
+    && candidate?.masterProduct.defaultUnitCost
+    && input.unitCost
+    && new Prisma.Decimal(input.adjustment).isZero()
+    && new Prisma.Decimal(input.unitCost).equals(candidate.masterProduct.defaultUnitCost)
+    && input.reasonCode === 'LEGACY_OPENING_VALUATION'
+    && input.valuationDocumentReference === `AUTO-MASTER-COST:${candidate.masterProduct.sku}`,
+  );
+  const automatedActorAllowed = actor?.role === Role.ADMIN_LAYANAN
+    || actor?.role === Role.ADMIN_CABANG
+    || actor?.role === Role.SUPER_ADMIN;
+  if (!actor?.isActive || (actor.role !== Role.SUPER_ADMIN && !(automatedDefaultCostValuation && automatedActorAllowed))) {
     throw errors.forbidden('Perubahan stok langsung hanya dapat dilakukan oleh Super Admin.');
   }
   if (!candidate) throw errors.notFound('Item inventori tidak ditemukan.');
@@ -651,9 +672,11 @@ export async function directAdjustStock(
   }
 
   await assertBranchAccess(userId, candidate.branchId);
-  await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_CREATE, candidate.branchId);
-  await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_POST, candidate.branchId);
-  await assertPermission(userId, PERMISSIONS.INVENTORY_POST, candidate.branchId);
+  if (!automatedDefaultCostValuation) {
+    await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_CREATE, candidate.branchId);
+    await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_POST, candidate.branchId);
+    await assertPermission(userId, PERMISSIONS.INVENTORY_POST, candidate.branchId);
+  }
 
   const payloadHash = hash({ inventoryItemId, ...input });
   return prisma.$transaction(async (tx) => {

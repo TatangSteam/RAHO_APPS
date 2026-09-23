@@ -16,6 +16,7 @@ export async function getAddOnAvailability(branchId: string) {
         where: { onHandQty: { gt: 0 } },
         select: {
           stockLocationId: true, onHandQty: true, reservedQty: true, quarantineQty: true,
+          stockLocation: { select: { isActive: true, warehouse: { select: { isActive: true, branchId: true } } } },
           batch: { select: { isBlocked: true, expiryDate: true } },
           costLayers: {
             where: { remainingQty: { gt: 0 }, unitCost: { gt: 0 }, valuationStatus: 'VALUED', isVoided: false, receivedAt: { lte: now } },
@@ -30,21 +31,27 @@ export async function getAddOnAvailability(branchId: string) {
     const candidateItems = entry.inventorySkus.map((sku) => bySku.get(sku)).filter(Boolean);
     let bestAvailable = new Prisma.Decimal(0);
     for (const item of candidateItems) {
-      if (!item?.stockLocationId) continue;
-      let itemAvailable = new Prisma.Decimal(0);
+      if (!item) continue;
+      const availableByLocation = new Map<string, Prisma.Decimal>();
       for (const balance of item.balances) {
-        if (balance.stockLocationId !== item.stockLocationId
+        if (!balance.stockLocation.isActive
+          || !balance.stockLocation.warehouse.isActive
+          || balance.stockLocation.warehouse.branchId !== branchId
           || balance.batch?.isBlocked
           || (balance.batch?.expiryDate && balance.batch.expiryDate <= now)) continue;
         const physical = Prisma.Decimal.max(0, balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty));
         const valued = balance.costLayers.reduce((sum, layer) => sum.add(layer.remainingQty), new Prisma.Decimal(0));
-        itemAvailable = itemAvailable.add(Prisma.Decimal.min(physical, valued));
+        const current = availableByLocation.get(balance.stockLocationId) || new Prisma.Decimal(0);
+        availableByLocation.set(balance.stockLocationId, current.add(Prisma.Decimal.min(physical, valued)));
       }
-      bestAvailable = Prisma.Decimal.max(bestAvailable, itemAvailable);
+      for (const available of availableByLocation.values()) {
+        bestAvailable = Prisma.Decimal.max(bestAvailable, available);
+      }
     }
     const availableUnits = Math.max(0, Math.floor(bestAvailable.div(entry.unitsPerSale).toNumber()));
     const reason = availableUnits > 0 ? null
-      : !candidateItems.some((item) => item?.stockLocationId) ? 'Stok cabang belum siap dijual karena lokasi atau harga modal belum tercatat.'
+      : !candidateItems.some((item) => item?.balances.some((balance) => balance.stockLocation.isActive && balance.stockLocation.warehouse.isActive && balance.stockLocation.warehouse.branchId === branchId))
+        ? 'Stok cabang belum siap dijual karena lokasi atau harga modal belum tercatat.'
         : 'Stok dengan harga modal belum tersedia di cabang ini.';
     return { code: entry.code, availableUnits, reason };
   });

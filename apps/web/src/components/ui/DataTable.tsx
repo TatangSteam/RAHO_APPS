@@ -345,7 +345,10 @@ export function AvatarCell({
             src={resolvedAvatarUrl}
             alt={name || 'Avatar'}
             className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setImageFailed(true)}
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+              setImageFailed(true);
+            }}
           />
         )}
       </div>

@@ -136,7 +136,7 @@ router.get(
 router.post(
   '/:memberId/add-on-availability/prepare',
   authenticate,
-  authorize(SUPER_ADMIN_ONLY),
+  authorize(MEMBER_MUTATORS),
   assertBranchAccess,
   packagesController.prepareAddOnInventory.bind(packagesController),
 );

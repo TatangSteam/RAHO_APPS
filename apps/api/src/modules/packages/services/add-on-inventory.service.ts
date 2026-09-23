@@ -17,6 +17,7 @@ type Tx = Prisma.TransactionClient;
 
 interface LockedBalance {
   id: string;
+  stockLocationId: string;
   onHandQty: Prisma.Decimal;
   reservedQty: Prisma.Decimal;
   quarantineQty: Prisma.Decimal;
@@ -79,13 +80,12 @@ export async function reserveAddOnStockInTransaction(
   const inventoryItem = await tx.inventoryItem.findFirst({
     where: {
       branchId: addOn.branchId,
-      stockLocationId: { not: null },
       masterProduct: { sku: { in: inventorySkuCandidates(addOn.inventorySku) }, isActive: true },
     },
     select: { id: true, stockLocationId: true },
     orderBy: { stock: 'desc' },
   });
-  if (!inventoryItem?.stockLocationId) {
+  if (!inventoryItem) {
     throw errors.unprocessable(
       'ADD_ON_INVENTORY_NOT_CONFIGURED',
       `Inventory ${addOn.inventorySku} belum dikonfigurasi pada cabang ini.`,
@@ -94,11 +94,15 @@ export async function reserveAddOnStockInTransaction(
 
   await lockInventoryItems(tx, [inventoryItem.id]);
   const balances = await tx.$queryRaw<LockedBalance[]>(Prisma.sql`
-    SELECT b."id", b."onHandQty", b."reservedQty", b."quarantineQty"
+    SELECT b."id", b."stockLocationId", b."onHandQty", b."reservedQty", b."quarantineQty"
     FROM "inventory_balances" b
     LEFT JOIN "inventory_batches" batch ON batch."id" = b."batchId"
+    JOIN "stock_locations" location ON location."id" = b."stockLocationId"
+    JOIN "warehouses" warehouse ON warehouse."id" = location."warehouseId"
     WHERE b."inventoryItemId" = ${inventoryItem.id}
-      AND b."stockLocationId" = ${inventoryItem.stockLocationId}
+      AND location."isActive" = true
+      AND warehouse."isActive" = true
+      AND warehouse."branchId" = ${addOn.branchId}
       AND b."onHandQty" - b."reservedQty" - b."quarantineQty" > 0
       AND (batch."id" IS NULL OR (
         batch."isBlocked" = false
@@ -137,10 +141,20 @@ export async function reserveAddOnStockInTransaction(
       valuedByBalance.get(balance.id) || new Prisma.Decimal(0),
     ),
   }));
-  const available = allocatable.reduce(
-    (sum, row) => sum.add(row.quantity),
-    new Prisma.Decimal(0),
-  );
+  const rowsByLocation = new Map<string, typeof allocatable>();
+  for (const row of allocatable) {
+    const rows = rowsByLocation.get(row.balance.stockLocationId) || [];
+    rows.push(row);
+    rowsByLocation.set(row.balance.stockLocationId, rows);
+  }
+  const selectedLocation = [...rowsByLocation.entries()]
+    .map(([stockLocationId, rows]) => ({
+      stockLocationId,
+      rows,
+      available: rows.reduce((sum, row) => sum.add(row.quantity), new Prisma.Decimal(0)),
+    }))
+    .sort((left, right) => right.available.comparedTo(left.available))[0];
+  const available = selectedLocation?.available || new Prisma.Decimal(0);
   if (available.lessThan(addOn.stockQuantity)) {
     if (available.isZero()) {
       throw errors.unprocessable(
@@ -155,7 +169,7 @@ export async function reserveAddOnStockInTransaction(
   }
 
   let remaining = addOn.stockQuantity;
-  for (const row of allocatable) {
+  for (const row of selectedLocation?.rows || []) {
     if (remaining.isZero()) break;
     const quantity = Prisma.Decimal.min(row.quantity, remaining);
     if (!quantity.greaterThan(0)) continue;

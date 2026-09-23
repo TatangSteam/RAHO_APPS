@@ -79,7 +79,7 @@ describe('automatic add-on inventory setup', () => {
       stockLocationId: 'location-1',
       reasonCode: 'LEGACY_OPENING_VALUATION',
       valuationDocumentReference: 'AUTO-MASTER-COST:PRD-ANN-KNG-001',
-    }));
+    }), { automatedDefaultCostValuation: true });
   });
 
   it('does not invent a cost when the admin has not configured one', async () => {

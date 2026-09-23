@@ -156,7 +156,7 @@ export async function prepareAddOnInventoryForSale(branchId: string, actorUserId
         reasonCode: 'LEGACY_OPENING_VALUATION',
         valuationDocumentReference: `AUTO-MASTER-COST:${sku}`,
         notes: `Harga modal otomatis dari Master Produk ${sku}.`,
-      });
+      }, { automatedDefaultCostValuation: true });
       results.push({ sku, status: 'PREPARED' });
     } catch (error) {
       results.push({ sku, status: 'NEEDS_ATTENTION', message: errorMessage(error) });

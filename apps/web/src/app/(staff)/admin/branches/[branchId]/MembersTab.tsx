@@ -218,7 +218,10 @@ function MemberAvatar({ member }: { member: BranchMember }) {
         <AppImage
           src={photoUrl}
           alt={member.fullName || 'Member'}
-          onError={() => setImageFailed(true)}
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+            setImageFailed(true);
+          }}
         />
       )}
     </div>

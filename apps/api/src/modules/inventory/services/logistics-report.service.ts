@@ -466,7 +466,14 @@ export async function getSkuValuationLookup(branchId: string, sku: string) {
   // the branch default up front so Super Admin can value that stock from the
   // dashboard; the audited valuation transaction will attach the item to this
   // location without increasing its quantity.
-  const fallbackLocation = item.stockLocationId ? null : await prisma.stockLocation.findFirst({
+  const positiveLocationIds = [...new Set(item.balances
+    .filter((balance) => balance.onHandQty.greaterThan(0))
+    .map((balance) => balance.stockLocationId))];
+  const itemLocationHasStock = Boolean(item.stockLocationId && positiveLocationIds.includes(item.stockLocationId));
+  const balanceLocationId = itemLocationHasStock
+    ? item.stockLocationId
+    : positiveLocationIds.length === 1 ? positiveLocationIds[0] : null;
+  const fallbackLocation = (balanceLocationId || item.stockLocationId) ? null : await prisma.stockLocation.findFirst({
     where: {
       isActive: true,
       warehouse: { branchId, isActive: true },
@@ -474,10 +481,10 @@ export async function getSkuValuationLookup(branchId: string, sku: string) {
     select: { id: true },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   });
-  const valuationStockLocationId = item.stockLocationId || fallbackLocation?.id || null;
+  const valuationStockLocationId = balanceLocationId || item.stockLocationId || fallbackLocation?.id || null;
 
   const allOnHand = decimalSum(item.balances.map((balance) => balance.onHandQty));
-  const canonical = item.balances.filter((balance) => balance.stockLocationId === item.stockLocationId);
+  const canonical = item.balances.filter((balance) => balance.stockLocationId === valuationStockLocationId);
   const onHandQty = decimalSum(canonical.map((balance) => balance.onHandQty));
   const missingBalances = canonical.filter((balance) => balance.onHandQty.greaterThan(0) && balance.costLayers.length === 0);
   const missingLayerQty = decimalSum(missingBalances.map((balance) => balance.onHandQty));
@@ -511,7 +518,7 @@ export async function getSkuValuationLookup(branchId: string, sku: string) {
     pendingQty,
     missingLayerQty,
   };
-  if (!item.stockLocationId) return {
+  if (!item.stockLocationId && !balanceLocationId) return {
     ...base,
     status: 'NO_STOCK_LOCATION',
     canValue: Boolean(valuationStockLocationId && item.stock.greaterThan(0) && !product.tracksBatch),
