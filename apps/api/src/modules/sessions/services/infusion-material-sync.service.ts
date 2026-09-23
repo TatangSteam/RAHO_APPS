@@ -1,4 +1,5 @@
 import { Prisma, StockMutationType } from '@prisma/client';
+import { calculatePhysicalAvailableBaseQuantity } from './material-usage.helpers';
 
 const DEFAULT_NO_IN_IFA250_ML = 2.5;
 const MATERIAL_DELTA_EPSILON = 0.0001;
@@ -142,7 +143,7 @@ async function findInventoryItem(tx: Prisma.TransactionClient, branchId: string,
         isActive: true,
       },
     },
-    include: { masterProduct: true },
+    include: { masterProduct: true, balances: true },
   });
 
   if (bySku) return bySku;
@@ -158,7 +159,7 @@ async function findInventoryItem(tx: Prisma.TransactionClient, branchId: string,
         isActive: true,
       },
     },
-    include: { masterProduct: true },
+    include: { masterProduct: true, balances: true },
   });
 }
 
@@ -180,6 +181,7 @@ export async function syncSessionInfusionToTherapyPlan(
       id: true,
       branchId: true,
       sessionCode: true,
+      materialPolicyVersion: true,
       infusion: true,
     },
   });
@@ -208,6 +210,58 @@ export async function syncSessionInfusionToTherapyPlan(
 
     const conversionFactor = Number(inventoryItem.masterProduct.conversionFactor) || 1;
     const deltaBaseQuantity = deltaUsageQuantity / conversionFactor;
+    const existingUsage = await tx.materialUsage.findFirst({
+      where: {
+        treatmentSessionId: params.sessionId,
+        inventoryItemId: inventoryItem.id,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (session.materialPolicyVersion >= 2 && (!existingUsage || existingUsage.status === 'DRAFT')) {
+      const newBaseQuantity = new Prisma.Decimal(newUsageQuantity)
+        .div(conversionFactor)
+        .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
+      const physicalAvailable = calculatePhysicalAvailableBaseQuantity(inventoryItem.balances);
+      if (newBaseQuantity.greaterThan(physicalAvailable)) {
+        const availableUsageUnit = physicalAvailable.mul(conversionFactor);
+        throw {
+          status: 409,
+          code: 'STOCK_INSUFFICIENT',
+          message: `Stok ${inventoryItem.masterProduct.name} tidak mencukupi untuk penyesuaian therapy plan. Tersedia: ${physicalAvailable.toFixed(2)} ${inventoryItem.masterProduct.baseUnit} (${availableUsageUnit.toFixed(0)} ${inventoryItem.masterProduct.usageUnit})`,
+        };
+      }
+
+      if (newUsageQuantity > 0) {
+        if (existingUsage) {
+          await tx.materialUsage.update({
+            where: { id: existingUsage.id },
+            data: {
+              quantity: newUsageQuantity,
+              unit: inventoryItem.masterProduct.usageUnit,
+              baseQuantity: newBaseQuantity,
+              recordedBy: params.userId,
+            },
+          });
+        } else {
+          await tx.materialUsage.create({
+            data: {
+              treatmentSessionId: params.sessionId,
+              inventoryItemId: inventoryItem.id,
+              quantity: newUsageQuantity,
+              unit: inventoryItem.masterProduct.usageUnit,
+              baseQuantity: newBaseQuantity,
+              recordedBy: params.userId,
+            },
+          });
+        }
+      } else if (existingUsage) {
+        await tx.materialUsage.delete({ where: { id: existingUsage.id } });
+      }
+      adjustedMaterials += 1;
+      continue;
+    }
+
     const stockBefore = Number(inventoryItem.stock);
     const stockAfter = stockBefore - deltaBaseQuantity;
 
@@ -242,14 +296,6 @@ export async function syncSessionInfusionToTherapyPlan(
       },
     });
 
-    const existingUsage = await tx.materialUsage.findFirst({
-      where: {
-        treatmentSessionId: params.sessionId,
-        inventoryItemId: inventoryItem.id,
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-
     if (newUsageQuantity > 0) {
       if (existingUsage) {
         await tx.materialUsage.update({
@@ -257,6 +303,9 @@ export async function syncSessionInfusionToTherapyPlan(
           data: {
             quantity: newUsageQuantity,
             unit: inventoryItem.masterProduct.usageUnit,
+            baseQuantity: new Prisma.Decimal(newUsageQuantity)
+              .div(conversionFactor)
+              .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
             recordedBy: params.userId,
           },
         });
@@ -267,6 +316,9 @@ export async function syncSessionInfusionToTherapyPlan(
             inventoryItemId: inventoryItem.id,
             quantity: newUsageQuantity,
             unit: inventoryItem.masterProduct.usageUnit,
+            baseQuantity: new Prisma.Decimal(newUsageQuantity)
+              .div(conversionFactor)
+              .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
             recordedBy: params.userId,
           },
         });

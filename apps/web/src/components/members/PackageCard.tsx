@@ -321,7 +321,7 @@ export default function PackageCard({
                   className={styles.verifyButton}
                   style={{ marginTop: 0 }}
                 >
-                  ✅ Verify Payment
+                  Upload / Konfirmasi Pembayaran
                 </button>
                 )}
                 {onCancelPackage && (
@@ -660,7 +660,7 @@ export default function PackageCard({
                   className={styles.verifyButton}
                   style={{ marginTop: 0 }}
                 >
-                  ✅ Verify Payment (Bundle)
+                  Upload / Konfirmasi Pembayaran
                 </button>
                 )}
                 {onEditPackage && canEditGroup && (
@@ -904,7 +904,7 @@ export default function PackageCard({
                 className={styles.verifyButton}
                 style={{ marginTop: 0 }}
               >
-                ✅ Verify Payment
+                Upload / Konfirmasi Pembayaran
               </button>
               )}
               {onEditPackage && canEditStandalonePackage && (

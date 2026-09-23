@@ -1,4 +1,4 @@
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '@lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { CreateInfusionInput } from '../sessions.schema';
 import {
@@ -8,6 +8,7 @@ import {
   Role,
   StockMutationType,
 } from '@prisma/client';
+import { calculatePhysicalAvailableBaseQuantity } from './material-usage.helpers';
 
 const DEFAULT_NO_IN_IFA250_ML = 2.5;
 
@@ -152,7 +153,9 @@ export class InfusionService {
       }
     }
 
-    // Create infusion and deduct stock in transaction
+    // Create the infusion atomically with its material records. Current-policy
+    // sessions stage usage here and post stock when the session is completed;
+    // legacy sessions retain their historical immediate-consumption behavior.
     const result = await prisma.$transaction(async (tx) => {
       const infusion = await tx.infusionExecution.create({
         data: {
@@ -272,7 +275,8 @@ export class InfusionService {
         }
       }
 
-      // Deduct stock for each material used AND create material usage records
+      // Record every material used. Stock is staged for current-policy sessions
+      // and deducted immediately only for legacy sessions.
       // Map field names to product SKU/name patterns for searching
       // Sesuai List Barang RAHO Official
       const noStockUsage = getNoStockUsageMl(data.no, data.ifa250, plan?.ifaSubstances);
@@ -317,6 +321,7 @@ export class InfusionService {
             },
             include: {
               masterProduct: true,
+              balances: true,
             },
           });
 
@@ -335,6 +340,7 @@ export class InfusionService {
               },
               include: {
                 masterProduct: true,
+                balances: true,
               },
             });
           }
@@ -370,6 +376,56 @@ export class InfusionService {
             };
           }
           const baseQuantityUsed = baseQuantity.toNumber();
+
+          // Current-policy sessions use the location balance ledger as the
+          // source of truth. Saving Infus Aktual only stages material usage;
+          // the atomic completion flow performs the actual FIFO stock issue.
+          // This avoids reading the obsolete inventory_items.stock mirror,
+          // which can be zero while the branch ledger still has stock.
+          if (session.materialPolicyVersion >= 2) {
+            const physicalAvailable = calculatePhysicalAvailableBaseQuantity(inventoryItem.balances);
+            if (physicalAvailable.lessThan(baseQuantity)) {
+              const availableUsageUnit = physicalAvailable.mul(conversionFactor);
+              throw {
+                status: 409,
+                code: 'STOCK_INSUFFICIENT',
+                message: `Stok ${inventoryItem.masterProduct.name} tidak mencukupi. Tersedia: ${physicalAvailable.toFixed(2)} ${inventoryItem.masterProduct.baseUnit} (${availableUsageUnit.toFixed(0)} ${inventoryItem.masterProduct.usageUnit})`,
+              };
+            }
+
+            const existingUsage = await tx.materialUsage.findFirst({
+              where: {
+                treatmentSessionId: sessionId,
+                inventoryItemId: inventoryItem.id,
+                status: MaterialUsageStatus.DRAFT,
+              },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (existingUsage) {
+              await tx.materialUsage.update({
+                where: { id: existingUsage.id },
+                data: {
+                  quantity: usageQuantity,
+                  unit: inventoryItem.masterProduct.usageUnit,
+                  baseQuantity,
+                  recordedBy: userId,
+                },
+              });
+            } else {
+              await tx.materialUsage.create({
+                data: {
+                  treatmentSessionId: sessionId,
+                  inventoryItemId: inventoryItem.id,
+                  quantity: usageQuantity,
+                  unit: inventoryItem.masterProduct.usageUnit,
+                  baseQuantity,
+                  status: MaterialUsageStatus.DRAFT,
+                  recordedBy: userId,
+                },
+              });
+            }
+            continue;
+          }
           
           const stockBefore = Number(inventoryItem.stock);
           const stockAfter = stockBefore - baseQuantityUsed;

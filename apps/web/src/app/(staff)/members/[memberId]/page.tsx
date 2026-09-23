@@ -41,6 +41,7 @@ import MemberEditModal from '@/components/members/MemberEditModal';
 import MemberPhoneEditModal from '@/components/members/MemberPhoneEditModal';
 import MemberDestructionModal from '@/components/members/MemberDestructionModal';
 import { getActiveMemberPackagesByType } from '@/components/members/memberStatusPresentation';
+import { canHandlePackagePayment } from '@/components/members/paymentAccess';
 import {
   ClipboardList,
   Droplets,
@@ -267,6 +268,10 @@ export default function MemberDetailPage() {
   const canSendNotification = Boolean(user && canMutateMember);
   const canDeleteMember = isSuperAdmin;
   const canAssignPackage = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
+  // Nakes may receive proof from the member at the point of service and
+  // confirm it for packages in one of their assigned branches. Keep this
+  // separate from package assignment/edit permissions.
+  const canHandlePayment = canHandlePackagePayment(user?.role);
   const canPrivilegedEditPackage =
     isSuperAdmin ||
     (isAdminManager && user?.adminManagerAccessScope !== 'MEMBER_VIEW_ONLY');
@@ -1040,7 +1045,7 @@ export default function MemberDetailPage() {
                 packages={packageTransactions}
                 loading={loadingPackages}
                 hideGroupedAddOns
-                onVerifyPayment={canAssignPackage ? handleOpenPaymentVerification : undefined}
+                onVerifyPayment={canHandlePayment ? handleOpenPaymentVerification : undefined}
                 onRefundPackage={canAssignPackage ? (packageId: string, packageCode: string, finalPrice: number) => {
                   setSelectedPackageId(packageId);
                   setRefundPackageCode(packageCode);
@@ -1140,7 +1145,7 @@ export default function MemberDetailPage() {
               <MemberAddOnsTab
                 addOns={addOnTransactions}
                 loading={loadingPackages}
-                onVerifyPayment={canAssignPackage ? handleOpenPaymentVerification : undefined}
+                onVerifyPayment={canHandlePayment ? handleOpenPaymentVerification : undefined}
                 onCancelAddOn={isSuperAdmin ? (addOnId, addOnCode) => {
                   setSelectedPackageId(addOnId);
                   setCancelPackageCode(addOnCode);
@@ -1282,7 +1287,7 @@ export default function MemberDetailPage() {
         onPaidAmountChange={setVerifyPaidAmount}
         onProofChange={setPaymentProof}
         onSubmit={handleVerifyPayment}
-        onReject={handleRejectPayment}
+        onReject={canAssignPackage ? handleRejectPayment : undefined}
         existingProofUrl={selectedPackageProof.url}
         existingProofFileName={selectedPackageProof.fileName}
         packageStatus={selectedPackageProof.status}
