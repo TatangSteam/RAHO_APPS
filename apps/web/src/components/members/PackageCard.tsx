@@ -361,7 +361,7 @@ export default function PackageCard({
                     className={styles.verifyButton}
                     style={{ marginTop: 0 }}
                   >
-                    ✅ Verify Termin Berikutnya
+                    Upload / Konfirmasi Termin Berikutnya
                   </button>
                 )}
                 {onRefundPackage && addon.status === 'ACTIVE' && (
@@ -724,7 +724,7 @@ export default function PackageCard({
                     className={styles.verifyButton}
                     style={{ marginTop: 0 }}
                   >
-                    ✅ Verify Termin Berikutnya
+                    Upload / Konfirmasi Termin Berikutnya
                   </button>
                 )}
                 {onEditPackage && canEditGroup && (
@@ -962,7 +962,7 @@ export default function PackageCard({
                   className={styles.verifyButton}
                   style={{ marginTop: 0 }}
                 >
-                  ✅ Verify Termin Berikutnya
+                  Upload / Konfirmasi Termin Berikutnya
                 </button>
               )}
               {onEditPackage && canEditStandalonePackage && (
