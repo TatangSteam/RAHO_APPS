@@ -88,6 +88,19 @@ describe('SessionDeletionService', () => {
       deleteMany: jest.fn().mockResolvedValue(undefined),
     },
     doctorEvaluationHistory: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    revenueRecognition: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue(undefined),
+    },
+    deferredRevenueMovement: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    domainEvent: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    homecareBagUsage: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue(undefined),
+    },
+    homecareBagUsageItem: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    homecareMultiBagUsage: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    whatsAppDelivery: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     vitalSign: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     materialUsage: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     infusionExecution: { deleteMany: jest.fn().mockResolvedValue(undefined) },
@@ -151,6 +164,17 @@ describe('SessionDeletionService', () => {
         deepLink: '/sessions/session-1',
         type: 'REMINDER',
         title: 'Diagnosis sesi belum diisi',
+      },
+    });
+    expect(tx.revenueRecognition.deleteMany).toHaveBeenCalledWith({
+      where: { treatmentSessionId: 'session-1' },
+    });
+    expect(tx.domainEvent.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { treatmentSessionId: 'session-1' },
+          { id: { in: [] } },
+        ],
       },
     });
     expect(tx.treatmentSession.delete).toHaveBeenCalledWith({ where: { id: 'session-1' } });

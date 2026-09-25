@@ -545,7 +545,7 @@ export class MembersController {
     try {
       const { memberId, setId } = req.params;
       const userId = req.user!.userId;
-      const result = await membersService.deleteTherapyPlanSet(memberId, setId, userId);
+      const result = await membersService.deleteTherapyPlanSet(memberId, setId, userId, req.body);
 
       await logAudit({
         userId,
@@ -557,7 +557,11 @@ export class MembersController {
           memberId,
           deletedSets: result.data.deletedSets,
           deletedPlans: result.data.deletedPlans,
-          details: `Deleted unused therapy plan set family with ${result.data.deletedSets} sets and ${result.data.deletedPlans} plans`,
+          deletedSessions: result.data.deletedSessions,
+          reversedSessions: result.data.reversedSessions,
+          sessionCodes: result.data.sessionCodes,
+          reason: req.body.reason,
+          details: `Deleted therapy plan set family with ${result.data.deletedSets} sets, ${result.data.deletedPlans} plans, and ${result.data.deletedSessions} linked sessions`,
         },
       });
 

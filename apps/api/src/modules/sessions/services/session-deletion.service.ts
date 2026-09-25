@@ -202,6 +202,38 @@ export class SessionDeletionService {
         });
       }
 
+      // A completed session can reach this service after its inventory and
+      // accounting postings have been reversed. Remove the operational links
+      // that still use restrictive foreign keys; the immutable journals and
+      // inventory postings themselves remain available for audit.
+      const revenueRecognitions = await tx.revenueRecognition.findMany({
+        where: { treatmentSessionId: sessionId },
+        select: { domainEventId: true },
+      });
+      const homecareUsages = await tx.homecareBagUsage.findMany({
+        where: { treatmentSessionId: sessionId },
+        select: { id: true },
+      });
+      const homecareUsageIds = homecareUsages.map((usage) => usage.id);
+      if (homecareUsageIds.length > 0) {
+        await tx.homecareBagUsageItem.deleteMany({
+          where: { usageId: { in: homecareUsageIds } },
+        });
+      }
+      await tx.homecareBagUsage.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.homecareMultiBagUsage.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.whatsAppDelivery.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.revenueRecognition.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.deferredRevenueMovement.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.domainEvent.deleteMany({
+        where: {
+          OR: [
+            { treatmentSessionId: sessionId },
+            { id: { in: revenueRecognitions.map((recognition) => recognition.domainEventId) } },
+          ],
+        },
+      });
+
       await tx.vitalSign.deleteMany({ where: { treatmentSessionId: sessionId } });
       await tx.materialUsage.deleteMany({ where: { treatmentSessionId: sessionId } });
       await tx.infusionExecution.deleteMany({ where: { treatmentSessionId: sessionId } });

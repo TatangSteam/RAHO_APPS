@@ -366,23 +366,43 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
     const familyMemberIds = new Set(familyMembers);
     const familyPlans = therapyPlans.filter((plan) => familyMemberIds.has(getPlanSetKey(plan)));
     const usedCount = familyPlans.filter((plan) => plan.isUsed).length;
-
-    if (usedCount > 0) {
-      showToast.error('Set tidak dapat dihapus karena salah satu versi sudah digunakan dalam sesi');
-      return;
-    }
+    const linkedSessions = Array.from(new Map(
+      familyPlans
+        .filter((plan) => plan.usedInSession)
+        .map((plan) => [plan.usedInSession!.id, plan.usedInSession!]),
+    ).values());
 
     const historyWarning = familyMembers.length > 1
       ? ` beserta ${familyMembers.length - 1} versi riwayatnya`
       : '';
+    const linkedSessionWarning = usedCount > 0
+      ? `\n\n${linkedSessions.length || usedCount} sesi terapi terkait juga akan dihapus. Stok dan voucher dikembalikan; posting sesi yang sudah selesai akan dibalik terlebih dahulu.`
+      : '';
     const confirmed = window.confirm(
-      `Hapus set therapy plan "${setName}"${historyWarning}? Tindakan ini tidak dapat dibatalkan.`,
+      `Hapus set therapy plan "${setName}"${historyWarning}?${linkedSessionWarning}\n\nTindakan ini tidak dapat dibatalkan.`,
     );
     if (!confirmed) return;
 
+    let deleteInput: Parameters<typeof therapyPlanApi.deleteTherapyPlanSet>[2] = {};
+    if (usedCount > 0) {
+      const confirmation = window.prompt(
+        'Untuk mencegah salah hapus, ketik persis: HAPUS SET DAN SESI',
+      );
+      if (confirmation !== 'HAPUS SET DAN SESI') {
+        if (confirmation !== null) showToast.error('Teks konfirmasi tidak sesuai. Penghapusan dibatalkan.');
+        return;
+      }
+      const reason = window.prompt('Tuliskan alasan penghapusan (minimal 5 karakter):')?.trim();
+      if (!reason || reason.length < 5) {
+        showToast.error('Alasan penghapusan minimal 5 karakter.');
+        return;
+      }
+      deleteInput = { deleteLinkedSessions: true, confirmation, reason };
+    }
+
     setDeletingSetId(setId);
     try {
-      const result = await therapyPlanApi.deleteTherapyPlanSet(memberId, actualSetId);
+      const result = await therapyPlanApi.deleteTherapyPlanSet(memberId, actualSetId, deleteInput);
       showToast.success(result.message || 'Set therapy plan berhasil dihapus');
       setFilters((currentFilters) => familyMemberIds.has(currentFilters.selectedSetId)
         ? { ...currentFilters, selectedSetId: 'all' }
@@ -714,8 +734,8 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
               );
               const canDeleteSet =
                 user?.role === 'SUPER_ADMIN' &&
-                familyPlans.every((plan) => !plan.isUsed) &&
                 Boolean(set.firstPlan.therapyPlanSetId);
+              const setHasUsedPlans = familyPlans.some((plan) => plan.isUsed);
 
               return (
                 <div
@@ -923,10 +943,14 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                           e.currentTarget.style.background = 'rgba(239,68,68,0.10)';
                           e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
                         }}
-                        title="Hapus set therapy plan yang belum digunakan"
+                        title={setHasUsedPlans
+                          ? 'Hapus set beserta seluruh sesi terapi yang menggunakannya'
+                          : 'Hapus set therapy plan'}
                       >
                         <Trash2 size={14} />
-                        {deletingSetId === set.id ? 'Menghapus...' : 'Hapus Set'}
+                        {deletingSetId === set.id
+                          ? 'Menghapus...'
+                          : setHasUsedPlans ? 'Hapus Set & Sesi' : 'Hapus Set'}
                       </button>
                     )}
                   </div>

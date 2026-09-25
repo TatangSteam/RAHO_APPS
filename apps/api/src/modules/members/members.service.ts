@@ -291,10 +291,15 @@ export class MembersService {
   }
 
   /**
-   * Delete an unused therapy plan set.
+   * Delete a therapy plan set family and, with explicit confirmation, its linked sessions.
    */
-  async deleteTherapyPlanSet(memberId: string, setId: string, _userId: string) {
-    return await this.therapyPlanSetEditService.deleteTherapyPlanSet(memberId, setId);
+  async deleteTherapyPlanSet(
+    memberId: string,
+    setId: string,
+    userId: string,
+    input: import('./members.schema').DeleteTherapyPlanSetInput,
+  ) {
+    return await this.therapyPlanSetEditService.deleteTherapyPlanSet(memberId, setId, userId, input);
   }
 
   /**

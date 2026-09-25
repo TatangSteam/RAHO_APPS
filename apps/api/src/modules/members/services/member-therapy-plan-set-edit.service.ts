@@ -6,7 +6,9 @@
 import { prisma } from '../../../lib/prisma';
 import { normalizeIfaSubstances, type TherapyPlanSubstance } from '../../../utils/therapyPlanSubstances';
 import { syncSessionInfusionToTherapyPlan } from '../../sessions/services/infusion-material-sync.service';
-import { Prisma, type TherapyPlan } from '@prisma/client';
+import { SessionCompletionService } from '../../sessions/services/session-completion.service';
+import { SessionDeletionService } from '../../sessions/services/session-deletion.service';
+import { Prisma, TreatmentCompletionStatus, type TherapyPlan } from '@prisma/client';
 
 interface EditPlanInput {
   planNumber: number;
@@ -39,6 +41,15 @@ interface BulkEditSetOptions {
   editableTreatmentSessionId?: string;
   updatedBy?: string;
 }
+
+export interface DeleteTherapyPlanSetInput {
+  deleteLinkedSessions?: boolean;
+  confirmation?: string;
+  reason?: string;
+}
+
+type SessionCompletionDependency = Pick<SessionCompletionService, 'cancelCompletion'>;
+type SessionDeletionDependency = Pick<SessionDeletionService, 'deleteSession'>;
 
 function padSequence(value: number, size = 2) {
   return String(value).padStart(size, '0');
@@ -89,7 +100,17 @@ function generateEditedSetName(originalName: string | null, setCode: string): st
 }
 
 export class MemberTherapyPlanSetEditService {
-  async deleteTherapyPlanSet(memberId: string, setId: string) {
+  constructor(
+    private readonly sessionCompletionService: SessionCompletionDependency = new SessionCompletionService(),
+    private readonly sessionDeletionService: SessionDeletionDependency = new SessionDeletionService(),
+  ) {}
+
+  async deleteTherapyPlanSet(
+    memberId: string,
+    setId: string,
+    deletedBy?: string,
+    options: DeleteTherapyPlanSetInput = {},
+  ) {
     const requestedSet = await prisma.therapyPlanSet.findUnique({
       where: { id: setId },
       select: { id: true, memberId: true },
@@ -135,17 +156,82 @@ export class MemberTherapyPlanSetEditService {
         planCode: true,
         planNumber: true,
         treatmentSessionId: true,
+        infusions: { select: { treatmentSessionId: true } },
         _count: { select: { infusions: true } },
       },
     });
 
     const usedPlan = plans.find((plan) => plan.treatmentSessionId || plan._count.infusions > 0);
-    if (usedPlan) {
+    if (usedPlan && !options.deleteLinkedSessions) {
       throw {
         status: 409,
         code: 'THERAPY_PLAN_SET_IN_USE',
         message: `Terapi #${usedPlan.planNumber || usedPlan.planCode} pada salah satu versi set sudah digunakan dalam sesi dan tidak dapat dihapus`,
       };
+    }
+
+    const linkedSessionIds = Array.from(new Set(plans.flatMap((plan) => [
+      plan.treatmentSessionId,
+      ...plan.infusions.map((infusion) => infusion.treatmentSessionId),
+    ]).filter((sessionId): sessionId is string => Boolean(sessionId))));
+
+    let reversedSessions = 0;
+    const deletedSessions: Array<{ id: string; sessionCode: string }> = [];
+
+    if (linkedSessionIds.length > 0) {
+      if (
+        options.confirmation !== 'HAPUS SET DAN SESI' ||
+        !options.reason?.trim() ||
+        options.reason.trim().length < 5
+      ) {
+        throw {
+          status: 400,
+          code: 'THERAPY_PLAN_SET_DELETE_CONFIRMATION_REQUIRED',
+          message: 'Konfirmasi HAPUS SET DAN SESI dan alasan minimal 5 karakter wajib diisi',
+        };
+      }
+      if (!deletedBy) {
+        throw { status: 401, code: 'UNAUTHENTICATED', message: 'Pengguna tidak terautentikasi' };
+      }
+
+      const linkedSessions = await prisma.treatmentSession.findMany({
+        where: { id: { in: linkedSessionIds } },
+        select: {
+          id: true,
+          sessionCode: true,
+          isCompleted: true,
+          completionStatus: true,
+        },
+        orderBy: { treatmentDate: 'asc' },
+      });
+      if (linkedSessions.length !== linkedSessionIds.length) {
+        throw {
+          status: 409,
+          code: 'THERAPY_PLAN_SESSION_DATA_INCONSISTENT',
+          message: 'Relasi sesi pada set therapy plan tidak lengkap. Muat ulang halaman dan coba kembali.',
+        };
+      }
+
+      // Reverse every posted session first. If one reversal is rejected, no
+      // session has been physically deleted yet and the operator can retry.
+      for (const session of linkedSessions) {
+        if (
+          session.isCompleted ||
+          session.completionStatus !== TreatmentCompletionStatus.IN_PROGRESS
+        ) {
+          await this.sessionCompletionService.cancelCompletion(session.id, deletedBy, {
+            idempotencyKey: `DELETE-THERAPY-SET-${setId}-${session.id}`,
+            reason: options.reason.trim(),
+            reopenForEditing: true,
+          });
+          reversedSessions += 1;
+        }
+      }
+
+      for (const session of linkedSessions) {
+        await this.sessionDeletionService.deleteSession(session.id, deletedBy);
+        deletedSessions.push({ id: session.id, sessionCode: session.sessionCode });
+      }
     }
 
     const planIds = plans.map((plan) => plan.id);
@@ -166,14 +252,22 @@ export class MemberTherapyPlanSetEditService {
       await tx.therapyPlanSet.deleteMany({ where: { id: { in: setIds } } });
     });
 
+    const historyMessage = setIds.length > 1
+      ? ` beserta ${setIds.length - 1} versi riwayat`
+      : '';
+    const sessionMessage = deletedSessions.length > 0
+      ? ` dan ${deletedSessions.length} sesi terkait`
+      : '';
+
     return {
-      message: setIds.length > 1
-        ? `Set therapy plan beserta ${setIds.length - 1} versi riwayat berhasil dihapus`
-        : 'Set therapy plan berhasil dihapus',
+      message: `Set therapy plan${historyMessage}${sessionMessage} berhasil dihapus`,
       data: {
         setId,
         deletedSets: setIds.length,
         deletedPlans: plans.length,
+        deletedSessions: deletedSessions.length,
+        reversedSessions,
+        sessionCodes: deletedSessions.map((session) => session.sessionCode),
       },
     };
   }

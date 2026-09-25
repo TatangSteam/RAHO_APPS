@@ -191,9 +191,14 @@ export const therapyPlanApi = {
 
   deleteTherapyPlanSet: async (
     memberId: string,
-    setId: string
-  ): Promise<{ message: string; data: { setId: string; deletedSets: number; deletedPlans: number } }> => {
-    const response = await api.delete(`/members/${memberId}/therapy-plan-sets/${setId}`);
+    setId: string,
+    input: {
+      deleteLinkedSessions?: boolean;
+      confirmation?: string;
+      reason?: string;
+    } = {},
+  ): Promise<{ message: string; data: { setId: string; deletedSets: number; deletedPlans: number; deletedSessions: number; reversedSessions: number; sessionCodes: string[] } }> => {
+    const response = await api.delete(`/members/${memberId}/therapy-plan-sets/${setId}`, { data: input });
     return response.data.data;
   },
 

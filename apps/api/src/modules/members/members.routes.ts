@@ -5,7 +5,7 @@ import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
 import { uploadMemberDocuments, uploadLabResult, uploadSpreadsheet } from '../../middleware/upload';
 import { validate } from '../../middleware/validate';
-import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema, bulkEditTherapyPlanSetSchema } from './members.schema';
+import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema, bulkEditTherapyPlanSetSchema, deleteTherapyPlanSetSchema } from './members.schema';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -349,12 +349,13 @@ router.put(
   controller.bulkEditTherapyPlanSet.bind(controller)
 );
 
-// DELETE /api/v1/members/:memberId/therapy-plan-sets/:setId - Delete unused therapy plan set
+// DELETE /api/v1/members/:memberId/therapy-plan-sets/:setId - Delete a therapy plan set family
 router.delete(
   '/:memberId/therapy-plan-sets/:setId',
   authenticate,
   authorize([Role.SUPER_ADMIN]),
   assertBranchAccess,
+  validate(deleteTherapyPlanSetSchema),
   controller.deleteTherapyPlanSet.bind(controller)
 );
 

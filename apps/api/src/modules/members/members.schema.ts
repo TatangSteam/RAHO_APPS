@@ -267,6 +267,30 @@ export const sendNotificationSchema = z.object({
   message: z.string().min(1, 'Pesan wajib diisi'),
 });
 
+export const deleteTherapyPlanSetSchema = z.object({
+  deleteLinkedSessions: z.boolean().optional().default(false),
+  confirmation: z.string().trim().optional(),
+  reason: z.string().trim().max(1000, 'Alasan maksimal 1000 karakter').optional(),
+}).superRefine((value, context) => {
+  if (!value.deleteLinkedSessions) return;
+  if (value.confirmation !== 'HAPUS SET DAN SESI') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['confirmation'],
+      message: 'Ketik HAPUS SET DAN SESI untuk mengonfirmasi',
+    });
+  }
+  if (!value.reason || value.reason.length < 5) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'Alasan penghapusan minimal 5 karakter',
+    });
+  }
+}).default({ deleteLinkedSessions: false });
+
+export type DeleteTherapyPlanSetInput = z.infer<typeof deleteTherapyPlanSetSchema>;
+
 export const destroyMemberSchema = z.object({
   confirmation: z.literal('DESTRUCTION MEMBER'),
   memberNo: z.string().trim().min(1, 'Nomor member wajib diisi'),
