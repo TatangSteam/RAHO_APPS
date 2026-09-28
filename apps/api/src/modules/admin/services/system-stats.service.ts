@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 
 type RecentActivity = Prisma.AuditLogGetPayload<{
   include: {
@@ -96,11 +96,18 @@ export class SystemStatsService {
         // Active branches
         prisma.branch.count({ where: { isActive: true } }).catch(() => 0),
         
-        // Total users
-        prisma.user.count().catch(() => 0),
+        // Total staff (exclude member accounts)
+        prisma.user.count({
+          where: { role: { not: Role.MEMBER } },
+        }).catch(() => 0),
         
-        // Active users
-        prisma.user.count({ where: { isActive: true } }).catch(() => 0),
+        // Active staff (exclude member accounts)
+        prisma.user.count({
+          where: {
+            isActive: true,
+            role: { not: Role.MEMBER },
+          },
+        }).catch(() => 0),
         
         // Total master products
         prisma.masterProduct.count().catch(() => 0),
