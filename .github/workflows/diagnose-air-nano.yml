@@ -97,7 +97,9 @@ jobs:
               seller_found: Boolean(sellerId),
               sale_count_two: sales.length === 2,
               raw_boxes_four: sales.filter(isBox).reduce((sum, sale) => sum + sale.quantity, 0) === 4,
+              raw_boxes_five: sales.filter(isBox).reduce((sum, sale) => sum + sale.quantity, 0) === 5,
               eligible_boxes_four: sales.filter(fullyEligible).reduce((sum, sale) => sum + sale.quantity, 0) === 4,
+              eligible_boxes_five: sales.filter(fullyEligible).reduce((sum, sale) => sum + sale.quantity, 0) === 5,
               eligible_boxes_two: sales.filter(fullyEligible).reduce((sum, sale) => sum + sale.quantity, 0) === 2,
               qty3_found: Boolean(qty3),
               qty3_active: qty3?.status === 'ACTIVE',
@@ -135,8 +137,14 @@ jobs:
       - name: Raw box quantities total four
         if: steps.facts.outputs.raw_boxes_four == 'true'
         run: 'true'
+      - name: Raw box quantities total five
+        if: steps.facts.outputs.raw_boxes_five == 'true'
+        run: 'true'
       - name: Eligible box quantities total four
         if: steps.facts.outputs.eligible_boxes_four == 'true'
+        run: 'true'
+      - name: Eligible box quantities total five
+        if: steps.facts.outputs.eligible_boxes_five == 'true'
         run: 'true'
       - name: Eligible box quantities total two
         if: steps.facts.outputs.eligible_boxes_two == 'true'
