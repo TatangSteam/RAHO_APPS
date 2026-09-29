@@ -241,11 +241,15 @@ export function isAirNanoBoxSale(productCode: string | null, notes: string | nul
 export function areAllPurchaseInvoicesPaid(invoices: Array<{
   status: InvoiceStatus;
   paymentVerificationStatus: PaymentVerificationStatus;
+  verifiedAt?: Date | null;
 }>) {
   const activeInvoices = invoices.filter((invoice) => invoice.status !== InvoiceStatus.CANCELLED);
   return activeInvoices.length > 0 && activeInvoices.every((invoice) => (
     invoice.status === InvoiceStatus.PAID
-    && invoice.paymentVerificationStatus === PaymentVerificationStatus.VERIFIED
+    && (
+      invoice.paymentVerificationStatus === PaymentVerificationStatus.VERIFIED
+      || Boolean(invoice.verifiedAt)
+    )
   ));
 }
 
@@ -257,6 +261,7 @@ export function sumPaidAirNanoBoxesBySeller(sales: Array<{
   invoices: Array<{
     status: InvoiceStatus;
     paymentVerificationStatus: PaymentVerificationStatus;
+    verifiedAt?: Date | null;
   }>;
 }>) {
   const paidBoxCounts = new Map<string, number>();
@@ -452,7 +457,7 @@ export async function calculateMonthlyStaffIncentivesService(
         select: {
           itemId: true,
           invoice: {
-            select: { status: true, paymentVerificationStatus: true },
+            select: { status: true, paymentVerificationStatus: true, verifiedAt: true },
           },
         },
       })
@@ -462,7 +467,7 @@ export async function calculateMonthlyStaffIncentivesService(
           where: { itemType: 'PACKAGE', itemId: { in: revenuePackageIds } },
           select: {
             itemId: true,
-            invoice: { select: { status: true, paymentVerificationStatus: true } },
+            invoice: { select: { status: true, paymentVerificationStatus: true, verifiedAt: true } },
           },
         })
       : [],
@@ -546,6 +551,7 @@ export async function calculateMonthlyStaffIncentivesService(
   const invoicesByAddOn = new Map<string, Array<{
     status: InvoiceStatus;
     paymentVerificationStatus: PaymentVerificationStatus;
+    verifiedAt: Date | null;
   }>>();
   invoiceItems.forEach((item) => {
     const invoices = invoicesByAddOn.get(item.itemId) || [];
@@ -555,6 +561,7 @@ export async function calculateMonthlyStaffIncentivesService(
   const invoicesByPackage = new Map<string, Array<{
     status: InvoiceStatus;
     paymentVerificationStatus: PaymentVerificationStatus;
+    verifiedAt: Date | null;
   }>>();
   packageInvoiceItems.forEach((item) => {
     const invoices = invoicesByPackage.get(item.itemId) || [];

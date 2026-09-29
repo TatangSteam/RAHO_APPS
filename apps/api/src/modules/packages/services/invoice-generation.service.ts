@@ -401,7 +401,7 @@ export class InvoiceGenerationService {
         carryOverAmount: 0,
         creditAmount: 0,
         actualPaidAmount: null,
-        paymentVerificationStatus: 'PENDING',
+        paymentVerificationStatus: params.targetStatus === 'PAID' ? 'VERIFIED' : 'PENDING',
         paymentRejectionReason: null,
         isAdjustment: false,
       };

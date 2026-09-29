@@ -136,6 +136,11 @@ describe('staff monthly incentive rules', () => {
       status: InvoiceStatus.CANCELLED,
       paymentVerificationStatus: PaymentVerificationStatus.VERIFIED,
     }])).toBe(false);
+    expect(areAllPurchaseInvoicesPaid([{
+      status: InvoiceStatus.PAID,
+      paymentVerificationStatus: PaymentVerificationStatus.PENDING,
+      verifiedAt: new Date('2026-09-01T00:00:00.000Z'),
+    }])).toBe(true);
   });
 
   it('calculates the coordinator personal-infusion bonus only once', () => {
