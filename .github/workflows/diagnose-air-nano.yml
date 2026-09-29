@@ -21,6 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           docker exec -i raho-erp-api node <<'NODE' > /tmp/air-nano-facts.txt
+          const fs = require('node:fs');
+          process.env.DATABASE_URL = fs.readFileSync('/run/secrets/DATABASE_URL', 'utf8').trim();
           const { PrismaClient } = require('@prisma/client');
           const prisma = new PrismaClient();
 
