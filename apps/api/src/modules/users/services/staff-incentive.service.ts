@@ -48,6 +48,10 @@ const INCENTIVE_ROLES = new Set<Role>([
   Role.FINANCE_LOGISTICS_CONTROLLER,
 ]);
 
+export function canViewAllStaffIncentives(role: Role) {
+  return role === Role.SUPER_ADMIN || role === Role.FINANCE_LOGISTICS_CONTROLLER;
+}
+
 export function calculateNakesMonthlyIncentive(infusionCount: number) {
   const safeCount = Math.max(0, Math.trunc(infusionCount));
   const baseAmount = safeCount * NAKES_RATE_PER_INFUSION;
@@ -389,7 +393,7 @@ export async function calculateMonthlyStaffIncentivesService(
 ) {
   const period = getJakartaMonthRange(query.month);
   const branchIds = await resolveBranchScope(callerRole, callerUserId, callerBranchId, query.branchId);
-  const selfOnly = callerRole === Role.NURSE || callerRole === Role.DOCTOR || callerRole === Role.ADMIN_LAYANAN;
+  const selfOnly = !canViewAllStaffIncentives(callerRole);
 
   const sessionWhere: Prisma.TreatmentSessionWhereInput = {
     isCompleted: true,
@@ -1026,7 +1030,7 @@ async function incentiveScopeContext(
     : branchIds.length === 1
       ? `BRANCH:${branchIds[0]}`
       : `BRANCHES:${[...branchIds].sort().join(',')}`;
-  const selfOnly = callerRole === Role.NURSE || callerRole === Role.DOCTOR || callerRole === Role.ADMIN_LAYANAN;
+  const selfOnly = !canViewAllStaffIncentives(callerRole);
   return {
     month: period.month,
     scopeKey: selfOnly ? `USER:${callerUserId}|${branchScope}` : branchScope,

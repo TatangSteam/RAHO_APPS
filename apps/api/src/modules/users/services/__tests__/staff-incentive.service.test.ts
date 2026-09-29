@@ -1,6 +1,7 @@
 import {
   areAllPurchaseInvoicesPaid,
   canRecalculateStaffIncentivePeriod,
+  canViewAllStaffIncentives,
   calculateChsCoordinatorMonthlyIncentive,
   calculateDoctorHeadMonthlyIncentive,
   calculateMsoMonthlyIncentive,
@@ -14,11 +15,22 @@ import {
   shouldUseLockedIncentiveSnapshot,
   sumPaidAirNanoBoxesBySeller,
 } from '../staff-incentive.service';
-import { InvoiceStatus, PaymentVerificationStatus, StaffIncentivePeriodStatus } from '@prisma/client';
+import { InvoiceStatus, PaymentVerificationStatus, Role, StaffIncentivePeriodStatus } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { buildStaffIncentiveWorkbook } from '../staff-incentive-export.service';
 
 describe('staff monthly incentive rules', () => {
+  it('only allows Super Admin and Finance Controller to view other staff incentives', () => {
+    expect(canViewAllStaffIncentives(Role.SUPER_ADMIN)).toBe(true);
+    expect(canViewAllStaffIncentives(Role.FINANCE_LOGISTICS_CONTROLLER)).toBe(true);
+
+    expect(canViewAllStaffIncentives(Role.ADMIN_MANAGER)).toBe(false);
+    expect(canViewAllStaffIncentives(Role.ADMIN_CABANG)).toBe(false);
+    expect(canViewAllStaffIncentives(Role.ADMIN_LAYANAN)).toBe(false);
+    expect(canViewAllStaffIncentives(Role.DOCTOR)).toBe(false);
+    expect(canViewAllStaffIncentives(Role.NURSE)).toBe(false);
+  });
+
   it('pays Nakes Rp10.000 per infusion and a single Rp2.000.000 bonus from 100 infusions', () => {
     expect(calculateNakesMonthlyIncentive(99)).toMatchObject({
       baseAmount: 990_000,

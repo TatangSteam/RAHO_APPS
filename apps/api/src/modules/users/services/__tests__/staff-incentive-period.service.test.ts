@@ -53,8 +53,39 @@ describe('staff incentive period workflow', () => {
       null,
     );
 
+    expect(prismaMock.staffIncentivePeriod.findUnique).toHaveBeenCalledWith({
+      where: { month_scopeKey: { month: '2026-09', scopeKey: 'ALL' } },
+    });
     expect(result.workflow).toMatchObject({ periodId: 'period-1', status: 'APPROVED' });
     expect(result.summary.grandTotalAmount).toBe(0);
+  });
+
+  it('isolates a non-finance admin snapshot by user', async () => {
+    prismaMock.staffIncentivePeriod.findUnique.mockResolvedValue({
+      id: 'period-self',
+      status: StaffIncentivePeriodStatus.APPROVED,
+      report: savedReport,
+      generatedAt: new Date('2026-10-01T00:00:00.000Z'),
+      reviewedAt: null,
+      approvedAt: new Date('2026-10-01T02:00:00.000Z'),
+      paidAt: null,
+    });
+
+    await getMonthlyStaffIncentivesService(
+      { month: '2026-09' },
+      Role.ADMIN_CABANG,
+      'admin-cabang-1',
+      'branch-1',
+    );
+
+    expect(prismaMock.staffIncentivePeriod.findUnique).toHaveBeenCalledWith({
+      where: {
+        month_scopeKey: {
+          month: '2026-09',
+          scopeKey: 'USER:admin-cabang-1|BRANCH:branch-1',
+        },
+      },
+    });
   });
 
   it('blocks approval while assignment anomalies remain', async () => {
