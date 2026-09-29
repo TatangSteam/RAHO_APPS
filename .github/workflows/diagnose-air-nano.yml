@@ -1,0 +1,152 @@
+name: Diagnose Air Nano incentive data
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/diagnose-air-nano.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, erp-runner]
+    timeout-minutes: 5
+    steps:
+      - name: Read production incentive facts
+        id: facts
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i raho-erp-api node <<'NODE' > /tmp/air-nano-facts.txt
+          const { PrismaClient } = require('@prisma/client');
+          const prisma = new PrismaClient();
+
+          async function main() {
+            const profile = await prisma.userProfile.findFirst({
+              where: { fullName: { contains: 'Adzka Sibghotullah', mode: 'insensitive' } },
+              select: { userId: true },
+            });
+            const sellerId = profile?.userId || null;
+            const sales = sellerId ? await prisma.memberAddOn.findMany({
+              where: {
+                addOnType: 'AIR_NANO',
+                sellerMsoId: sellerId,
+                transactionDate: {
+                  gte: new Date('2026-09-01T00:00:00.000Z'),
+                  lt: new Date('2026-10-01T00:00:00.000Z'),
+                },
+              },
+              select: {
+                id: true,
+                quantity: true,
+                status: true,
+                verifiedAt: true,
+                paymentPlanStatus: true,
+                productCode: true,
+                notes: true,
+              },
+            }) : [];
+            const invoiceItems = sales.length > 0 ? await prisma.invoiceItem.findMany({
+              where: { itemType: 'ADDON', itemId: { in: sales.map((sale) => sale.id) } },
+              select: {
+                itemId: true,
+                invoice: { select: { status: true, paymentVerificationStatus: true } },
+              },
+            }) : [];
+            const invoicesBySale = new Map();
+            for (const item of invoiceItems) {
+              const invoices = invoicesBySale.get(item.itemId) || [];
+              invoices.push(item.invoice);
+              invoicesBySale.set(item.itemId, invoices);
+            }
+            const isBox = (sale) => {
+              const code = (sale.productCode || '').trim().toUpperCase();
+              return /^PRD-ANN-(?:KNG|BRU|HJU|H2S)-00[34]$/.test(code)
+                || /(?:^|-)DS$/.test(code)
+                || /\b(?:1\s*)?DUS\b/i.test(sale.notes || '');
+            };
+            const invoicesPaid = (sale) => {
+              const active = (invoicesBySale.get(sale.id) || []).filter((invoice) => invoice.status !== 'CANCELLED');
+              return active.length > 0 && active.every((invoice) => (
+                invoice.status === 'PAID' && invoice.paymentVerificationStatus === 'VERIFIED'
+              ));
+            };
+            const baseEligible = (sale) => sale.status === 'ACTIVE'
+              && Boolean(sale.verifiedAt)
+              && sale.paymentPlanStatus === 'PAID'
+              && isBox(sale);
+            const fullyEligible = (sale) => baseEligible(sale) && invoicesPaid(sale);
+            const qty3 = sales.find((sale) => sale.quantity === 3);
+            const periods = await prisma.staffIncentivePeriod.findMany({
+              where: { month: '2026-09' },
+              select: { status: true, report: true },
+            });
+            const snapshotRows = periods.flatMap((period) => Array.isArray(period.report?.mso) ? period.report.mso : []);
+            const snapshotRow = snapshotRows.find((row) => row?.id === sellerId);
+
+            const facts = {
+              seller_found: Boolean(sellerId),
+              sale_count_two: sales.length === 2,
+              raw_boxes_four: sales.filter(isBox).reduce((sum, sale) => sum + sale.quantity, 0) === 4,
+              eligible_boxes_four: sales.filter(fullyEligible).reduce((sum, sale) => sum + sale.quantity, 0) === 4,
+              eligible_boxes_two: sales.filter(fullyEligible).reduce((sum, sale) => sum + sale.quantity, 0) === 2,
+              qty3_found: Boolean(qty3),
+              qty3_active: qty3?.status === 'ACTIVE',
+              qty3_verified: Boolean(qty3?.verifiedAt),
+              qty3_payment_paid: qty3?.paymentPlanStatus === 'PAID',
+              qty3_is_box: qty3 ? isBox(qty3) : false,
+              qty3_invoices_paid: qty3 ? invoicesPaid(qty3) : false,
+              snapshot_two: snapshotRow?.paidAirNanoBoxes === 2,
+              snapshot_draft: periods.some((period) => period.status === 'DRAFT'),
+            };
+            for (const [key, value] of Object.entries(facts)) console.log(`${key}=${value}`);
+          }
+
+          main().finally(() => prisma.$disconnect());
+          NODE
+          while IFS= read -r line; do
+            echo "$line" >> "$GITHUB_OUTPUT"
+          done < /tmp/air-nano-facts.txt
+
+      - name: Seller record exists
+        if: steps.facts.outputs.seller_found == 'true'
+        run: 'true'
+      - name: Exactly two Air Nano transaction rows exist
+        if: steps.facts.outputs.sale_count_two == 'true'
+        run: 'true'
+      - name: Raw box quantities total four
+        if: steps.facts.outputs.raw_boxes_four == 'true'
+        run: 'true'
+      - name: Eligible box quantities total four
+        if: steps.facts.outputs.eligible_boxes_four == 'true'
+        run: 'true'
+      - name: Eligible box quantities total two
+        if: steps.facts.outputs.eligible_boxes_two == 'true'
+        run: 'true'
+      - name: Quantity-three transaction exists
+        if: steps.facts.outputs.qty3_found == 'true'
+        run: 'true'
+      - name: Quantity-three transaction is active
+        if: steps.facts.outputs.qty3_active == 'true'
+        run: 'true'
+      - name: Quantity-three transaction is verified
+        if: steps.facts.outputs.qty3_verified == 'true'
+        run: 'true'
+      - name: Quantity-three transaction payment status is paid
+        if: steps.facts.outputs.qty3_payment_paid == 'true'
+        run: 'true'
+      - name: Quantity-three transaction is a box product
+        if: steps.facts.outputs.qty3_is_box == 'true'
+        run: 'true'
+      - name: Quantity-three transaction invoices are paid and verified
+        if: steps.facts.outputs.qty3_invoices_paid == 'true'
+        run: 'true'
+      - name: Saved snapshot reports two boxes
+        if: steps.facts.outputs.snapshot_two == 'true'
+        run: 'true'
+      - name: A draft snapshot exists
+        if: steps.facts.outputs.snapshot_draft == 'true'
+        run: 'true'
