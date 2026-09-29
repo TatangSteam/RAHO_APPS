@@ -10,8 +10,10 @@ import {
   isAirNanoBoxSale,
   isEligiblePaidChsInfusion,
   isPaidInfusion,
+  shouldUseLockedIncentiveSnapshot,
+  sumPaidAirNanoBoxesBySeller,
 } from '../staff-incentive.service';
-import { InvoiceStatus, PaymentVerificationStatus } from '@prisma/client';
+import { InvoiceStatus, PaymentVerificationStatus, StaffIncentivePeriodStatus } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { buildStaffIncentiveWorkbook } from '../staff-incentive-export.service';
 
@@ -58,6 +60,44 @@ describe('staff monthly incentive rules', () => {
       airNanoAmount: 720_000,
       totalAmount: 2_720_000,
     });
+  });
+
+  it('sums Air Nano box quantities instead of counting transaction rows', () => {
+    const paidInvoice = [{
+      status: InvoiceStatus.PAID,
+      paymentVerificationStatus: PaymentVerificationStatus.VERIFIED,
+    }];
+    const paidBoxes = sumPaidAirNanoBoxesBySeller([
+      {
+        sellerMsoId: 'mso-1',
+        quantity: 1,
+        productCode: 'PRD-ANN-KNG-003',
+        notes: null,
+        invoices: paidInvoice,
+      },
+      {
+        sellerMsoId: 'mso-1',
+        quantity: 3,
+        productCode: 'PRD-ANN-BRU-003',
+        notes: null,
+        invoices: paidInvoice,
+      },
+    ]);
+
+    expect(paidBoxes.get('mso-1')).toBe(4);
+    expect(calculateMsoMonthlyIncentive(102, paidBoxes.get('mso-1') || 0)).toMatchObject({
+      paidAirNanoBoxes: 4,
+      airNanoAmount: 360_000,
+      visitBonus: 0,
+      totalAmount: 360_000,
+    });
+  });
+
+  it('refreshes draft incentive data but keeps reviewed and later snapshots locked', () => {
+    expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.DRAFT)).toBe(false);
+    expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.REVIEWED)).toBe(true);
+    expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.APPROVED)).toBe(true);
+    expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.PAID)).toBe(true);
   });
 
   it('uses Jakarta calendar-month boundaries', () => {

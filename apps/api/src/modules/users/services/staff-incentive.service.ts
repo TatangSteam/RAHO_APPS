@@ -249,6 +249,34 @@ export function areAllPurchaseInvoicesPaid(invoices: Array<{
   ));
 }
 
+export function sumPaidAirNanoBoxesBySeller(sales: Array<{
+  sellerMsoId: string | null;
+  quantity: number;
+  productCode: string | null;
+  notes: string | null;
+  invoices: Array<{
+    status: InvoiceStatus;
+    paymentVerificationStatus: PaymentVerificationStatus;
+  }>;
+}>) {
+  const paidBoxCounts = new Map<string, number>();
+
+  sales.forEach((sale) => {
+    if (
+      !sale.sellerMsoId
+      || !isAirNanoBoxSale(sale.productCode, sale.notes)
+      || !areAllPurchaseInvoicesPaid(sale.invoices)
+    ) return;
+
+    paidBoxCounts.set(
+      sale.sellerMsoId,
+      (paidBoxCounts.get(sale.sellerMsoId) || 0) + sale.quantity,
+    );
+  });
+
+  return paidBoxCounts;
+}
+
 export async function resolveBranchScope(
   callerRole: Role,
   callerUserId: string,
@@ -542,20 +570,18 @@ export async function calculateMonthlyStaffIncentivesService(
 
   const infusionCounts = new Map<string, number>();
   const visitCounts = new Map<string, number>();
-  const paidBoxCounts = new Map<string, number>();
 
   sessions.forEach((session) => {
     infusionCounts.set(session.nurseId, (infusionCounts.get(session.nurseId) || 0) + 1);
     visitCounts.set(session.adminLayananId, (visitCounts.get(session.adminLayananId) || 0) + 1);
   });
-  airNanoSales.forEach((sale) => {
-    if (
-      !sale.sellerMsoId
-      || !isAirNanoBoxSale(sale.productCode, sale.notes)
-      || !areAllPurchaseInvoicesPaid(invoicesByAddOn.get(sale.id) || [])
-    ) return;
-    paidBoxCounts.set(sale.sellerMsoId, (paidBoxCounts.get(sale.sellerMsoId) || 0) + sale.quantity);
-  });
+  const paidBoxCounts = sumPaidAirNanoBoxesBySeller(airNanoSales.map((sale) => ({
+    sellerMsoId: sale.sellerMsoId,
+    quantity: sale.quantity,
+    productCode: sale.productCode,
+    notes: sale.notes,
+    invoices: invoicesByAddOn.get(sale.id) || [],
+  })));
 
   const userIds = Array.from(new Set([
     ...infusionCounts.keys(),
@@ -1040,6 +1066,10 @@ function workflowMetadata(period: {
       };
 }
 
+export function shouldUseLockedIncentiveSnapshot(status: StaffIncentivePeriodStatus) {
+  return status !== StaffIncentivePeriodStatus.DRAFT;
+}
+
 export async function getMonthlyStaffIncentivesService(
   query: { month?: string; branchId?: string },
   callerRole: Role,
@@ -1050,7 +1080,7 @@ export async function getMonthlyStaffIncentivesService(
   const savedPeriod = await prisma.staffIncentivePeriod.findUnique({
     where: { month_scopeKey: { month: scope.month, scopeKey: scope.scopeKey } },
   });
-  if (savedPeriod) {
+  if (savedPeriod && shouldUseLockedIncentiveSnapshot(savedPeriod.status)) {
     return {
       ...restoreSnapshotReport(savedPeriod.report),
       workflow: workflowMetadata(savedPeriod),
@@ -1063,7 +1093,7 @@ export async function getMonthlyStaffIncentivesService(
     callerUserId,
     callerBranchId,
   );
-  return { ...report, workflow: workflowMetadata(null) };
+  return { ...report, workflow: workflowMetadata(savedPeriod) };
 }
 
 export async function saveStaffIncentiveDraftService(
