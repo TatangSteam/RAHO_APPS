@@ -1,4 +1,5 @@
 name: Diagnose Air Nano incentive data
+# Re-run after verified-paid invoice reconciliation.
 
 on:
   push:
