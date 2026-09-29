@@ -1070,6 +1070,10 @@ export function shouldUseLockedIncentiveSnapshot(status: StaffIncentivePeriodSta
   return status !== StaffIncentivePeriodStatus.DRAFT;
 }
 
+export function canRecalculateStaffIncentivePeriod(status: StaffIncentivePeriodStatus) {
+  return status !== StaffIncentivePeriodStatus.PAID;
+}
+
 export async function getMonthlyStaffIncentivesService(
   query: { month?: string; branchId?: string },
   callerRole: Role,
@@ -1110,10 +1114,10 @@ export async function saveStaffIncentiveDraftService(
     where: { month_scopeKey: { month: scope.month, scopeKey: scope.scopeKey } },
     select: { id: true, status: true },
   });
-  if (existing && existing.status !== StaffIncentivePeriodStatus.DRAFT) {
+  if (existing && !canRecalculateStaffIncentivePeriod(existing.status)) {
     throw errors.conflict(
       'INCENTIVE_PERIOD_LOCKED',
-      'Periode yang sudah direview, disetujui, atau dibayar tidak dapat dihitung ulang.',
+      'Periode yang sudah dibayar tidak dapat dihitung ulang.',
     );
   }
 
@@ -1128,8 +1132,9 @@ export async function saveStaffIncentiveDraftService(
   let saved;
   if (existing) {
     const updated = await prisma.staffIncentivePeriod.updateMany({
-      where: { id: existing.id, status: StaffIncentivePeriodStatus.DRAFT },
+      where: { id: existing.id, status: existing.status },
       data: {
+        status: StaffIncentivePeriodStatus.DRAFT,
         report: reportJson,
         generatedBy: callerUserId,
         generatedAt: now,
@@ -1144,7 +1149,7 @@ export async function saveStaffIncentiveDraftService(
     if (updated.count !== 1) {
       throw errors.conflict(
         'INCENTIVE_PERIOD_LOCKED',
-        'Status periode berubah saat dihitung ulang. Muat ulang sebelum mencoba kembali.',
+        'Status periode berubah saat dikoreksi. Muat ulang sebelum mencoba kembali.',
       );
     }
     saved = await prisma.staffIncentivePeriod.findUniqueOrThrow({ where: { id: existing.id } });

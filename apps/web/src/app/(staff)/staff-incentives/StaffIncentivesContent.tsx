@@ -159,7 +159,11 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
     }
   };
 
-  const saveDraft = async () => {
+  const saveDraft = async (resetLockedPeriod = false) => {
+    const previousStatus = data?.workflow.status;
+    if (resetLockedPeriod && !window.confirm(
+      'Koreksi akan menghitung ulang angka terbaru dan mengembalikan periode ke DRAFT. Periode harus direview dan disetujui kembali. Lanjutkan?',
+    )) return;
     try {
       setWorkflowProcessing(true);
       const result = await usersApi.saveStaffIncentiveDraft({
@@ -167,7 +171,13 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
         branchId: canSelectBranch ? branchId || undefined : undefined,
       });
       setData(result);
-      showToast.success(data?.workflow.status === 'DRAFT' ? 'Draft berhasil dihitung ulang.' : 'Draft insentif berhasil disimpan.');
+      showToast.success(
+        previousStatus === 'REVIEWED' || previousStatus === 'APPROVED'
+          ? 'Perhitungan berhasil dikoreksi dan dikembalikan ke DRAFT.'
+          : previousStatus === 'DRAFT'
+            ? 'Draft berhasil dihitung ulang.'
+            : 'Draft insentif berhasil disimpan.',
+      );
     } catch (error) {
       assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menyimpan draft insentif.');
@@ -260,16 +270,22 @@ export function StaffIncentivesContent({ view = 'all' }: StaffIncentivesPageProp
               </>
             )}
             {canManagePeriod && data?.workflow.status === 'REVIEWED' && (
-              <button
-                type="button"
-                onClick={() => void transitionPeriod('approve')}
-                disabled={workflowProcessing || data.anomalies.length > 0}
-                title={data.anomalies.length > 0 ? 'Selesaikan anomali assignment sebelum menyetujui periode.' : undefined}
-                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >Setujui &amp; Kunci</button>
+              <>
+                <button type="button" onClick={() => void saveDraft(true)} disabled={workflowProcessing || loading} className="rounded-xl border border-amber-400 px-4 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-50 dark:text-amber-300">Koreksi &amp; Hitung Ulang</button>
+                <button
+                  type="button"
+                  onClick={() => void transitionPeriod('approve')}
+                  disabled={workflowProcessing || data.anomalies.length > 0}
+                  title={data.anomalies.length > 0 ? 'Selesaikan anomali assignment sebelum menyetujui periode.' : undefined}
+                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >Setujui &amp; Kunci</button>
+              </>
             )}
             {canManagePeriod && data?.workflow.status === 'APPROVED' && (
-              <button type="button" onClick={() => void transitionPeriod('mark-paid')} disabled={workflowProcessing} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Tandai Dibayar</button>
+              <>
+                <button type="button" onClick={() => void saveDraft(true)} disabled={workflowProcessing || loading} className="rounded-xl border border-amber-400 px-4 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-50 dark:text-amber-300">Koreksi &amp; Hitung Ulang</button>
+                <button type="button" onClick={() => void transitionPeriod('mark-paid')} disabled={workflowProcessing} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Tandai Dibayar</button>
+              </>
             )}
             <button
               type="button"

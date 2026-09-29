@@ -1,5 +1,6 @@
 import {
   areAllPurchaseInvoicesPaid,
+  canRecalculateStaffIncentivePeriod,
   calculateChsCoordinatorMonthlyIncentive,
   calculateDoctorHeadMonthlyIncentive,
   calculateMsoMonthlyIncentive,
@@ -98,6 +99,13 @@ describe('staff monthly incentive rules', () => {
     expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.REVIEWED)).toBe(true);
     expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.APPROVED)).toBe(true);
     expect(shouldUseLockedIncentiveSnapshot(StaffIncentivePeriodStatus.PAID)).toBe(true);
+  });
+
+  it('allows an explicit correction before payment and protects paid periods', () => {
+    expect(canRecalculateStaffIncentivePeriod(StaffIncentivePeriodStatus.DRAFT)).toBe(true);
+    expect(canRecalculateStaffIncentivePeriod(StaffIncentivePeriodStatus.REVIEWED)).toBe(true);
+    expect(canRecalculateStaffIncentivePeriod(StaffIncentivePeriodStatus.APPROVED)).toBe(true);
+    expect(canRecalculateStaffIncentivePeriod(StaffIncentivePeriodStatus.PAID)).toBe(false);
   });
 
   it('uses Jakarta calendar-month boundaries', () => {
