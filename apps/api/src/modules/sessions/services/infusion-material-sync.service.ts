@@ -182,6 +182,8 @@ export async function syncSessionInfusionToTherapyPlan(
       branchId: true,
       sessionCode: true,
       materialPolicyVersion: true,
+      skipInventoryConsumption: true,
+      isCompleted: true,
       infusion: true,
     },
   });
@@ -190,8 +192,29 @@ export async function syncSessionInfusionToTherapyPlan(
     return { synced: false, adjustedMaterials: 0 };
   }
 
+  if (session.isCompleted) {
+    throw {
+      status: 409,
+      code: 'POSTED_SESSION_REQUIRES_REVERSAL',
+      message: 'Sesi sudah diposting. Balikkan posting dan buka kembali sesi sebelum mengubah therapy plan.',
+    };
+  }
+
   const oldDoses = buildActualDosesFromInfusion(session.infusion);
   const newDoses = buildActualDosesFromPlan(params.therapyPlan);
+
+  if (session.skipInventoryConsumption) {
+    await tx.infusionExecution.update({
+      where: { id: session.infusion.id },
+      data: {
+        therapyPlanId: params.therapyPlan.id,
+        ...newDoses,
+        deviationNotes: null,
+      },
+    });
+    return { synced: true, adjustedMaterials: 0 };
+  }
+
   let adjustedMaterials = 0;
 
   for (const material of MATERIALS) {
@@ -205,7 +228,11 @@ export async function syncSessionInfusionToTherapyPlan(
 
     const inventoryItem = await findInventoryItem(tx, session.branchId, material);
     if (!inventoryItem) {
-      continue;
+      throw {
+        status: 409,
+        code: 'MATERIAL_INVENTORY_NOT_FOUND',
+        message: `Stok ${material.namePattern} belum tersedia di cabang sesi. Tambahkan master dan saldo stok sebelum mengubah therapy plan.`,
+      };
     }
 
     const conversionFactor = Number(inventoryItem.masterProduct.conversionFactor) || 1;
@@ -218,7 +245,15 @@ export async function syncSessionInfusionToTherapyPlan(
       orderBy: { createdAt: 'asc' },
     });
 
-    if (session.materialPolicyVersion >= 2 && (!existingUsage || existingUsage.status === 'DRAFT')) {
+    if (session.materialPolicyVersion >= 2 && existingUsage && existingUsage.status !== 'DRAFT') {
+      throw {
+        status: 409,
+        code: 'POSTED_MATERIAL_REQUIRES_REVERSAL',
+        message: 'Material sesi sudah diposting. Balikkan posting dan buka kembali sesi sebelum mengubah therapy plan.',
+      };
+    }
+
+    if (session.materialPolicyVersion >= 2) {
       const newBaseQuantity = new Prisma.Decimal(newUsageQuantity)
         .div(conversionFactor)
         .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
@@ -337,6 +372,7 @@ export async function syncSessionInfusionToTherapyPlan(
     data: {
       therapyPlanId: params.therapyPlan.id,
       ...newDoses,
+      deviationNotes: null,
     },
   });
 

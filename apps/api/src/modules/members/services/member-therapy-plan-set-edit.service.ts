@@ -59,6 +59,32 @@ function createPlanCodeFromSet(setCode: string, planNumber: number) {
   return `${setCode.replace(/^TPS-/, 'TP-')}-${padSequence(planNumber)}`;
 }
 
+const CLINICAL_DOSE_FIELDS = [
+  'ifa250',
+  'ifa500',
+  'hho',
+  'hhoKonsentrat',
+  'h2',
+  'no',
+  'gaso',
+  'o2',
+  'o3',
+  'edta',
+  'mb',
+  'h2s',
+  'kcl',
+  'jmlNb',
+] as const;
+
+export function hasTherapyPlanDoseChanged(
+  previousPlan: Pick<TherapyPlan, (typeof CLINICAL_DOSE_FIELDS)[number] | 'ifaSubstances'>,
+  nextPlan: Pick<TherapyPlan, (typeof CLINICAL_DOSE_FIELDS)[number] | 'ifaSubstances'>,
+) {
+  return CLINICAL_DOSE_FIELDS.some((field) => (
+    Number(previousPlan[field] || 0) !== Number(nextPlan[field] || 0)
+  )) || JSON.stringify(previousPlan.ifaSubstances ?? null) !== JSON.stringify(nextPlan.ifaSubstances ?? null);
+}
+
 /**
  * Generate a new name for the edited set with current date
  * Format: "Set #[number] - [current date]"
@@ -630,6 +656,8 @@ export class MemberTherapyPlanSetEditService {
       }
 
       let sessionTherapyPlanId: string | null = null;
+      let infusionSynced = false;
+      let adjustedMaterials = 0;
 
       for (const pair of copiedPlans) {
         if (!pair.oldPlan?.treatmentSessionId) {
@@ -653,12 +681,14 @@ export class MemberTherapyPlanSetEditService {
 
         if (pair.oldPlan.treatmentSessionId === options.editableTreatmentSessionId) {
           sessionTherapyPlanId = pair.copiedPlan.id;
-          if (options.updatedBy) {
-            await syncSessionInfusionToTherapyPlan(tx, {
+          if (options.updatedBy && hasTherapyPlanDoseChanged(pair.oldPlan, pair.copiedPlan)) {
+            const syncResult = await syncSessionInfusionToTherapyPlan(tx, {
               sessionId: pair.oldPlan.treatmentSessionId,
               therapyPlan: pair.copiedPlan,
               userId: options.updatedBy,
             });
+            infusionSynced = syncResult.synced;
+            adjustedMaterials = syncResult.adjustedMaterials;
           }
         }
       }
@@ -671,7 +701,7 @@ export class MemberTherapyPlanSetEditService {
         };
       }
 
-      return { newSet, copiedPlans, sessionTherapyPlanId };
+      return { newSet, copiedPlans, sessionTherapyPlanId, infusionSynced, adjustedMaterials };
     });
 
     const editedCount = result.copiedPlans.filter((p) => p.edited).length;
@@ -687,6 +717,8 @@ export class MemberTherapyPlanSetEditService {
         editedPlans: editedCount,
         originalSetId: originalSet.id,
         sessionTherapyPlanId: result.sessionTherapyPlanId,
+        infusionSynced: result.infusionSynced,
+        adjustedMaterials: result.adjustedMaterials,
         createdAt: result.newSet.createdAt.toISOString(),
       },
     };

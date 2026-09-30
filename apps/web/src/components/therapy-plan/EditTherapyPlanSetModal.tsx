@@ -8,6 +8,8 @@ import { TherapyPlan, therapyPlanApi, BulkEditTherapyPlanSetInput } from '@/lib/
 import { showToast } from '../ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { THERAPY_PLAN_EDITORS, hasRole } from '@/types/auth';
+import { sessionApi } from '@/lib/sessionApi';
+import { createClientIdempotencyKey } from '@/lib/clientIdempotencyKey';
 
 type DoseInputValue = number | string | null;
 
@@ -96,6 +98,19 @@ export default function EditTherapyPlanSetModal({
   const [addRowCount, setAddRowCount] = useState('1');
   const [sessionPlanNumber, setSessionPlanNumber] = useState<number | null>(null);
   const [initialSessionPlanNumber, setInitialSessionPlanNumber] = useState<number | null>(null);
+  const [postedCorrectionReason, setPostedCorrectionReason] = useState('');
+  const [postedCorrectionConfirmed, setPostedCorrectionConfirmed] = useState(false);
+  const [sessionReopened, setSessionReopened] = useState(false);
+
+  const editableSessionPlan = editableSessionId
+    ? therapyPlans.find((plan) => plan.usedInSession?.id === editableSessionId)
+    : undefined;
+  const requiresPostedReversal = Boolean(
+    editableSessionId && editableSessionPlan?.usedInSession?.isCompleted && !sessionReopened
+  );
+  const canReversePostedSession = Boolean(
+    user && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role)
+  );
 
   // Check if user has permission to edit set name and add plans
   const canEditSetNameAndAddPlans = user
@@ -237,6 +252,9 @@ export default function EditTherapyPlanSetModal({
       const currentPlanNumber = currentSessionPlan?.planNumber || null;
       setSessionPlanNumber(currentPlanNumber);
       setInitialSessionPlanNumber(currentPlanNumber);
+      setPostedCorrectionReason('');
+      setPostedCorrectionConfirmed(false);
+      setSessionReopened(false);
       
       // Initialize set name
       const currentSetName = therapyPlans[0]?.setName || '';
@@ -545,7 +563,23 @@ export default function EditTherapyPlanSetModal({
       }
     }
 
+    if (requiresPostedReversal && !canReversePostedSession) {
+      showToast.error('Hanya Super Admin, Admin Manager, atau Admin Cabang yang dapat membalik posting sesi.');
+      return;
+    }
+
+    if (requiresPostedReversal && postedCorrectionReason.trim().length < 5) {
+      showToast.error('Alasan koreksi sesi posted wajib diisi minimal 5 karakter');
+      return;
+    }
+
+    if (requiresPostedReversal && !postedCorrectionConfirmed) {
+      showToast.error('Konfirmasi reversal posting sebelum menyimpan perubahan');
+      return;
+    }
+
     setIsSubmitting(true);
+    let reopenedForEditing = sessionReopened;
     try {
       // Find the maximum initial plan number to detect newly added rows
       const maxInitialPlanNumber = initialRows.length > 0 
@@ -646,6 +680,16 @@ export default function EditTherapyPlanSetModal({
         payload.sessionPlanNumber = sessionPlanNumber;
       }
 
+      if (requiresPostedReversal && editableSessionId) {
+        await sessionApi.cancelCompletion(editableSessionId, {
+          idempotencyKey: createClientIdempotencyKey(),
+          reason: postedCorrectionReason.trim(),
+          reopenForEditing: true,
+        });
+        reopenedForEditing = true;
+        setSessionReopened(true);
+      }
+
       const response = editableSessionId
         ? await therapyPlanApi.bulkEditSessionTherapyPlanSet(editableSessionId, payload)
         : await therapyPlanApi.bulkEditTherapyPlanSet(memberId, setId, payload);
@@ -653,7 +697,11 @@ export default function EditTherapyPlanSetModal({
       // Clear draft after successful submission
       clearDraft();
       
-      if (sessionPlanNumberChanged && editedUnlockedPlans.length === 0 && !setNameChanged) {
+      if (reopenedForEditing) {
+        showToast.success(
+          'Posting lama sudah dibalik. Therapy plan, infus aktual, dan material diperbarui. Selesaikan kembali sesi untuk memposting stok baru.'
+        );
+      } else if (sessionPlanNumberChanged && editedUnlockedPlans.length === 0 && !setNameChanged) {
         showToast.success(response.message || `Sesi dipindahkan ke Terapi #${sessionPlanNumber}`);
       } else {
         showToast.success(
@@ -670,7 +718,14 @@ export default function EditTherapyPlanSetModal({
         error?.response?.data?.message ||
         error?.message ||
         'Gagal mengedit therapy plan set';
-      showToast.error(errorMessage);
+      showToast.error(
+        reopenedForEditing
+          ? `Posting lama sudah dibalik, tetapi perubahan therapy plan belum tersimpan: ${errorMessage}. Sesi sekarang pending dan aman untuk diedit ulang.`
+          : errorMessage
+      );
+      if (reopenedForEditing) {
+        onSuccess();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -776,6 +831,41 @@ export default function EditTherapyPlanSetModal({
                 );
               })}
             </select>
+          </div>
+        )}
+
+        {requiresPostedReversal && (
+          <div className="mx-6 mb-3 p-4 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 rounded-lg">
+            <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+              Sesi ini sudah diposting
+            </p>
+            <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+              {canReversePostedSession
+                ? 'Sistem akan membalik posting stok dan keuangan lama, membuka kembali sesi, lalu menyelaraskan infus aktual serta material dengan therapy plan baru. Sesi wajib diselesaikan kembali setelah koreksi.'
+                : 'Hubungi Super Admin, Admin Manager, atau Admin Cabang untuk membalik posting sebelum therapy plan dapat dikoreksi.'}
+            </p>
+            <label className="block mt-3 text-xs font-semibold text-red-900 dark:text-red-100">
+              Alasan koreksi
+            </label>
+            <textarea
+              value={postedCorrectionReason}
+              onChange={(event) => setPostedCorrectionReason(event.target.value)}
+              disabled={isSubmitting || !canReversePostedSession}
+              rows={2}
+              maxLength={1000}
+              className="mt-1 w-full px-3 py-2 text-sm border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white disabled:opacity-50"
+              placeholder="Jelaskan alasan perubahan therapy plan (minimal 5 karakter)"
+            />
+            <label className="mt-3 flex items-start gap-2 text-xs text-red-800 dark:text-red-200">
+              <input
+                type="checkbox"
+                checked={postedCorrectionConfirmed}
+                onChange={(event) => setPostedCorrectionConfirmed(event.target.checked)}
+                disabled={isSubmitting || !canReversePostedSession}
+                className="mt-0.5"
+              />
+              Saya memahami posting lama akan direversal dan sesi harus diselesaikan kembali.
+            </label>
           </div>
         )}
 
@@ -1164,7 +1254,7 @@ export default function EditTherapyPlanSetModal({
             )}
             {editableSessionId && (
               <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
-                Therapy plan milik sesi ini dapat diedit dan akan dipindahkan ke versi set terbaru.
+                Therapy plan milik sesi ini dapat diedit. Infus aktual dan material sesi akan diselaraskan ke dosis baru dalam satu transaksi.
               </p>
             )}
           </div>
@@ -1178,7 +1268,7 @@ export default function EditTherapyPlanSetModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting || !changesDetected}
+              disabled={isSubmitting || !changesDetected || (requiresPostedReversal && !canReversePostedSession)}
               className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-amber-600 border border-transparent rounded-lg hover:from-amber-600 hover:to-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-lg shadow-amber-500/30"
               title={!changesDetected ? 'Tidak ada perubahan yang dibuat' : ''}
             >
@@ -1191,7 +1281,7 @@ export default function EditTherapyPlanSetModal({
                   Menyimpan...
                 </>
               ) : (
-                'Simpan Perubahan'
+                requiresPostedReversal ? 'Reversal & Simpan Perubahan' : 'Simpan Perubahan'
               )}
             </button>
           </div>

@@ -41,6 +41,8 @@ export interface TherapyPlan {
     branchCode: string;
     totalSessionsCount: number; // Terapi ke-X (global)
     branchSessionsCount: number; // Terapi ke-X di cabang ini
+    isCompleted?: boolean;
+    completionStatus?: string;
   };
   createdAt: string;
 }
@@ -147,6 +149,8 @@ export interface BulkEditTherapyPlanSetResponse {
     editedPlans: number;
     plans: TherapyPlan[];
     sessionTherapyPlanId?: string | null;
+    infusionSynced?: boolean;
+    adjustedMaterials?: number;
   };
 }
 

@@ -136,6 +136,8 @@ export class TherapyPlanService {
             treatmentDate: true,
             infusKe: true,
             branchInfusKe: true,
+            isCompleted: true,
+            completionStatus: true,
             branch: {
               select: {
                 name: true,
@@ -193,6 +195,8 @@ export class TherapyPlanService {
             branchCode: plan.session.branch.branchCode,
             totalSessionsCount: plan.session.infusKe,
             branchSessionsCount: plan.session.branchInfusKe,
+            isCompleted: plan.session.isCompleted,
+            completionStatus: plan.session.completionStatus,
           }
         : undefined,
       createdAt: plan.createdAt.toISOString(),
@@ -215,6 +219,12 @@ export class TherapyPlanService {
         planNumber: true,
         therapyPlanSetId: true,
         supersededById: true,
+        session: {
+          select: {
+            isCompleted: true,
+            completionStatus: true,
+          },
+        },
       },
     });
 
@@ -226,7 +236,16 @@ export class TherapyPlanService {
       };
     }
 
-    let editablePlan = therapyPlan;
+    if (therapyPlan.session?.isCompleted) {
+      throw {
+        status: 409,
+        code: 'POSTED_SESSION_REQUIRES_REVERSAL',
+        message: 'Sesi sudah diposting. Balikkan posting dan buka kembali sesi sebelum mengedit therapy plan.',
+      };
+    }
+
+    const { session: _sessionState, ...therapyPlanData } = therapyPlan;
+    let editablePlan = therapyPlanData;
 
     while (editablePlan.supersededById) {
       const nextPlan = await prisma.therapyPlan.findUnique({

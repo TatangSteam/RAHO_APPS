@@ -36,6 +36,31 @@ describe('TherapyPlanService session editing', () => {
     jest.clearAllMocks();
   });
 
+  it('requires a posted session to be reversed before editing its therapy plan', async () => {
+    (prisma.therapyPlan.findUnique as jest.Mock).mockResolvedValueOnce({
+      id: 'plan-posted',
+      planNumber: 1,
+      therapyPlanSetId: 'set-1',
+      supersededById: null,
+      session: {
+        isCompleted: true,
+        completionStatus: 'COMPLETED',
+      },
+    });
+
+    const service = new TherapyPlanService();
+
+    await expect(service.updateTherapyPlanSetForSession(
+      'session-posted',
+      { plans: [{ planNumber: 1, ifa250: 1 }] },
+      'doctor-1'
+    )).rejects.toMatchObject({
+      status: 409,
+      code: 'POSTED_SESSION_REQUIRES_REVERSAL',
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('normalizes a session from a superseded plan before creating a new version', async () => {
     (prisma.therapyPlan.findUnique as jest.Mock)
       .mockResolvedValueOnce({

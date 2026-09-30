@@ -1,5 +1,8 @@
 import { prisma } from '../../../lib/prisma';
-import { MemberTherapyPlanSetEditService } from '../../members/services/member-therapy-plan-set-edit.service';
+import {
+  hasTherapyPlanDoseChanged,
+  MemberTherapyPlanSetEditService,
+} from '../../members/services/member-therapy-plan-set-edit.service';
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
@@ -139,6 +142,33 @@ describe('session therapy plan set editing', () => {
     });
     expect(result.data.sessionTherapyPlanId).toBe('plan-current-v2');
     expect(result.data.version).toBe(2);
+  });
+
+  it('only synchronizes clinical execution when a dose or IFA composition changes', () => {
+    const basePlan = {
+      ifa250: 1,
+      ifa500: null,
+      hho: 10,
+      hhoKonsentrat: null,
+      h2: null,
+      no: 2.5,
+      gaso: null,
+      o2: null,
+      o3: null,
+      edta: null,
+      mb: null,
+      h2s: null,
+      kcl: null,
+      jmlNb: null,
+      ifaSubstances: null,
+    } as any;
+
+    expect(hasTherapyPlanDoseChanged(basePlan, { ...basePlan })).toBe(false);
+    expect(hasTherapyPlanDoseChanged(basePlan, { ...basePlan, hho: 15 })).toBe(true);
+    expect(hasTherapyPlanDoseChanged(basePlan, {
+      ...basePlan,
+      ifaSubstances: [{ name: 'NO', amount: 2.5, unit: 'ml' }],
+    })).toBe(true);
   });
 
   it('copies only retained plans when reducing therapy count', async () => {
