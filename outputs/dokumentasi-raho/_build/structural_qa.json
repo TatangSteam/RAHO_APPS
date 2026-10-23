@@ -1,0 +1,18 @@
+{
+  "preset": "compact_reference_guide",
+  "header": "editorial_cover",
+  "named_overrides": [
+    "brand cover gold kicker",
+    "32pt cover title",
+    "10pt table text",
+    "9pt captions",
+    "1.15 heading line spacing"
+  ],
+  "chapters": 18,
+  "tables": 12,
+  "inline_images": 10,
+  "paragraphs": 285,
+  "table_geometry_issues": 0,
+  "baseline": "1dd9abd",
+  "output": "C:\\Users\\jovan\\Documents\\RAHO\\agpROJ\\outputs\\dokumentasi-raho\\DOKUMENTASI_PROJECT_RAHO_ERP_v1.1.docx"
+}

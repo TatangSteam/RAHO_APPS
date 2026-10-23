@@ -174,6 +174,7 @@ router.get('/reports/stock-card', authenticate, requirePermission(PERMISSIONS.IN
 router.get('/reports/valuation', authenticate, requirePermission(PERMISSIONS.INVENTORY_READ), logisticsReportController.valuation.bind(logisticsReportController));
 router.get('/ledger/balances', authenticate, authorize(ALLSTAFF), inventoryLedgerController.balances.bind(inventoryLedgerController));
 router.get('/ledger/postings', authenticate, authorize(ALLSTAFF), inventoryLedgerController.postings.bind(inventoryLedgerController));
+router.post('/ledger/repair-stock-mirrors', authenticate, requirePermission(PERMISSIONS.INVENTORY_RECONCILE), inventoryLedgerController.repairStockMirrors.bind(inventoryLedgerController));
 router.get('/ledger/reconciliation', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.reconcile.bind(inventoryLedgerController));
 router.post('/ledger/opening-stock', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPENING_POST), inventoryLedgerController.opening.bind(inventoryLedgerController));
 router.post('/ledger/receipts', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.receive.bind(inventoryLedgerController));

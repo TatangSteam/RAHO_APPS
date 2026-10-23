@@ -621,6 +621,49 @@ function ensureUniqueIssueLines(input: IssueInventoryInput) {
   if (new Set(keys).size !== keys.length) throw errors.badRequest('DUPLICATE_ISSUE_LINE', 'Inventory item/location/batch tidak boleh duplikat dalam satu posting.');
 }
 
+/** Caller must hold the inventory item lock. Never invent quantity or valuation. */
+export async function repairStockMirrorInTransaction(
+  tx: Tx, actorUserId: string, item: LockedInventoryItem,
+) {
+  const balances = await tx.inventoryBalance.findMany({
+    where: { inventoryItemId: item.id },
+    include: { costLayers: { where: { isVoided: false } } },
+  });
+  const total = balances.reduce((sum, balance) => sum.add(balance.onHandQty), new Prisma.Decimal(0));
+  if (total.equals(item.stock)) return { repaired: false, blocked: false };
+  const consistent = balances.length > 0 && balances.every((balance) =>
+    !balance.onHandQty.isNegative()
+    && balance.costLayers.reduce((sum, layer) => sum.add(layer.remainingQty), new Prisma.Decimal(0)).equals(balance.onHandQty));
+  if (!consistent) return { repaired: false, blocked: true };
+  await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: total } });
+  await tx.auditLog.create({ data: {
+    userId: actorUserId, branchId: item.branchId, action: 'UPDATE',
+    resource: 'InventoryItem', resourceId: item.id,
+    description: 'Sinkronisasi saldo stok lama ke ledger terverifikasi',
+    beforeData: { stock: item.stock.toString() },
+    afterData: { stock: total.toString(), reason: 'STOCK_MIRROR_REPAIR' },
+  } });
+  item.stock = total;
+  return { repaired: true, blocked: false };
+}
+
+export async function repairInventoryStockMirrors(actorUserId: string, branchId: string) {
+  await assertBranchAccess(actorUserId, branchId);
+  await assertPermission(actorUserId, PERMISSIONS.INVENTORY_RECONCILE, branchId);
+  return withTransactionRetry(() => prisma.$transaction(async (tx) => {
+    const candidates = await tx.inventoryItem.findMany({ where: { branchId }, select: { id: true } });
+    const items = await lockInventoryItems(tx, candidates.map((item) => item.id));
+    const repaired: string[] = [];
+    const blocked: string[] = [];
+    for (const item of items) {
+      const result = await repairStockMirrorInTransaction(tx, actorUserId, item);
+      if (result.repaired) repaired.push(item.id);
+      if (result.blocked) blocked.push(item.id);
+    }
+    return { checked: items.length, repaired, blocked };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
+}
+
 export async function issueInventoryInTransaction(
   actorUserId: string,
   input: IssueInventoryInput,
@@ -652,6 +695,10 @@ export async function issueInventoryInTransaction(
   const itemMap = new Map(items.map((item) => [item.id, item]));
   if (items.length !== new Set(normalizedLines.map((line) => line.inventoryItemId)).size || items.some((item) => item.branchId !== input.branchId)) {
     throw errors.notFound('Satu atau lebih inventory item tidak ditemukan dalam branch.');
+  }
+
+  if (!options.preserveCompatibilityStock) {
+    for (const item of items) await repairStockMirrorInTransaction(tx, actorUserId, item);
   }
 
   const posting = await tx.inventoryPosting.create({
@@ -698,7 +745,7 @@ export async function issueInventoryInTransaction(
         where: { id: item.id, stock: { gte: quantity } },
         data: { stock: { decrement: quantity } },
       });
-      if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', 'Compatibility stock tidak mencukupi.');
+      if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', `Saldo stok lama item ${item.id} tidak sinkron. Jalankan Perbaiki saldo stok di Ledger Stok; jika belum berhasil, periksa ledger dan cost layer.`);
     }
 
     const stockBefore = item.stock;

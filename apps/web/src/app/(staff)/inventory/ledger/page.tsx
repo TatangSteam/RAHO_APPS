@@ -47,6 +47,7 @@ export default function InventoryLedgerPage() {
   const [receipt, setReceipt] = useState(() => newInboundForm('RECEIPT'));
   const [issue, setIssue] = useState({ inventoryItemId: '', quantity: '', sourceId: '' });
   const [reconciliation, setReconciliation] = useState<Row | null>(null);
+  const [repairResult, setRepairResult] = useState<{ branchId: string; repaired: string[]; blocked: string[] } | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [lastInboundPosting, setLastInboundPosting] = useState<Row | null>(null);
 
@@ -105,6 +106,21 @@ export default function InventoryLedgerPage() {
   }, [balancePage, branchId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const repairStock = async () => {
+    try {
+      setSaving(true);
+      const response = await api.post('/inventory/ledger/repair-stock-mirrors', { branchId });
+      const result = response.data.data as { repaired: string[]; blocked: string[] };
+      setRepairResult({ branchId, ...result });
+      showToast.success(`${result.repaired.length} saldo stok diperbaiki.`);
+      if (result.blocked.length) showToast.error(`${result.blocked.length} item perlu pemeriksaan ledger/cost layer. Stok tidak diubah.`);
+      await load();
+    } catch (requestError) {
+      assertCaughtError(requestError);
+      showToast.error(requestError.response?.data?.error?.message || 'Perbaikan saldo stok gagal.');
+    } finally { setSaving(false); }
+  };
 
   const submitReceipt = async (event: FormEvent) => {
     event.preventDefault();
@@ -218,6 +234,14 @@ export default function InventoryLedgerPage() {
 
     <div className={styles.summary}>{Object.entries(summary).map(([key, value]) => <div key={key} className={styles.summaryItem}><span>{summaryLabels[key]}</span><strong>{value.toLocaleString('id-ID', { maximumFractionDigits: 4 })}</strong></div>)}</div>
     {hasIncompleteValuation && <div className={styles.notice} role="status"><strong>Nilai persediaan belum lengkap.</strong>{hasPendingValuation && <> {pendingValuationQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} unit pada {Number(reconciliation?.pendingValuationItemCount || 0).toLocaleString('id-ID')} item masih menunggu unit cost.</>}{quantityMismatchCount > 0 && <> {quantityMismatchCount.toLocaleString('id-ID')} item memiliki selisih antara saldo, mirror stock, atau cost layer.</>} Lengkapi dan rekonsiliasi melalui Dashboard Logistik → Valuation sebelum memakai total nilai untuk laporan keuangan.</div>}
+    {permissions.has('INVENTORY.RECONCILE') && <div className={styles.notice}>
+      <p>Perbaiki saldo stok lama mengikuti ledger per lokasi yang cocok dengan cost layer. Setiap perubahan dicatat di audit.</p>
+      <button type="button" className={styles.secondaryButton} disabled={saving || loading || !branchId} onClick={() => void repairStock()}>{saving ? 'Memproses...' : 'Perbaiki saldo stok'}</button>
+      {repairResult?.branchId === branchId && <div role="status">
+        <p>{repairResult.repaired.length} saldo diperbaiki; {repairResult.blocked.length} item perlu diperiksa.</p>
+        {repairResult.blocked.length > 0 && <ul>{repairResult.blocked.map((id) => <li key={id}>{items.find((item) => item.id === id)?.masterProduct?.name || id}: ledger dan cost layer belum cocok atau ledger belum tersedia.</li>)}</ul>}
+      </div>}
+    </div>}
     {reconciliation && <div className={styles.summary}>
       <div className={styles.summaryItem}><span>Nilai cost layer</span><strong>Rp {Number(reconciliation.layerValue || 0).toLocaleString('id-ID')}</strong></div>
       <div className={styles.summaryItem}><span>Nilai in-transit</span><strong>Rp {Number(reconciliation.inTransitValue || 0).toLocaleString('id-ID')}</strong></div>

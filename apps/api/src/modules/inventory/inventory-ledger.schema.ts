@@ -96,3 +96,5 @@ export type OpeningInventoryInput = z.infer<typeof openingInventorySchema>;
 export type IssueInventoryInput = z.infer<typeof issueInventorySchema>;
 export type ReverseInventoryPostingInput = z.infer<typeof reverseInventoryPostingSchema>;
 export type InventoryLedgerQuery = z.infer<typeof inventoryLedgerQuerySchema>;
+
+export const repairStockMirrorsSchema = z.object({ branchId: z.string().trim().min(1) }).strict();

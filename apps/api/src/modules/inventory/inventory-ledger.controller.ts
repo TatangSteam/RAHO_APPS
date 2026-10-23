@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { sendCreated, sendSuccess } from '@utils/response';
 import {
   inventoryLedgerQuerySchema,
+  repairStockMirrorsSchema,
   issueInventorySchema,
   openingInventorySchema,
   receiveInventorySchema,
@@ -14,6 +15,7 @@ import {
   postOpeningInventory,
   receiveInventory,
   reconcileInventory,
+  repairInventoryStockMirrors,
   reverseInventoryPosting,
 } from './services/inventory-ledger.service';
 
@@ -35,6 +37,12 @@ export class InventoryLedgerController {
   }
   async postings(req: Request, res: Response, next: NextFunction) {
     try { sendSuccess(res, await listInventoryPostings(req.user.userId, inventoryLedgerQuerySchema.parse(req.query))); } catch (error) { next(error); }
+  }
+  async repairStockMirrors(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { branchId } = repairStockMirrorsSchema.parse(req.body);
+      sendSuccess(res, await repairInventoryStockMirrors(req.user.userId, branchId));
+    } catch (error) { next(error); }
   }
   async reconcile(req: Request, res: Response, next: NextFunction) {
     try { sendSuccess(res, await reconcileInventory(req.user.userId, String(req.query.branchId || ''))); } catch (error) { next(error); }
