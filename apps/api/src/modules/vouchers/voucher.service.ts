@@ -911,7 +911,16 @@ export async function claimVoucher(actorId: string, actorRole: Role, input: Clai
       if (!voucher) throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan.');
       if (voucher.status === CampaignVoucherStatus.CLAIMED) throw errors.conflict('VOUCHER_ALREADY_CLAIMED', 'Voucher sudah pernah diklaim.');
       if (voucher.status === CampaignVoucherStatus.CANCELLED) throw errors.conflict('VOUCHER_CANCELLED', 'Voucher telah dibatalkan.');
-      const isFirstUseActivation = voucher.status === CampaignVoucherStatus.AVAILABLE;
+      // Legacy imports may use ISSUED without ever assigning a recipient.
+      // Only completely unbound records may accept a new identity.
+      const isUnassignedLegacyVoucher = voucher.status === CampaignVoucherStatus.ISSUED
+        && !voucher.recipientMemberId
+        && !voucher.recipientNameSnapshot
+        && !voucher.recipientNikHash
+        && !voucher.recipientDateOfBirth
+        && !voucher.nikLast4
+        && !voucher.claimedAt;
+      const isFirstUseActivation = voucher.status === CampaignVoucherStatus.AVAILABLE || isUnassignedLegacyVoucher;
       if (!isFirstUseActivation && voucher.status !== CampaignVoucherStatus.ISSUED) {
         throw errors.conflict('VOUCHER_NOT_ISSUED', 'Voucher belum dapat diklaim.');
       }
@@ -971,7 +980,7 @@ export async function claimVoucher(actorId: string, actorRole: Role, input: Clai
       await tx.voucherCampaign.update({
         where: { id: voucher.campaignId },
         data: {
-          ...(isFirstUseActivation ? { issuedCount: { increment: 1 } } : {}),
+          ...(voucher.status === CampaignVoucherStatus.AVAILABLE ? { issuedCount: { increment: 1 } } : {}),
           claimedCount: { increment: 1 },
           updatedBy: actorId,
         },
@@ -1057,4 +1066,67 @@ export async function updateVoucherOperator(actorId: string, actorRole: Role, op
   });
   await logAudit({ userId: actorId, action: AuditAction.UPDATE, module: 'VOUCHER', resource: 'VoucherOperator', resourceId: operatorId, meta: { isActive: input.isActive, locationIds, passwordReset: Boolean(input.password) } });
   return operator;
+}
+
+function assertVoucherController(role: Role) {
+  if (role !== Role.VOUCHER_OPERATOR) throw errors.forbidden('Kontrol ini khusus Pengelola Voucher.');
+}
+
+async function assertControlScope(actorId: string, voucher: { allowedLocationId: string | null; claimedLocationId: string | null }) {
+  const locations = await getAllowedLocations(actorId, Role.VOUCHER_OPERATOR);
+  const ids = locations.map((location) => location.id);
+  if (!ids.length || (voucher.allowedLocationId && !ids.includes(voucher.allowedLocationId))
+    || (voucher.claimedLocationId && !ids.includes(voucher.claimedLocationId))) {
+    throw errors.forbidden('Voucher di luar lokasi assignment aktif akun ini.');
+  }
+}
+
+const controlInclude = {
+  campaign: { select: { code: true, title: true, basicSessions: true, boosterSessions: true } },
+  allowedLocation: { select: { id: true, displayName: true, city: true } },
+  claimedLocation: { select: { id: true, displayName: true, city: true } },
+} as const;
+
+export async function lookupVoucherControl(actorId: string, role: Role, code: string) {
+  assertVoucherController(role);
+  const voucher = await prisma.campaignVoucher.findUnique({ where: { codeHash: codeHash(code) }, include: controlInclude });
+  if (!voucher) throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan.');
+  await assertControlScope(actorId, voucher);
+  return presentVoucher(voucher);
+}
+
+export async function releaseVoucherControl(actorId: string, role: Role, input: { code: string; reason: string }) {
+  assertVoucherController(role);
+  const result = await prisma.$transaction(async (tx) => {
+    const initial = await tx.campaignVoucher.findUnique({ where: { codeHash: codeHash(input.code) } });
+    if (!initial) throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan.');
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`VOUCHER_CLAIM:${initial.id}`}))`;
+    const voucher = await tx.campaignVoucher.findUnique({ where: { id: initial.id } });
+    if (!voucher) throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan.');
+    await assertControlScope(actorId, voucher);
+    if (voucher.status !== CampaignVoucherStatus.ISSUED || voucher.claimedAt) {
+      throw errors.conflict('VOUCHER_RELEASE_NOT_ALLOWED', 'Hanya voucher ISSUED yang belum diklaim dapat dikembalikan ke AVAILABLE.');
+    }
+    const released = await tx.campaignVoucher.update({
+      where: { id: voucher.id },
+      data: {
+        status: CampaignVoucherStatus.AVAILABLE, recipientMemberId: null,
+        recipientNameSnapshot: null, recipientNikHash: null, recipientDateOfBirth: null,
+        nikLast4: null, updatedBy: actorId,
+      },
+      include: controlInclude,
+    });
+    await tx.voucherCampaign.updateMany({
+      where: { id: voucher.campaignId, issuedCount: { gt: 0 } },
+      data: { issuedCount: { decrement: 1 }, updatedBy: actorId },
+    });
+    // Store audit in the same transaction so a release cannot lose its reason.
+    await tx.auditLog.create({ data: {
+      userId: actorId, action: AuditAction.UPDATE, module: 'VOUCHER', resource: 'CampaignVoucher',
+      resourceId: voucher.id, description: input.reason,
+      meta: { operation: 'RELEASE_RECIPIENT', previousStatus: voucher.status, status: 'AVAILABLE' },
+    } });
+    return released;
+  });
+  return presentVoucher(result);
 }

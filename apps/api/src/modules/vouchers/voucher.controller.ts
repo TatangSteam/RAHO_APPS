@@ -84,3 +84,21 @@ export async function generateCodes(req: Request, res: Response, next: NextFunct
     sendCreated(res, await generateVoucherCodes(req.user.userId, req.user.role as Role, req.params.campaignId, generateVoucherCodesSchema.parse(req.body)));
   } catch (error) { next(error); }
 }
+
+// Control endpoints deliberately exclude other staff roles.
+export async function lookupControl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { voucherControlSchema } = await import('./voucher.schema');
+    const { lookupVoucherControl } = await import('./voucher.service');
+    sendSuccess(res, await lookupVoucherControl(req.user.userId, req.user.role as Role, voucherControlSchema.parse(req.body).code));
+  } catch (error) { next(error); }
+}
+
+export async function releaseControl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { releaseVoucherSchema } = await import('./voucher.schema');
+    const { releaseVoucherControl } = await import('./voucher.service');
+    const input = releaseVoucherSchema.parse(req.body);
+    sendSuccess(res, await releaseVoucherControl(req.user.userId, req.user.role as Role, { code: input.code!, reason: input.reason! }));
+  } catch (error) { next(error); }
+}

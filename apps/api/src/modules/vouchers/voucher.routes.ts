@@ -9,6 +9,8 @@ const VOUCHER_ROLES = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.VOUCHER_OPERAT
 const VOUCHER_ISSUER_ROLES = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER];
 
 router.use(authenticate);
+router.post('/control/lookup', authorize([Role.VOUCHER_OPERATOR]), controller.lookupControl);
+router.post('/control/release', authorize([Role.VOUCHER_OPERATOR]), controller.releaseControl);
 router.get('/dashboard', authorize(VOUCHER_ROLES), controller.dashboard);
 router.get('/claims', authorize(VOUCHER_ROLES), controller.listClaims);
 router.get('/claims/:voucherId/receipt', authorize(VOUCHER_ROLES), controller.downloadClaimReceipt);

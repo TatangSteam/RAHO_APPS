@@ -52,6 +52,37 @@ describe('voucher claim recipient eligibility', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
+  it('claims a legacy ISSUED code with no recipient without counting issuance twice', async () => {
+    const voucher = {
+      id: 'legacy-1', campaignId: 'campaign-1', status: 'ISSUED',
+      recipientMemberId: null, recipientMember: null, recipientNameSnapshot: null,
+      recipientNikHash: null, recipientDateOfBirth: null, nikLast4: null, claimedAt: null,
+      campaign: { code: 'TEST', title: 'Test', basicSessions: 10, boosterSessions: 0 },
+    };
+    db.campaignVoucher.findUnique.mockResolvedValue(voucher);
+    db.campaignVoucher.update.mockImplementation(async ({ data }: any) => ({ ...voucher, ...data }));
+    await expect(claimVoucher('operator-1', Role.VOUCHER_OPERATOR, input))
+      .resolves.toMatchObject({ status: 'CLAIMED' });
+    expect(db.voucherCampaign.update).toHaveBeenCalledWith({
+      where: { id: 'campaign-1' },
+      data: { claimedCount: { increment: 1 }, updatedBy: 'operator-1' },
+    });
+  });
+
+  it.each([
+    { recipientMemberId: 'member-1' },
+    { recipientNikHash: 'existing-hash' },
+    { recipientDateOfBirth: new Date('1980-01-01') },
+    { nikLast4: '9999' },
+  ])('does not overwrite partially assigned legacy identity: %o', async (identity) => {
+    db.campaignVoucher.findUnique.mockResolvedValue({
+      id: 'legacy-1', status: 'ISSUED', campaign: {}, recipientMember: null, ...identity,
+    });
+    await expect(claimVoucher('operator-1', Role.VOUCHER_OPERATOR, input))
+      .rejects.toMatchObject({ code: 'VOUCHER_IDENTITY_MISMATCH' });
+    expect(db.campaignVoucher.update).not.toHaveBeenCalled();
+  });
+
   it('keeps an ISSUED code bound to its designated recipient', async () => {
     db.campaignVoucher.findUnique.mockResolvedValue({
       id: 'voucher-1', status: 'ISSUED', campaign: {},

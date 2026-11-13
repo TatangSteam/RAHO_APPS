@@ -185,6 +185,11 @@ export default function VoucherPartnershipPage() {
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const isVoucherController = user?.role === 'VOUCHER_OPERATOR';
+  const [controlCode, setControlCode] = useState('');
+  const [controlVoucher, setControlVoucher] = useState<Voucher | null>(null);
+  const [controlReason, setControlReason] = useState('');
+  const [releaseConfirmed, setReleaseConfirmed] = useState(false);
   const canIssueVoucher = isSuperAdmin || isAdminManager;
   const isAllowed = canIssueVoucher || user?.role === 'VOUCHER_OPERATOR';
   const isViewAllowed = isSuperAdmin || view === 'claim' || view === 'history' || (isAdminManager && view === 'registry');
@@ -330,10 +335,28 @@ export default function VoucherPartnershipPage() {
         requestId: crypto.randomUUID(),
       });
       setClaimResult(response.data.data);
+      setControlVoucher(null);
       setClaimForm((current) => ({ ...current, code: '', recipientName: '', nik: '', dateOfBirth: '' }));
       showToast.success('Voucher berhasil diklaim dan manfaat sudah diaktifkan.');
       await load();
     } catch (error) {
+      showToast.error(errorMessage(error));
+    } finally { setBusy(null); }
+  }
+
+  async function submitVoucherControl(event: FormEvent, release = false) {
+    event.preventDefault();
+    setBusy('control');
+    try {
+      const response = await api.post<{ data: Voucher }>(`/vouchers/control/${release ? 'release' : 'lookup'}`, {
+        code: controlCode, ...(release ? { reason: controlReason } : {}),
+      });
+      setControlVoucher(response.data.data);
+      setReleaseConfirmed(false);
+      setControlReason('');
+      if (release) { showToast.success('Penerima dilepas. Voucher kembali AVAILABLE.'); await load(); }
+    } catch (error) {
+      setControlVoucher(null);
       showToast.error(errorMessage(error));
     } finally { setBusy(null); }
   }
@@ -532,6 +555,32 @@ export default function VoucherPartnershipPage() {
             ['Sudah diklaim', totals.claimed, <BadgeCheck key="claimed" size={19} />],
             ['Lokasi aktif', dashboard.locations.length, <MapPin key="locations" size={19} />],
           ].map(([label, value, icon]) => <div className="card" style={{ padding: 18 }} key={String(label)}><div style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>{icon}{label}</div><div style={{ fontSize: 28, fontWeight: 850, marginTop: 8 }}>{value}</div></div>)}
+        </section>
+      )}
+
+      {view === 'claim' && isVoucherController && (
+        <section className="card" style={{ padding: 21, marginBottom: 18, maxWidth: 620, display: 'grid', gap: 14 }}>
+          <div><h2 style={{ fontSize: 19, fontWeight: 800 }}>Kontrol Status Voucher</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>Khusus Pengelola Voucher. ISSUED berarti diterbitkan, belum diklaim. CLAIMED berarti sudah diklaim.</p></div>
+          <form onSubmit={submitVoucherControl} style={{ display: 'grid', gap: 10 }}>
+            <label style={labelStyle}>Kode voucher lengkap<input required minLength={6} maxLength={64} style={fieldStyle} value={controlCode} onChange={(event) => {
+              setControlCode(cleanVoucherCodeInput(event.target.value)); setControlVoucher(null); setReleaseConfirmed(false); setControlReason('');
+            }} placeholder="RAHO-…" /></label>
+            <button className="btn btn-secondary" disabled={busy !== null}><Search size={16} /> Periksa status</button>
+          </form>
+          {controlVoucher && <div style={{ display: 'grid', gap: 12 }}>
+            <strong style={{ color: controlVoucher.status === 'AVAILABLE' ? '#22c55e' : '#f59e0b' }}>{controlVoucher.status} — {({ AVAILABLE: 'Tersedia, penerima bebas', ISSUED: 'Diterbitkan, belum diklaim', CLAIMED: 'Sudah diklaim', CANCELLED: 'Dibatalkan', EXPIRED: 'Kedaluwarsa', EXHAUSTED: 'Manfaat habis' } as Record<string, string>)[controlVoucher.status]}</strong>
+            <div>{controlVoucher.maskedCode} · {controlVoucher.campaign.title}</div>
+            <div>Penerima: {controlVoucher.recipientName}<br />NIK: {controlVoucher.maskedNik}<br />Lokasi berlaku: {controlVoucher.allowedLocation?.displayName || 'Semua lokasi aktif'}</div>
+            {controlVoucher.claimedAt && <div>Diklaim: {new Date(controlVoucher.claimedAt).toLocaleString('id-ID')} · {controlVoucher.claimedLocation?.displayName}</div>}
+            {controlVoucher.status === 'AVAILABLE' && <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => setClaimForm((current) => ({ ...current, code: controlCode }))}>Gunakan kode di formulir klaim</button>}
+            {controlVoucher.status === 'ISSUED' && !controlVoucher.claimedAt && <form onSubmit={(event) => void submitVoucherControl(event, true)} style={{ display: 'grid', gap: 10, borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
+              <p style={{ fontSize: 13 }}>Kembalikan ke AVAILABLE untuk melepas nama, NIK, dan tanggal lahir penerima. Lokasi dan batas klaim tetap berlaku. Tindakan dicatat di audit.</p>
+              <label style={labelStyle}>Alasan pelepasan penerima<textarea required minLength={5} maxLength={500} style={fieldStyle} value={controlReason} onChange={(event) => setControlReason(event.target.value)} /></label>
+              <label style={{ fontSize: 13 }}><input type="checkbox" required checked={releaseConfirmed} onChange={(event) => setReleaseConfirmed(event.target.checked)} /> Saya memastikan voucher belum diklaim dan penerima boleh dilepas.</label>
+              <button className="btn btn-secondary" disabled={busy !== null || !releaseConfirmed || controlReason.trim().length < 5}>Lepas penerima → AVAILABLE</button>
+            </form>}
+          </div>}
         </section>
       )}
 

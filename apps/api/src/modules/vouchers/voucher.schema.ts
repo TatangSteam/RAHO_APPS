@@ -7,6 +7,8 @@ import {
 } from '@prisma/client';
 
 const nikSchema = z.string().trim().regex(/^\d{16}$/, 'NIK harus tepat 16 digit.');
+export const voucherControlSchema = z.object({ code: z.string().trim().min(6).max(64) });
+export const releaseVoucherSchema = voucherControlSchema.extend({ reason: z.string().trim().min(5).max(500) });
 const dateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal harus berformat YYYY-MM-DD.');
 
 function isValidDateOnly(value: string): boolean {
