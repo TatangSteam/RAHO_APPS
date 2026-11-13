@@ -895,7 +895,7 @@ export async function claimVoucher(actorId: string, actorRole: Role, input: Clai
   const initial = await prisma.campaignVoucher.findUnique({ where: { codeHash: hashedCode } });
   if (!initial) {
     await recordFailedAttempt(actorId, location.id, input.requestId, 'VOUCHER_NOT_FOUND');
-    throw errors.notFound('Voucher tidak ditemukan atau identitas tidak sesuai.');
+    throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan. Periksa kode lengkap dari hasil export dan pastikan database yang digunakan sesuai. Penerima tidak perlu memiliki akun/member.');
   }
 
   try {
@@ -908,7 +908,7 @@ export async function claimVoucher(actorId: string, actorRole: Role, input: Clai
           recipientMember: { include: { user: { include: { profile: true } } } },
         },
       });
-      if (!voucher) throw errors.notFound('Voucher tidak ditemukan atau identitas tidak sesuai.');
+      if (!voucher) throw new AppError(404, 'VOUCHER_NOT_FOUND', 'Kode voucher tidak ditemukan.');
       if (voucher.status === CampaignVoucherStatus.CLAIMED) throw errors.conflict('VOUCHER_ALREADY_CLAIMED', 'Voucher sudah pernah diklaim.');
       if (voucher.status === CampaignVoucherStatus.CANCELLED) throw errors.conflict('VOUCHER_CANCELLED', 'Voucher telah dibatalkan.');
       const isFirstUseActivation = voucher.status === CampaignVoucherStatus.AVAILABLE;
@@ -938,7 +938,7 @@ export async function claimVoucher(actorId: string, actorRole: Role, input: Clai
         registeredNikHash !== submittedNikHash ||
         !sameDate(registeredDateOfBirth, input.dateOfBirth)
       )) {
-        throw errors.unprocessable('VOUCHER_IDENTITY_MISMATCH', 'Voucher tidak ditemukan atau identitas tidak sesuai.');
+        throw errors.unprocessable('VOUCHER_IDENTITY_MISMATCH', 'Voucher ini sudah diterbitkan untuk penerima tertentu. Nama, NIK, dan tanggal lahir harus sesuai data penerbitan; penerima tidak perlu memiliki akun/member.');
       }
 
       const claimed = await tx.campaignVoucher.update({

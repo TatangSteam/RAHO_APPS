@@ -31,7 +31,11 @@ async function main() {
   require('dotenv').config({ path: resolve(root, '.env') });
   process.chdir(root);
   const prisma = new (require('@prisma/client').PrismaClient)();
-  try { await deployWithRecovery(prisma); }
+  try {
+    await deployWithRecovery(prisma);
+    const added = await require('./seed-default-vouchers.cjs').seedDefaultVouchers(prisma);
+    console.log(`Default vouchers: ${added} added; existing codes preserved.`);
+  }
   finally { await prisma.$disconnect(); }
 }
 

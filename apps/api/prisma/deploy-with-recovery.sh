@@ -13,3 +13,5 @@ while ! npx prisma migrate deploy; do
   echo "Migrate deploy failed; checking for a recognized recovery case (attempt $attempt/3)."
   node prisma/recover-failed-migrations.cjs
 done
+
+node prisma/seed-default-vouchers.cjs
